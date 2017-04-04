@@ -12,7 +12,6 @@
  [default]
  aws_access_key_id = AKID1234567890
  aws_secret_access_key = MY-SECRET-KEY
- You can learn more about the credentials file from this blog post.
 ```
 
  Alternatively, you can set the following environment variables:
