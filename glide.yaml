@@ -1,0 +1,12 @@
+package: github.com/coreos-inc/grafiti
+import:
+- package: github.com/Sirupsen/logrus
+  version: ~0.11.5
+- package: github.com/spf13/cobra
+  subpackages:
+  - pflag
+- package: github.com/spf13/viper
+- package: github.com/aws/aws-sdk-go
+  version: ~1.8.7
+- package: github.com/spf13/pflag
+  version: d16db1e50e33dff1b6cdf37596cef36742128670
