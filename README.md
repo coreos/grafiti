@@ -12,7 +12,6 @@
  [default]
  aws_access_key_id = AKID1234567890
  aws_secret_access_key = MY-SECRET-KEY
- You can learn more about the credentials file from this blog post.
 ```
 
  Alternatively, you can set the following environment variables:
@@ -83,7 +82,7 @@ Tagging input takes the form:
 
 ```json
 {
-	"Resource" {
+	"Resource": {
 		"ResourceType": "AWS:EC2:Instance",
 		"ResourceName": "i-123456"
 	},
@@ -108,5 +107,10 @@ grafiti parse -c config.toml | jq 'if .Event.Username != "root" then . else empt
 
 Output:
 ```
-
+Tagging EC2 Instance i-0b512b2b72f960a94
+Tagging EC2 Instance i-037f3df2ad504f355
+Tagging EC2 Instance i-0a383997ce0d97773
+Tagging EC2 Instance i-0eb72af0dc46eab32
+Tagging EC2 Instance i-0b6f8a5db42547739
+Tagging EC2 Instance i-032f2ab01e3a952dc
 ```
