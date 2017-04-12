@@ -23,6 +23,8 @@ import (
 )
 
 var cfgFile string
+var debug bool
+var dryRun bool
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
@@ -37,9 +39,9 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Root config holds global config
-	RootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.grafiti.yaml)")
-	RootCmd.PersistentFlags().StringVarP(&cfgFile, "debug", "d", "", "enable debug logging")
-	RootCmd.PersistentFlags().StringVar(&cfgFile, "dry-run", "", "output changes to stdout instead of AWS")
+	RootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.grafiti.toml)")
+	RootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "enable debug logging")
+	RootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "output changes to stdout instead of AWS")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -56,6 +58,7 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		log.Info("Using config file:", viper.ConfigFileUsed())
 	}
+
 }
 
 func main() {

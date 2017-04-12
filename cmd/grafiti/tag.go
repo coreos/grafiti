@@ -15,121 +15,117 @@
 package main
 
 import (
+	"strings"
+
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"os"
 
-	"text/tabwriter"
-
-	"time"
+	"io"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudtrail"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"fmt"
 )
 
-var inputFile string
-var bucket string
+var tagFile string
 
 func init() {
 	RootCmd.AddCommand(tagCmd)
-	tagCmd.PersistentFlags().StringVarP(&inputFile, "inputFile", "i", "", "CloudTrail Log input")
-	tagCmd.PersistentFlags().StringVarP(&bucket, "bucket", "b", "", "S3 bucket with CloudTrail Logs")
+	parseCmd.PersistentFlags().StringVarP(&tagFile, "tagFile", "t", "", "CloudTrail Log input")
 }
 
 var tagCmd = &cobra.Command{
 	Use:   "tag",
-	Short: "tag resources by reading CloudTrail logs",
-	Long:  "Parse a CloudTrail Log and tag resources. By default, talks to the configured aws account and reads directly from CloudTrail.",
+	Short: "tag resources in AWS",
+	Long:  "Tag resources in AWS. By default, talks to the configured aws account and reads directly from CloudTrail.",
 	RunE:  runTagCommand,
 }
 
 func runTagCommand(cmd *cobra.Command, args []string) error {
-	if inputFile != "" {
-		return tagFromFile(inputFile)
-	}
-	if bucket != "" {
-		return fmt.Errorf("bucket support not implemented")
-	}
-	if err := tagFromCloudTrail(); err != nil {
+	//if tagFile != "" {
+	//	return tagFromFile(tagFile)
+	//}
+	if err := tagFromStdIn(); err != nil {
 		return err
 	}
 	return nil
 }
 
-type CloudTrailLogFile struct {
-	Events []*cloudtrail.Event `json:"Records"`
+type TagInput struct {
+	Resource cloudtrail.Resource
+	Tags     map[string]string
 }
 
-func tagFromFile(logFileName string) error {
-	raw, err := ioutil.ReadFile(logFileName)
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
-
-	var logFile CloudTrailLogFile
-	if err := json.Unmarshal(raw, &logFile); err != nil {
-		return err
-	}
-	printEvents(logFile.Events)
-
-	//TODO: actually tag events
-	return nil
-}
-
-func tagFromCloudTrail() error {
-	// TODO: arguments for this, cleanup
+func tagFromStdIn() error {
+	region := viper.GetString("grafiti.az")
 	sess := session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String("us-east-1"),
+			Region: aws.String(region),
 		},
 	))
-	svc := cloudtrail.New(sess)
-	params := &cloudtrail.LookupEventsInput{
-		EndTime: aws.Time(time.Now()),
-		LookupAttributes: []*cloudtrail.LookupAttribute{
-			{
-				AttributeKey:   aws.String("ResourceType"),
-				AttributeValue: aws.String("AWS::EC2::Instance"),
-			},
-		},
-		MaxResults: aws.Int64(50),
-		StartTime:  aws.Time(time.Now().AddDate(0, 0, -1)),
-	}
 
-	var events []*cloudtrail.Event
-	req, resp := svc.LookupEventsRequest(params)
-	if err := req.Send(); err != nil {
-		return err
-	}
-	events = append(events, resp.Events...)
-
-	// Loop through pages
-	for resp.NextToken != nil {
-		params.NextToken = resp.NextToken
-		req, resp := svc.LookupEventsRequest(params)
-		if err := req.Send(); err != nil {
+	dec := json.NewDecoder(os.Stdin)
+	for {
+		var t TagInput
+		if err := dec.Decode(&t); err != nil {
+			if err == io.EOF {
+				break
+			}
 			return err
 		}
-		events = append(events, resp.Events...)
-		fmt.Println("fetching next batch...")
+		if err := TagByResourceType(sess, t.Tags, *t.Resource.ResourceName, *t.Resource.ResourceType); err != nil {
+			return err
+		}
 	}
-	printEvents(events)
 
-	//TODO: actually tag stuff
 	return nil
 }
 
-func printEvents(events []*cloudtrail.Event) {
-	w := tabwriter.NewWriter(os.Stdout, 8, 8, 8, ' ', 0)
-	for _, e := range events {
-		fmt.Println(e)
-		for _, r := range e.Resources {
-			fmt.Fprintf(w, "%s\t%s\t%s\t\n", *r.ResourceName, *r.ResourceType, *e.Username)
+func TagByResourceType(sess *session.Session, tags map[string]string, resourceName, resourceType string) error {
+	switch {
+	case strings.HasPrefix(resourceType, "AWS::EC2::"):
+		svc := ec2.New(sess)
+
+		var awsTags []*ec2.Tag
+		for k, v := range tags {
+			awsTags = append(awsTags, &ec2.Tag{Key: aws.String(k), Value: aws.String(v)})
 		}
+
+		params := &ec2.CreateTagsInput{
+			Resources: []*string{
+				aws.String(resourceName),
+			},
+			Tags:   awsTags,
+			DryRun: aws.Bool(dryRun),
+		}
+		if _, err := svc.CreateTags(params); err != nil {
+			return err
+		}
+		fmt.Printf("Tagging EC2 Instance %s\n", resourceName)
+
+		return nil
+	case strings.HasPrefix(resourceType, "AWS::AutoScaling::"):
+		return nil
+	case strings.HasPrefix(resourceType, "AWS::ACM::"):
+		return nil
+	case strings.HasPrefix(resourceType, "AWS::CloudTrail::"):
+		return nil
+	case strings.HasPrefix(resourceType, "AWS::CodePipeline::"):
+		return nil
+	case strings.HasPrefix(resourceType, "AWS::ElasticLoadBalancing::"):
+		return nil
+	case strings.HasPrefix(resourceType, "AWS::IAM::"):
+		return nil
+	case strings.HasPrefix(resourceType, "AWS::Redshift::"):
+		return nil
+	case strings.HasPrefix(resourceType, "AWS::RDS::"):
+		return nil
+	case strings.HasPrefix(resourceType, "AWS::S3::"):
+		return nil
 	}
-	w.Flush()
+	return nil
 }

@@ -1,0 +1,4 @@
+[grafiti]
+resourceType = "AWS::EC2::Instance"
+hours = -8
+az = "us-east-1"
