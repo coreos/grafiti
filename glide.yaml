@@ -10,3 +10,5 @@ import:
   version: ~1.8.7
 - package: github.com/spf13/pflag
   version: d16db1e50e33dff1b6cdf37596cef36742128670
+- package: github.com/tidwall/gjson
+  version: e30a9c1037e0f9fbde93a6a9848a2dd5c59d3b91

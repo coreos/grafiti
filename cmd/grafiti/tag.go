@@ -15,27 +15,43 @@
 package main
 
 import (
-	"strings"
-
 	"encoding/json"
 	"os"
 
 	"io"
 
+	"fmt"
+
+	"bufio"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudtrail"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"fmt"
 )
 
 var tagFile string
+var ignoreErrors bool
+
+// TaggingMetadata is the data required to find and tag a resource
+type TaggingMetadata struct {
+	ResourceName string
+	ResourceType string
+	ResourceARN  string
+	CreatorARN   string
+	CreatorName  string
+}
+
+type TagInput struct {
+	TaggingMetadata TaggingMetadata
+	Tags            map[string]*string
+}
 
 func init() {
 	RootCmd.AddCommand(tagCmd)
-	parseCmd.PersistentFlags().StringVarP(&tagFile, "tagFile", "t", "", "CloudTrail Log input")
+	tagCmd.PersistentFlags().StringVarP(&tagFile, "tagFile", "t", "", "CloudTrail Log input")
+	tagCmd.PersistentFlags().BoolVarP(&ignoreErrors, "ignoreErrors", "e", false, "Continue processing even when there are API errors when tagging.")
 }
 
 var tagCmd = &cobra.Command{
@@ -46,86 +62,65 @@ var tagCmd = &cobra.Command{
 }
 
 func runTagCommand(cmd *cobra.Command, args []string) error {
-	//if tagFile != "" {
-	//	return tagFromFile(tagFile)
-	//}
+	if tagFile != "" {
+		return tagFromFile(tagFile)
+	}
 	if err := tagFromStdIn(); err != nil {
 		return err
 	}
 	return nil
 }
 
-type TagInput struct {
-	Resource cloudtrail.Resource
-	Tags     map[string]string
+func tagFromFile(tagFile string) error {
+	file, err := os.Open(tagFile)
+	if err != nil {
+		return err
+	}
+	reader := bufio.NewReader(file)
+	return tag(reader)
 }
 
 func tagFromStdIn() error {
+	return tag(os.Stdin)
+}
+
+func tag(reader io.Reader) error {
 	region := viper.GetString("grafiti.az")
 	sess := session.Must(session.NewSession(
 		&aws.Config{
 			Region: aws.String(region),
 		},
 	))
-
-	dec := json.NewDecoder(os.Stdin)
+	svc := resourcegroupstaggingapi.New(sess)
+	dec := json.NewDecoder(reader)
 	for {
 		var t TagInput
 		if err := dec.Decode(&t); err != nil {
 			if err == io.EOF {
 				break
 			}
+			if ignoreErrors {
+				fmt.Printf("Ignoring error: %s\n", err.Error())
+				continue
+			}
 			return err
 		}
-		if err := TagByResourceType(sess, t.Tags, *t.Resource.ResourceName, *t.Resource.ResourceType); err != nil {
+
+		var awsTags []*resourcegroupstaggingapi.Tag
+		for k, v := range t.Tags {
+			awsTags = append(awsTags, &resourcegroupstaggingapi.Tag{Key: aws.String(k), Value: aws.String(v)})
+		}
+
+		//TODO: slurp up input
+		params := &resourcegroupstaggingapi.TagResourcesInput{
+			ResourceARNList: []*string{aws.String(t.TaggingMetadata.ResourceARN)},
+			Tags:            t.Tags,
+		}
+
+		if _, err := svc.TagResources(params); err != nil {
 			return err
 		}
 	}
 
-	return nil
-}
-
-func TagByResourceType(sess *session.Session, tags map[string]string, resourceName, resourceType string) error {
-	switch {
-	case strings.HasPrefix(resourceType, "AWS::EC2::"):
-		svc := ec2.New(sess)
-
-		var awsTags []*ec2.Tag
-		for k, v := range tags {
-			awsTags = append(awsTags, &ec2.Tag{Key: aws.String(k), Value: aws.String(v)})
-		}
-
-		params := &ec2.CreateTagsInput{
-			Resources: []*string{
-				aws.String(resourceName),
-			},
-			Tags:   awsTags,
-			DryRun: aws.Bool(dryRun),
-		}
-		if _, err := svc.CreateTags(params); err != nil {
-			return err
-		}
-		fmt.Printf("Tagging EC2 Instance %s\n", resourceName)
-
-		return nil
-	case strings.HasPrefix(resourceType, "AWS::AutoScaling::"):
-		return nil
-	case strings.HasPrefix(resourceType, "AWS::ACM::"):
-		return nil
-	case strings.HasPrefix(resourceType, "AWS::CloudTrail::"):
-		return nil
-	case strings.HasPrefix(resourceType, "AWS::CodePipeline::"):
-		return nil
-	case strings.HasPrefix(resourceType, "AWS::ElasticLoadBalancing::"):
-		return nil
-	case strings.HasPrefix(resourceType, "AWS::IAM::"):
-		return nil
-	case strings.HasPrefix(resourceType, "AWS::Redshift::"):
-		return nil
-	case strings.HasPrefix(resourceType, "AWS::RDS::"):
-		return nil
-	case strings.HasPrefix(resourceType, "AWS::S3::"):
-		return nil
-	}
 	return nil
 }
