@@ -3,3 +3,9 @@ resourceType = "AWS::EC2::Instance"
 hours = -8
 az = "us-east-1"
 includeEvent = false
+tagPatterns = [
+  "{CreatedBy: .userIdentity.arn}",
+]
+filterPatterns = [
+  ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
+]

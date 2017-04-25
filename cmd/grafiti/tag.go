@@ -106,11 +106,6 @@ func tag(reader io.Reader) error {
 			return err
 		}
 
-		var awsTags []*resourcegroupstaggingapi.Tag
-		for k, v := range t.Tags {
-			awsTags = append(awsTags, &resourcegroupstaggingapi.Tag{Key: aws.String(k), Value: aws.String(v)})
-		}
-
 		//TODO: slurp up input
 		params := &resourcegroupstaggingapi.TagResourcesInput{
 			ResourceARNList: []*string{aws.String(t.TaggingMetadata.ResourceARN)},

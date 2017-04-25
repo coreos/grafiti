@@ -28,6 +28,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudtrail"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	jq "github.com/threatgrid/jqpipe-go"
 	"github.com/tidwall/gjson"
 )
 
@@ -116,10 +117,29 @@ func parseFromCloudTrail() error {
 type OutputWithEvent struct {
 	Event           *cloudtrail.Event
 	TaggingMetadata *TaggingMetadata
+	Tags            map[string]string
 }
 
 type Output struct {
 	TaggingMetadata *TaggingMetadata
+	Tags            map[string]string
+}
+
+func filterOutput(output []byte) []byte {
+	for _, filter := range viper.GetStringSlice("grafiti.filterPatterns") {
+		results, err := jq.Eval(string(output), filter)
+		if err != nil {
+			return nil
+		}
+		if len(results) == 0 {
+			return nil
+		}
+		json, _ := results[0].MarshalJSON()
+		if string(json) != "true" {
+			return nil
+		}
+	}
+	return output
 }
 
 func printEvents(events []*cloudtrail.Event) {
@@ -132,7 +152,8 @@ func printEvents(events []*cloudtrail.Event) {
 func printEvent(event *cloudtrail.Event, parsedEvent gjson.Result) {
 	includeEvent := viper.GetBool("grafiti.includeEvent")
 	for _, r := range event.Resources {
-		output := getOutput(includeEvent, event, &TaggingMetadata{
+		tags := getTags(event)
+		output := getOutput(includeEvent, event, tags, &TaggingMetadata{
 			ResourceName: *r.ResourceName,
 			ResourceType: *r.ResourceType,
 			ResourceARN:  ARNForResource(r, parsedEvent),
@@ -140,22 +161,55 @@ func printEvent(event *cloudtrail.Event, parsedEvent gjson.Result) {
 			CreatorName:  parsedEvent.Get("userIdentity.userName").Str,
 		})
 		resourceJson, err := json.Marshal(output)
+		resourceJson = filterOutput(resourceJson)
+		if resourceJson == nil {
+			continue
+		}
 		if err != nil {
-			fmt.Println("error:", err)
+			fmt.Println(fmt.Sprintf(`{"error": "%s"}`, err))
 		}
 		fmt.Println(string(resourceJson))
 	}
 }
 
-func getOutput(includeEvent bool, event *cloudtrail.Event, taggingMetadata *TaggingMetadata) interface{} {
+func getTags(event *cloudtrail.Event) map[string]string {
+	allTags := make(map[string]string)
+	for _, tagPattern := range viper.GetStringSlice("grafiti.tagPatterns") {
+		results, err := jq.Eval(*event.CloudTrailEvent, tagPattern)
+		if err != nil {
+			fmt.Println(fmt.Sprintf(`{"error": "%s"}`, err))
+			return nil
+		}
+		for _, r := range results {
+			rBytes, err := r.MarshalJSON()
+			if err != nil {
+				break
+			}
+			tagMap, ok := gjson.Parse(string(rBytes)).Value().(map[string]interface{})
+
+			if !ok {
+				break
+			}
+
+			for k, v := range tagMap {
+				allTags[k] = v.(string)
+			}
+		}
+	}
+	return allTags
+}
+
+func getOutput(includeEvent bool, event *cloudtrail.Event, tags map[string]string, taggingMetadata *TaggingMetadata) interface{} {
 	if includeEvent {
 		return OutputWithEvent{
 			Event:           event,
 			TaggingMetadata: taggingMetadata,
+			Tags:            tags,
 		}
 	}
 	return Output{
 		TaggingMetadata: taggingMetadata,
+		Tags:            tags,
 	}
 }
 
