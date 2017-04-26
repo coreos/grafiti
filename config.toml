@@ -1,0 +1,14 @@
+[grafiti]
+resourceType = "AWS::EC2::Instance"
+hours = -8
+az = "us-east-1"
+includeEvent = false
+tagPatterns = [
+  "{CreatedBy: .userIdentity.arn}",
+#  "{CreatedAt: .eventTime}",
+#  "{TaggedAt: now|todate}",
+]
+filterPatterns = [
+#  ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
+#  ".TaggingMetadata.ResourceType == \"AWS::ElasticLoadBalancing::LoadBalancer\"",
+]

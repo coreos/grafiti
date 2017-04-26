@@ -16,120 +16,173 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"os"
 
-	"text/tabwriter"
+	"io"
 
-	"time"
+	"fmt"
+
+	"bufio"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudtrail"
+	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-var inputFile string
-var bucket string
+var tagFile string
+var ignoreErrors bool
+
+// TaggingMetadata is the data required to find and tag a resource
+type TaggingMetadata struct {
+	ResourceName string
+	ResourceType string
+	ResourceARN  string
+	CreatorARN   string
+	CreatorName  string
+}
+
+type Tags map[string]string
+
+type Tag struct {
+	Key   string
+	Value string
+}
+
+type TagInput struct {
+	TaggingMetadata TaggingMetadata
+	Tags            Tags
+}
+
+type ARNBucketSet map[Tag][]string
+
+func NewARNBucketSet() ARNBucketSet {
+	return make(map[Tag][]string)
+}
+
+func (b *ARNBucketSet) AddARNToBuckets(ARN string, tags map[string]string) {
+	if ARN == "" {
+		return
+	}
+	for tagKey, tagValue := range tags {
+		tag := Tag{tagKey, tagValue}
+		if _, found := (*b)[tag]; found {
+			continue
+		}
+		(*b)[tag] = append((*b)[tag], ARN)
+	}
+}
+
+func (b *ARNBucketSet) ClearBucket(bucket Tag) {
+	(*b)[bucket] = []string{}
+}
 
 func init() {
 	RootCmd.AddCommand(tagCmd)
-	tagCmd.PersistentFlags().StringVarP(&inputFile, "inputFile", "i", "", "CloudTrail Log input")
-	tagCmd.PersistentFlags().StringVarP(&bucket, "bucket", "b", "", "S3 bucket with CloudTrail Logs")
+	tagCmd.PersistentFlags().StringVarP(&tagFile, "tagFile", "t", "", "CloudTrail Log input")
+	tagCmd.PersistentFlags().BoolVarP(&ignoreErrors, "ignoreErrors", "e", false, "Continue processing even when there are API errors when tagging.")
 }
 
 var tagCmd = &cobra.Command{
 	Use:   "tag",
-	Short: "tag resources by reading CloudTrail logs",
-	Long:  "Parse a CloudTrail Log and tag resources. By default, talks to the configured aws account and reads directly from CloudTrail.",
+	Short: "tag resources in AWS",
+	Long:  "Tag resources in AWS. By default, talks to the configured aws account and reads directly from CloudTrail.",
 	RunE:  runTagCommand,
 }
 
 func runTagCommand(cmd *cobra.Command, args []string) error {
-	if inputFile != "" {
-		return tagFromFile(inputFile)
+	if tagFile != "" {
+		return tagFromFile(tagFile)
 	}
-	if bucket != "" {
-		return fmt.Errorf("bucket support not implemented")
-	}
-	if err := tagFromCloudTrail(); err != nil {
+	if err := tagFromStdIn(); err != nil {
 		return err
 	}
 	return nil
 }
 
-type CloudTrailLogFile struct {
-	Events []*cloudtrail.Event `json:"Records"`
-}
-
-func tagFromFile(logFileName string) error {
-	raw, err := ioutil.ReadFile(logFileName)
+func tagFromFile(tagFile string) error {
+	file, err := os.Open(tagFile)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
-
-	var logFile CloudTrailLogFile
-	if err := json.Unmarshal(raw, &logFile); err != nil {
 		return err
 	}
-	printEvents(logFile.Events)
-
-	//TODO: actually tag events
-	return nil
+	reader := bufio.NewReader(file)
+	return tag(reader)
 }
 
-func tagFromCloudTrail() error {
-	// TODO: arguments for this, cleanup
+func tagFromStdIn() error {
+	return tag(os.Stdin)
+}
+
+func tag(reader io.Reader) error {
+	region := viper.GetString("grafiti.az")
 	sess := session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String("us-east-1"),
+			Region: aws.String(region),
 		},
 	))
-	svc := cloudtrail.New(sess)
-	params := &cloudtrail.LookupEventsInput{
-		EndTime: aws.Time(time.Now()),
-		LookupAttributes: []*cloudtrail.LookupAttribute{
-			{
-				AttributeKey:   aws.String("ResourceType"),
-				AttributeValue: aws.String("AWS::EC2::Instance"),
-			},
-		},
-		MaxResults: aws.Int64(50),
-		StartTime:  aws.Time(time.Now().AddDate(0, 0, -1)),
-	}
+	svc := resourcegroupstaggingapi.New(sess)
+	dec := json.NewDecoder(reader)
 
-	var events []*cloudtrail.Event
-	req, resp := svc.LookupEventsRequest(params)
-	if err := req.Send(); err != nil {
-		return err
-	}
-	events = append(events, resp.Events...)
+	ARNBuckets := NewARNBucketSet()
 
-	// Loop through pages
-	for resp.NextToken != nil {
-		params.NextToken = resp.NextToken
-		req, resp := svc.LookupEventsRequest(params)
-		if err := req.Send(); err != nil {
+	for {
+		var t TagInput
+		isEOF, err := decodeInput(&t, dec)
+		if err != nil {
 			return err
 		}
-		events = append(events, resp.Events...)
-		fmt.Println("fetching next batch...")
-	}
-	printEvents(events)
 
-	//TODO: actually tag stuff
+		ARNBuckets.AddARNToBuckets(t.TaggingMetadata.ResourceARN, t.Tags)
+
+		for tag, bucket := range ARNBuckets {
+			if len(bucket) == 20 || isEOF {
+				if err := tagARNBucket(svc, bucket, tag); err != nil {
+					return err
+				}
+				ARNBuckets.ClearBucket(tag)
+			}
+		}
+
+		if isEOF {
+			break
+		}
+	}
+
 	return nil
 }
 
-func printEvents(events []*cloudtrail.Event) {
-	w := tabwriter.NewWriter(os.Stdout, 8, 8, 8, ' ', 0)
-	for _, e := range events {
-		fmt.Println(e)
-		for _, r := range e.Resources {
-			fmt.Fprintf(w, "%s\t%s\t%s\t\n", *r.ResourceName, *r.ResourceType, *e.Username)
-		}
+func tagARNBucket(svc *resourcegroupstaggingapi.ResourceGroupsTaggingAPI, bucket []string, tag Tag) error {
+	params := &resourcegroupstaggingapi.TagResourcesInput{
+		ResourceARNList: aws.StringSlice(bucket),
+		Tags:            map[string]*string{tag.Key: aws.String(tag.Value)},
 	}
-	w.Flush()
+	paramsJson, _ := json.Marshal(params)
+	fmt.Println(string(paramsJson))
+	if dryRun {
+		return nil
+	}
+	if _, err := svc.TagResources(params); err != nil {
+		if ignoreErrors {
+			fmt.Printf(`{"error": "%s"}\n`, err.Error())
+			return nil
+		}
+		return err
+
+	}
+	return nil
+}
+
+func decodeInput(decoded *TagInput, decoder *json.Decoder) (bool, error) {
+	if err := decoder.Decode(&decoded); err != nil {
+		if err == io.EOF {
+			return true, nil
+		}
+		if ignoreErrors {
+			fmt.Printf(`{"error": "%s"}\n`, err.Error())
+			return false, nil
+		}
+		return false, err
+	}
+	return false, nil
 }
