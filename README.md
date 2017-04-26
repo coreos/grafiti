@@ -43,7 +43,7 @@ Flags:
 
 ## Configure Grafiti
 
-```
+```toml
 [grafiti]
 resourceType = "AWS::EC2::Instance"
 hours = -8
@@ -51,12 +51,9 @@ az = "us-east-1"
 includeEvent = false
 tagPatterns = [
   "{CreatedBy: .userIdentity.arn}",
-#  "{CreatedAt: .eventTime}",
-#  "{TaggedAt: now|todate}",
 ]
 filterPatterns = [
-#  ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
-#  ".TaggingMetadata.ResourceType == \"AWS::ElasticLoadBalancing::LoadBalancer\"",
+  ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
 ]
 ```
 
@@ -73,8 +70,10 @@ attributes to filter on).
 
 Grafiti is designed to take advantage of existing tools like `jq`.
 
-```
+```sh
 $ cat config.toml
+```
+```toml
 [grafiti]
 resourceType = "AWS::EC2::Instance"
 hours = -8
@@ -83,9 +82,11 @@ includeEvent = false
 tagPatterns = [
   "{CreatedBy: .userIdentity.arn}",
 ]
-
+```
+```sh
 $ grafiti parse -c ./config.toml
-
+```
+```json
 {
   "TaggingMetadata": {
     "ResourceName": "i-05a1ecfab5f74ffac",
@@ -110,11 +111,10 @@ $ grafiti parse -c ./config.toml
 	"CreatedBy": "arn:aws:iam::206170669542:user/QuayEphemeralBuilder"
   }
 }
-...
 ```
 
 Grafiti output is designed to be filtered/parsed (filters and tag generators can be embedded in config.toml as well)
-```
+```sh
 # Print all usernames
 grafiti parse | jq '.CreatorName' | sort | uniq
 
@@ -135,7 +135,6 @@ grafiti parse -c ./config.toml | jq '.Event.CloudTrailEvent' | sed -E 's/\\(.)/\
 ## Tag AWS Resources
 
 Tagging input takes the form:
-
 
 ```json
 {
@@ -162,7 +161,7 @@ This will apply the tags to the referenced resource.
 This is a full example of parsing events and generating tags from them.
 
 config.toml
-```
+```toml
 [grafiti]
 resourceType = "AWS::EC2::Instance"
 hours = -8
@@ -180,6 +179,6 @@ filterPatterns = [
 ```
 
 Run:
-```
+```sh
 grafiti parse -c config.toml | grafiti tag -c config.toml
 ```
