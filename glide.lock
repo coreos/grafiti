@@ -1,23 +1,35 @@
-hash: 3e996d25f2c326901dcf1c05970d5e97a99e909fae220d145768cced1ab08758
-updated: 2017-04-04T07:47:30.346356177-04:00
+hash: 25fe17c97073846b55776fa94eae39076d896d2834e92326afd31e6e0c1a1b80
+updated: 2017-04-26T10:22:37.801362764-04:00
 imports:
 - name: github.com/aws/aws-sdk-go
-  version: 06d3a0c37ae95ae040548a13952501261cb5fd2b
+  version: f6ea558f30e0a983d529b32c741e4caed17c7df0
   subpackages:
   - aws
   - aws/awserr
   - aws/awsutil
   - aws/client
   - aws/client/metadata
+  - aws/corehandlers
   - aws/credentials
+  - aws/credentials/ec2rolecreds
+  - aws/credentials/endpointcreds
+  - aws/credentials/stscreds
+  - aws/defaults
+  - aws/ec2metadata
   - aws/endpoints
   - aws/request
+  - aws/session
   - aws/signer/v4
   - private/protocol
   - private/protocol/json/jsonutil
   - private/protocol/jsonrpc
+  - private/protocol/query
+  - private/protocol/query/queryutil
   - private/protocol/rest
+  - private/protocol/xml/xmlutil
   - service/cloudtrail
+  - service/resourcegroupstaggingapi
+  - service/sts
 - name: github.com/BurntSushi/toml
   version: bd2bdf7f18f849530ef7a1c29a4290217cab32a1
 - name: github.com/go-ini/ini
@@ -48,6 +60,12 @@ imports:
   version: d16db1e50e33dff1b6cdf37596cef36742128670
 - name: github.com/spf13/viper
   version: be5ff3e4840cf692388bde7a057595a474ef379e
+- name: github.com/threatgrid/jqpipe-go
+  version: b5e15fb6d9f3f85353573236105b501a4ace0ccc
+- name: github.com/tidwall/gjson
+  version: e30a9c1037e0f9fbde93a6a9848a2dd5c59d3b91
+- name: github.com/tidwall/match
+  version: 173748da739a410c5b0b813b956f89ff94730b4c
 - name: golang.org/x/sys
   version: 30de6d19a3bd89a5f38ae4028e23aaa5582648af
   subpackages:
