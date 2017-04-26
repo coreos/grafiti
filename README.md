@@ -141,9 +141,9 @@ Tagging input takes the form:
 {
   "TaggingMetadata": {
     "ResourceName": "data",
-    "ResourceType": "data,
+    "ResourceType": "data",
     "ResourceARN": "arn:aws:ec2:us-east-1:206170669542:instance/i-081db11d0978f67a2",
-    "CreatorARN": "data,
+    "CreatorARN": "data",
     "CreatorName": "data"
   },
   "Tags": {
