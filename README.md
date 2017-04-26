@@ -1,12 +1,10 @@
-# Grafiti/Predator
+# Grafiti
 
- Grafiti tags your AWS resources.
-
- Predator hunts your tagged images for sport.
+Grafiti can parse CloudTrail event data an tag resources based on it.
 
 ## Configure aws credentials
 
-  In order to user these tools, you will need to configure your machine to talk to aws with a `~/.aws/credentials` file.
+  In order to use grafiti, you will need to configure your machine to talk to aws with a `~/.aws/credentials` file.
 
 ```
  [default]
