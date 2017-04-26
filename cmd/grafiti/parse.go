@@ -226,7 +226,7 @@ func ServiceNameForResource(resource *cloudtrail.Resource) string {
 	case strings.HasPrefix(*resource.ResourceType, "AWS::CodePipeline::"):
 		return "codepipeline"
 	case strings.HasPrefix(*resource.ResourceType, "AWS::ElasticLoadBalancing::"):
-		return "elb"
+		return "elasticloadbalancing"
 	case strings.HasPrefix(*resource.ResourceType, "AWS::IAM::"):
 		return "iam"
 	case strings.HasPrefix(*resource.ResourceType, "AWS::Redshift::"):
@@ -268,7 +268,8 @@ func ARNForResource(resource *cloudtrail.Resource, parsedEvent gjson.Result) str
 		break
 	case "AWS::EC2::Ami":
 		//arn:aws:ec2:region::image/image-id
-		break
+		imageID := parsedEvent.Get("responseElements.instancesSet.items.0.imageId")
+		return fmt.Sprintf("%s::image/%s", ARNPrefix, imageID)
 	case "AWS::EC2::BundleTask":
 		break
 	case "AWS::EC2::ConversionTask":
@@ -294,8 +295,7 @@ func ARNForResource(resource *cloudtrail.Resource, parsedEvent gjson.Result) str
 		break
 	case "AWS::EC2::Instance":
 		// arn:aws:ec2:region:account-id:instance/instance-id
-		instanceID := parsedEvent.Get("responseElements.instancesSet.items.0.instanceId")
-		return fmt.Sprintf("%s:instance/%s", ARNPrefix, instanceID)
+		return fmt.Sprintf("%s:instance/%s", ARNPrefix, *resource.ResourceName)
 	case "AWS::EC2::InternetGateway":
 		// arn:aws:ec2:region:account-id:internet-gateway/igw-id
 		break
@@ -333,12 +333,13 @@ func ARNForResource(resource *cloudtrail.Resource, parsedEvent gjson.Result) str
 		//arn:aws:ec2:region:account-id:snapshot/snapshot-id
 		break
 	case "AWS::EC2::SpotFleetRequest":
-		//arn:aws:ec2:region:account-id:subnet/subnet-id
 		break
 	case "AWS::EC2::SpotInstanceRequest":
 		break
 	case "AWS::EC2::Subnet":
-		break
+		//arn:aws:ec2:region:account-id:subnet/subnet-id
+		subnetID := parsedEvent.Get("responseElements.subnet.subnetId")
+		return fmt.Sprintf("%s:subnet/%s", ARNPrefix, subnetID)
 	case "AWS::EC2::SubnetNetworkAclAssociation":
 		break
 	case "AWS::EC2::SubnetRouteTableAssociation":
@@ -348,7 +349,8 @@ func ARNForResource(resource *cloudtrail.Resource, parsedEvent gjson.Result) str
 		break
 	case "AWS::EC2::VPC":
 		//arn:aws:ec2:region:account-id:vpc/vpc-id
-		break
+		vpcID := parsedEvent.Get("responseElements.instancesSet.items.0.vpcId")
+		return fmt.Sprintf("%s:vpc/%s", ARNPrefix, vpcID)
 	case "AWS::EC2::VPCEndpoint":
 		break
 	case "AWS::EC2::VPCPeeringConnection":
@@ -362,7 +364,7 @@ func ARNForResource(resource *cloudtrail.Resource, parsedEvent gjson.Result) str
 		break
 	case "AWS::ElasticLoadBalancing::LoadBalancer":
 		//arn:aws:elasticloadbalancing:region:account-id:loadbalancer/name
-		break
+		return fmt.Sprintf("%s:loadbalancer/%s", ARNPrefix, *resource.ResourceName)
 	case "AWS::IAM::AccessKey":
 		break
 	case "AWS::IAM::AccountAlias":

@@ -43,9 +43,39 @@ type TaggingMetadata struct {
 	CreatorName  string
 }
 
+type Tags map[string]string
+
+type Tag struct {
+	Key   string
+	Value string
+}
+
 type TagInput struct {
 	TaggingMetadata TaggingMetadata
-	Tags            map[string]*string
+	Tags            Tags
+}
+
+type ARNBucketSet map[Tag][]string
+
+func NewARNBucketSet() ARNBucketSet {
+	return make(map[Tag][]string)
+}
+
+func (b *ARNBucketSet) AddARNToBuckets(ARN string, tags map[string]string) {
+	if ARN == "" {
+		return
+	}
+	for tagKey, tagValue := range tags {
+		tag := Tag{tagKey, tagValue}
+		if _, found := (*b)[tag]; found {
+			continue
+		}
+		(*b)[tag] = append((*b)[tag], ARN)
+	}
+}
+
+func (b *ARNBucketSet) ClearBucket(bucket Tag) {
+	(*b)[bucket] = []string{}
 }
 
 func init() {
@@ -93,29 +123,66 @@ func tag(reader io.Reader) error {
 	))
 	svc := resourcegroupstaggingapi.New(sess)
 	dec := json.NewDecoder(reader)
+
+	ARNBuckets := NewARNBucketSet()
+
 	for {
 		var t TagInput
-		if err := dec.Decode(&t); err != nil {
-			if err == io.EOF {
-				break
-			}
-			if ignoreErrors {
-				fmt.Printf("Ignoring error: %s\n", err.Error())
-				continue
-			}
+		isEOF, err := decodeInput(&t, dec)
+		if err != nil {
 			return err
 		}
 
-		//TODO: slurp up input
-		params := &resourcegroupstaggingapi.TagResourcesInput{
-			ResourceARNList: []*string{aws.String(t.TaggingMetadata.ResourceARN)},
-			Tags:            t.Tags,
+		ARNBuckets.AddARNToBuckets(t.TaggingMetadata.ResourceARN, t.Tags)
+
+		for tag, bucket := range ARNBuckets {
+			if len(bucket) == 20 || isEOF {
+				if err := tagARNBucket(svc, bucket, tag); err != nil {
+					return err
+				}
+				ARNBuckets.ClearBucket(tag)
+			}
 		}
 
-		if _, err := svc.TagResources(params); err != nil {
-			return err
+		if isEOF {
+			break
 		}
 	}
 
 	return nil
+}
+
+func tagARNBucket(svc *resourcegroupstaggingapi.ResourceGroupsTaggingAPI, bucket []string, tag Tag) error {
+	params := &resourcegroupstaggingapi.TagResourcesInput{
+		ResourceARNList: aws.StringSlice(bucket),
+		Tags:            map[string]*string{tag.Key: aws.String(tag.Value)},
+	}
+	paramsJson, _ := json.Marshal(params)
+	fmt.Println(string(paramsJson))
+	if dryRun {
+		return nil
+	}
+	if _, err := svc.TagResources(params); err != nil {
+		if ignoreErrors {
+			fmt.Printf(`{"error": "%s"}\n`, err.Error())
+			return nil
+		}
+		return err
+
+	}
+	return nil
+}
+
+func decodeInput(decoded *TagInput, decoder *json.Decoder) (bool, error) {
+	if err := decoder.Decode(&decoded); err != nil {
+		if err == io.EOF {
+			return true, nil
+		}
+		if ignoreErrors {
+			fmt.Printf(`{"error": "%s"}\n`, err.Error())
+			return false, nil
+		}
+		return false, err
+	}
+	return false, nil
 }

@@ -23,6 +23,8 @@
 
 ## Usage
 
+Parse and generate tags with `grafiti parse`. Use that data to tag resources in AWS with `grafiti tag`.
+
 ```
 Usage:
   grafiti [flags]
@@ -46,17 +48,44 @@ Flags:
 resourceType = "AWS::EC2::Instance"
 hours = -8
 az = "us-east-1"
+includeEvent = false
+tagPatterns = [
+  "{CreatedBy: .userIdentity.arn}",
+#  "{CreatedAt: .eventTime}",
+#  "{TaggedAt: now|todate}",
+]
+filterPatterns = [
+#  ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
+#  ".TaggingMetadata.ResourceType == \"AWS::ElasticLoadBalancing::LoadBalancer\"",
+]
 ```
+
+Setting `includeEvent = true` will include the raw CloudEvent in the tagging output (this is useful for finding
+attributes to filter on).
+
+`tagPatterns` should use jq syntax to generate `{tagKey: tagValue}` objects from output from `grafiti parse`. The
+ results will be included in the `Tags` field of the tagging output.
+
+`filterPatterns` will filter output of `grafiti parse` based on jq syntax matches.
+
 
 ## Parse CloudTrail data
 
 Grafiti is designed to take advantage of existing tools like `jq`.
 
 ```
-# Print default tagging data
-grafiti parse -c ./config.toml
+$ cat config.toml
+[grafiti]
+resourceType = "AWS::EC2::Instance"
+hours = -8
+az = "us-east-1"
+includeEvent = false
+tagPatterns = [
+  "{CreatedBy: .userIdentity.arn}",
+]
 
-# Output
+$ grafiti parse -c ./config.toml
+
 {
   "TaggingMetadata": {
     "ResourceName": "i-05a1ecfab5f74ffac",
@@ -64,6 +93,9 @@ grafiti parse -c ./config.toml
     "ResourceARN": "arn:aws:ec2:us-east-1:206170669542:instance/i-05a1ecfab5f74ffac",
     "CreatorARN": "arn:aws:iam::206170669542:user/QuayEphemeralBuilder",
     "CreatorName": "QuayEphemeralBuilder"
+  },
+  "Tags": {
+  	"CreatedBy": "arn:aws:iam::206170669542:user/QuayEphemeralBuilder"
   }
 }
 {
@@ -73,12 +105,15 @@ grafiti parse -c ./config.toml
     "ResourceARN": "arn:aws:ec2:us-east-1:206170669542:instance/i-081db11d0978f67a2",
     "CreatorARN": "arn:aws:iam::206170669542:user/QuayEphemeralBuilder",
     "CreatorName": "QuayEphemeralBuilder"
+  },
+  "Tags": {
+	"CreatedBy": "arn:aws:iam::206170669542:user/QuayEphemeralBuilder"
   }
 }
 ...
 ```
 
-Grafiti output is designed to be filtered/parsed
+Grafiti output is designed to be filtered/parsed (filters and tag generators can be embedded in config.toml as well)
 ```
 # Print all usernames
 grafiti parse | jq '.CreatorName' | sort | uniq
@@ -104,14 +139,16 @@ Tagging input takes the form:
 
 ```json
 {
-	"Resource": {
-		"ResourceType": "AWS:EC2:Instance",
-		"ResourceName": "i-123456"
-	},
-	"Tags": {
-		"TagName": "ValueName",
-		"TagName2": "ValueName2"
-	}
+  "TaggingMetadata": {
+    "ResourceName": "data",
+    "ResourceType": "data,
+    "ResourceARN": "arn:aws:ec2:us-east-1:206170669542:instance/i-081db11d0978f67a2",
+    "CreatorARN": "data,
+    "CreatorName": "data"
+  },
+  "Tags": {
+	"TagName": "TagValue"
+  }
 }
 ```
 
@@ -121,26 +158,28 @@ This will apply the tags to the referenced resource.
 ## Parsing + Tagging
 
 
-### Tag with Username
-This is a full example of parsing events and generating tags from them. This matches all EC2::Instance events created by
-non-root users and adds a "CreatedBy: <username>" tag to them.
+### Tag EC2 instances with CreatedBy, CreatedAt, and TaggedAt
+This is a full example of parsing events and generating tags from them.
+
+config.toml
+```
+[grafiti]
+resourceType = "AWS::EC2::Instance"
+hours = -8
+az = "us-east-1"
+includeEvent = false
+tagPatterns = [
+  "{CreatedBy: .userIdentity.arn}",
+  "{CreatedAt: .eventTime}",
+  "{TaggedAt: now|todate}",
+]
+filterPatterns = [
+  ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
+]
 
 ```
-grafiti parse -c config.toml | jq 'if .Event.Username != "root" then . else empty end' | jq '{Tags: {CreatedBy: .Event.Username}, Resource: .Event.Resources[]}' | jq 'if .Resource.ResourceType == "AWS::EC2::Instance" then . else empty end' | grafiti -c config.toml tag
-```
 
-Output:
+Run:
 ```
-Tagging EC2 Instance i-0b512b2b72f960a94
-Tagging EC2 Instance i-037f3df2ad504f355
-Tagging EC2 Instance i-0a383997ce0d97773
-Tagging EC2 Instance i-0eb72af0dc46eab32
-Tagging EC2 Instance i-0b6f8a5db42547739
-Tagging EC2 Instance i-032f2ab01e3a952dc
-```
-### Tag with Expire time
-
-```
-# Time until expiry in seconds
-grafiti parse -c config.toml | jq 'if .Event.Username != "root" then . else empty end' | jq '{Tags: {CreatedBy: .Event.Username, Expires: (now+60*60*24)|todate}, Resource: .Event.Resources[]}' | jq 'if .Resource.ResourceType == "AWS::EC2::Instance" then . else empty end'
+grafiti parse -c config.toml | grafiti tag -c config.toml
 ```
