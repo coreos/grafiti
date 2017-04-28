@@ -114,7 +114,7 @@ $ grafiti parse -c ./config.toml
 Grafiti output is designed to be filtered/parsed (filters and tag generators can be embedded in config.toml as well)
 ```sh
 # Print all usernames
-grafiti parse | jq '.CreatorName' | sort | uniq
+grafiti parse | jq 'TaggingMetadata.CreatorName' | sort | uniq
 
 # Filter events by username
 grafiti parse -c ./config.toml | jq 'if .Event.Username != "root" then . else empty end'
@@ -155,7 +155,7 @@ This will apply the tags to the referenced resource.
 ## Parsing + Tagging
 
 
-### Tag EC2 instances with CreatedBy, CreatedAt, and TaggedAt
+### Tag EC2 instances with CreatedBy, TaggedAt, and ExpiresAt
 This is a full example of parsing events and generating tags from them.
 
 config.toml
@@ -167,8 +167,8 @@ az = "us-east-1"
 includeEvent = false
 tagPatterns = [
   "{CreatedBy: .userIdentity.arn}",
-  "{CreatedAt: .eventTime}",
-  "{TaggedAt: now|todate}",
+  "{TaggedAt: now|strftime(\"%Y-%m-%d\")}",
+  "{ExpiresAt: (now+(60*60*24*14))|strftime(\"%Y-%m-%d\")}" # Expire in 2 weeks
 ]
 filterPatterns = [
   ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
@@ -179,4 +179,14 @@ filterPatterns = [
 Run:
 ```sh
 grafiti parse -c config.toml | grafiti tag -c config.toml
+```
+
+This will tag all matching resources with tags that look like:
+
+```json
+{
+  "CreatedBy":"arn:aws:iam::206170669542:root",
+  "ExpiresAt":"2017-05-12",
+  "TaggedAt":"2017-04-28"
+}
 ```
