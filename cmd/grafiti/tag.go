@@ -55,27 +55,48 @@ type TagInput struct {
 	Tags            Tags
 }
 
-type ARNBucketSet map[Tag][]string
+type ARNSet map[string]struct{}
 
-func NewARNBucketSet() ARNBucketSet {
-	return make(map[Tag][]string)
+func NewARNSet() ARNSet {
+	return make(map[string]struct{})
 }
 
-func (b *ARNBucketSet) AddARNToBuckets(ARN string, tags map[string]string) {
+func (a *ARNSet) AddARN(ARN string) {
+	(*a)[ARN] = struct{}{}
+}
+
+func (a *ARNSet) ToList() []string {
+	var arnList = make([]string, 0, len(*a))
+	for k, _ := range *a {
+		arnList = append(arnList, k)
+	}
+	return arnList
+}
+
+//ARNSetBucket maps a tag to a set of ARN strings
+type ARNSetBucket map[Tag]ARNSet
+
+func NewARNSetBucket() ARNSetBucket {
+	return make(map[Tag]ARNSet)
+}
+
+func (b *ARNSetBucket) AddARNToBuckets(ARN string, tags map[string]string) {
 	if ARN == "" {
 		return
 	}
 	for tagKey, tagValue := range tags {
 		tag := Tag{tagKey, tagValue}
-		if _, found := (*b)[tag]; found {
-			continue
+		arnSet, found := (*b)[tag]
+		if !found {
+			arnSet = NewARNSet()
+			(*b)[tag] = arnSet
 		}
-		(*b)[tag] = append((*b)[tag], ARN)
+		arnSet.AddARN(ARN)
 	}
 }
 
-func (b *ARNBucketSet) ClearBucket(bucket Tag) {
-	(*b)[bucket] = []string{}
+func (b *ARNSetBucket) ClearBucket(bucket Tag) {
+	(*b)[bucket] = NewARNSet()
 }
 
 func init() {
@@ -124,20 +145,21 @@ func tag(reader io.Reader) error {
 	svc := resourcegroupstaggingapi.New(sess)
 	dec := json.NewDecoder(reader)
 
-	ARNBuckets := NewARNBucketSet()
+	ARNBuckets := NewARNSetBucket()
 
 	for {
-		var t TagInput
-		isEOF, err := decodeInput(&t, dec)
+		t, isEOF, err := decodeInput(dec)
 		if err != nil {
 			return err
 		}
-
+		if t == nil {
+			continue
+		}
 		ARNBuckets.AddARNToBuckets(t.TaggingMetadata.ResourceARN, t.Tags)
 
 		for tag, bucket := range ARNBuckets {
 			if len(bucket) == 20 || isEOF {
-				if err := tagARNBucket(svc, bucket, tag); err != nil {
+				if err := tagARNBucket(svc, bucket.ToList(), tag); err != nil {
 					return err
 				}
 				ARNBuckets.ClearBucket(tag)
@@ -173,16 +195,17 @@ func tagARNBucket(svc *resourcegroupstaggingapi.ResourceGroupsTaggingAPI, bucket
 	return nil
 }
 
-func decodeInput(decoded *TagInput, decoder *json.Decoder) (bool, error) {
+func decodeInput(decoder *json.Decoder) (*TagInput, bool, error) {
+	var decoded TagInput
 	if err := decoder.Decode(&decoded); err != nil {
 		if err == io.EOF {
-			return true, nil
+			return &decoded, true, nil
 		}
 		if ignoreErrors {
 			fmt.Printf(`{"error": "%s"}\n`, err.Error())
-			return false, nil
+			return nil, false, nil
 		}
-		return false, err
+		return nil, false, err
 	}
-	return false, nil
+	return &decoded, false, nil
 }
