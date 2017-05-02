@@ -15,14 +15,11 @@
 package main
 
 import (
-	"encoding/json"
-	"os"
-
-	"io"
-
-	"fmt"
-
 	"bufio"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -32,7 +29,6 @@ import (
 )
 
 var tagFile string
-var ignoreErrors bool
 
 // TaggingMetadata is the data required to find and tag a resource
 type TaggingMetadata struct {
@@ -102,7 +98,6 @@ func (b *ARNSetBucket) ClearBucket(bucket Tag) {
 func init() {
 	RootCmd.AddCommand(tagCmd)
 	tagCmd.PersistentFlags().StringVarP(&tagFile, "tagFile", "t", "", "CloudTrail Log input")
-	tagCmd.PersistentFlags().BoolVarP(&ignoreErrors, "ignoreErrors", "e", false, "Continue processing even when there are API errors when tagging.")
 }
 
 var tagCmd = &cobra.Command{

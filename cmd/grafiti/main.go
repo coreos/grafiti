@@ -25,6 +25,7 @@ import (
 var cfgFile string
 var debug bool
 var dryRun bool
+var ignoreErrors bool
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
@@ -42,6 +43,7 @@ func init() {
 	RootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.grafiti.toml)")
 	RootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "enable debug logging")
 	RootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "output changes to stdout instead of AWS")
+	RootCmd.PersistentFlags().BoolVarP(&ignoreErrors, "ignoreErrors", "e", false, "Continue processing even when there are API errors.")
 }
 
 // initConfig reads in config file and ENV variables if set.
