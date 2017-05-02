@@ -1,6 +1,6 @@
 # Grafiti
 
-Grafiti can parse CloudTrail event data an tag resources based on it.
+Grafiti can parse CloudTrail event data and tag resources based on it.
 
 ## Motivating Example
 
@@ -28,7 +28,6 @@ tagPatterns = [
 filterPatterns = [
   ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
 ]
-
 ```
 
 Run:
@@ -45,6 +44,10 @@ This will tag all matching resources with tags that look like:
   "TaggedAt": "2017-04-28"
 }
 ```
+
+# Usage
+
+Make sure you have `jq` installed.
 
 ## Configure aws credentials
 
@@ -63,9 +66,12 @@ This will tag all matching resources with tags that look like:
  AWS_SECRET_ACCESS_KEY=MY-SECRET-KEY
 ```
 
-## Usage
+## Grafiti commands
 
-Parse and generate tags with `grafiti parse`. Use that data to tag resources in AWS with `grafiti tag`.
+* `grafiti parse` - Parses CloudTrail data and outputs useful information (to be consumed by `grafiti tag`)
+* `grafiti tag` - Tags resources in AWS based on tagging rules
+* `grafiti delete` - Deletes resources in AWS based on tag data
+
 
 ```
 Usage:
@@ -73,6 +79,7 @@ Usage:
   grafiti [command]
 
 Available Commands:
+  delete      delete resources in AWS
   help        Help about any command
   parse       parse and output resources by reading CloudTrail logs
   tag         tag resources in AWS
@@ -81,9 +88,12 @@ Flags:
   -c, --config string   config file (default is $HOME/.grafiti.toml)
   -d, --debug           enable debug logging
       --dry-run         output changes to stdout instead of AWS
+  -e, --ignoreErrors    Continue processing even when there are API errors.
 ```
 
 ## Configure Grafiti
+
+Grafiti takes a config file which configures it's basic function.
 
 ```toml
 [grafiti]
@@ -99,14 +109,16 @@ filterPatterns = [
 ]
 ```
 
-Setting `includeEvent = true` will include the raw CloudEvent in the tagging output (this is useful for finding
+ * `resourceType` - Specifies which type of resource to query for. This can be any value CloudTrail APIs accept.
+ * `hours` - Specifies how far back to query CloudTrail, in hours.
+ * `az` - The availability zone to query
+ * `includeEvent` - Setting `true` will include the raw CloudEvent in the tagging output (this is useful for finding
 attributes to filter on).
-
-`tagPatterns` should use jq syntax to generate `{tagKey: tagValue}` objects from output from `grafiti parse`. The
+ * `tagPatterns` - should use jq syntax to generate `{tagKey: tagValue}` objects from output from `grafiti parse`. The
  results will be included in the `Tags` field of the tagging output.
+ * `filterPatterns` - will filter output of `grafiti parse` based on jq syntax matches.
 
-`filterPatterns` will filter output of `grafiti parse` based on jq syntax matches.
-
+# Examples
 
 ## Parse CloudTrail data
 
@@ -194,3 +206,57 @@ Tagging input takes the form:
 ```
 
 This will apply the tags to the referenced resource.
+
+
+## Parsing + Tagging
+
+
+### Tag EC2 instances with CreatedBy, CreatedAt, and TaggedAt
+This is a full example of parsing events and generating tags from them.
+
+config.toml
+```toml
+[grafiti]
+resourceType = "AWS::EC2::Instance"
+hours = -8
+az = "us-east-1"
+includeEvent = false
+tagPatterns = [
+  "{CreatedBy: .userIdentity.arn}",
+  "{CreatedAt: .eventTime}",
+  "{TaggedAt: now|todate}",
+]
+filterPatterns = [
+  ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
+]
+
+```
+
+Run:
+```sh
+grafiti parse -c config.toml | grafiti tag -c config.toml
+```
+
+## Deleting Resources
+
+Grafiti supports deleting resources based on matching Tags.
+
+Delete input has the form:
+
+```json
+{
+	"TagFilters": [
+		{
+			"Key": "DeleteMe",
+			"Values": ["Yes"]
+		}
+	]
+}
+```
+TagFilters have the same form as the AWS TagFilter resources, see the
+[docs for details](http://docs.aws.amazon.com/resourcegroupstagging/latest/APIReference/API_TagFilter.html).
+Of note is that values can be chained with AND and OR e.g. `"Values": ["Yes", "OR", "Maybe"]`
+
+```sh
+echo "{\"TagFilters\":[{\"Key\": \"DeleteMe\", \"Values\": [\"Yes\"]}]}" | ./grafiti --dry-run -c config.toml delete
+```
