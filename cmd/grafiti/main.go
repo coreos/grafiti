@@ -22,28 +22,29 @@ import (
 	"github.com/spf13/viper"
 )
 
-var cfgFile string
-var debug bool
-var dryRun bool
-var ignoreErrors bool
+var (
+	cfgFile      string
+	debug        bool
+	dryRun       bool
+	ignoreErrors bool
+)
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
 	Use:   "grafiti",
 	Short: "A tool which ingests CloudTrail data and tags resources according to tagging rules.",
-	Long: `grafiti tags CloudTrail tags as input and tags AWS resources in response. By default, this tags resources
-with the creating user.`,
-	Run: func(cmd *cobra.Command, args []string) { cmd.Usage() },
+	Long:  `grafiti tags CloudTrail tags as input and tags AWS resources in response. By default, this tags resources with the creating user.`,
+	Run:   func(cmd *cobra.Command, args []string) { cmd.Usage() },
 }
 
 func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Root config holds global config
-	RootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.grafiti.toml)")
-	RootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "enable debug logging")
-	RootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "output changes to stdout instead of AWS")
-	RootCmd.PersistentFlags().BoolVarP(&ignoreErrors, "ignoreErrors", "e", false, "Continue processing even when there are API errors.")
+	RootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "Config file (default is $HOME/.grafiti.toml)")
+	RootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug logging.")
+	RootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Output changes to stdout instead of AWS.")
+	RootCmd.PersistentFlags().BoolVarP(&ignoreErrors, "ignore-errors", "e", false, "Continue processing even when there are API errors.")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -58,7 +59,7 @@ func initConfig() {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		log.Info("Using config file:", viper.ConfigFileUsed())
+		log.Info("Using config file: ", viper.ConfigFileUsed())
 	}
 
 }

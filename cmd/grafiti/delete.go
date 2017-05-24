@@ -23,33 +23,40 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
-	"github.com/coreos/grafiti/arn"
+	"github.com/aws/aws-sdk-go/service/autoscaling"
+	rgta "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	"github.com/estroz/grafiti/arn"
+	"github.com/estroz/grafiti/deleter"
+	"github.com/estroz/grafiti/describe"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-var deleteFile string
+var (
+	deleteFile string
+	silent     bool
+)
 
+// DeleteInput holds a list of all tags to be deleted
 type DeleteInput struct {
-	TagFilters []*resourcegroupstaggingapi.TagFilter
+	TagFilters []*rgta.TagFilter
 }
 
 func init() {
 	RootCmd.AddCommand(deleteCmd)
-	tagCmd.PersistentFlags().StringVarP(&tagFile, "deleteFile", "i", "", "ARNs that should be deleted")
+	deleteCmd.PersistentFlags().StringVarP(&deleteFile, "delete-file", "f", "", "File of tags of resources to delete.")
+	deleteCmd.PersistentFlags().BoolVarP(&silent, "silent", "s", false, "Suppress JSON output.")
 }
 
 var deleteCmd = &cobra.Command{
 	Use:   "delete",
-	Short: "delete resources in AWS",
+	Short: "Delete resources in AWS",
 	Long:  "Delete resources in AWS. Uses the configured delete filters to decide which resources to delete.",
 	RunE:  runDeleteCommand,
 }
 
 func runDeleteCommand(cmd *cobra.Command, args []string) error {
-	if tagFile != "" {
+	if deleteFile != "" {
 		return deleteFromFile(deleteFile)
 	}
 	if err := deleteFromStdIn(); err != nil {
@@ -57,122 +64,279 @@ func runDeleteCommand(cmd *cobra.Command, args []string) error {
 	}
 	return nil
 }
-func deleteFromFile(tagFile string) error {
-	file, err := os.Open(tagFile)
+
+func deleteFromFile(fname string) error {
+	file, err := os.Open(fname)
 	if err != nil {
 		return err
 	}
 	reader := bufio.NewReader(file)
-	return delete(reader)
+	return deleteFromTags(reader)
 }
 
 func deleteFromStdIn() error {
-	return delete(os.Stdin)
+	return deleteFromTags(os.Stdin)
 }
 
-func delete(reader io.Reader) error {
+func deleteFromTags(reader io.Reader) error {
 	region := viper.GetString("grafiti.az")
 	sess := session.Must(session.NewSession(
 		&aws.Config{
 			Region: aws.String(region),
 		},
 	))
-	svc := resourcegroupstaggingapi.New(sess)
+	svc := rgta.New(sess)
 	dec := json.NewDecoder(reader)
+	// Collect all ARN's
+	allARNs := make([]string, 0)
 
 	for {
 		t, isEOF, err := decodeDeleteInput(dec)
 		if err != nil {
 			return err
 		}
+		if isEOF {
+			break
+		}
 		if t == nil {
 			continue
 		}
-		// get ARNs of matching tags
-		params := &resourcegroupstaggingapi.GetResourcesInput{
-			PaginationToken: nil,
-			ResourceTypeFilters: []*string{
-				aws.String(arn.ServiceNameForResource(viper.GetString("grafiti.resourceType"))),
-			},
+
+		// Get ARNs of matching tags
+		params := &rgta.GetResourcesInput{
 			TagFilters:  t.TagFilters,
 			TagsPerPage: aws.Int64(100),
 		}
 
+		// If available, get all resourceTypes from config file
+		rts := viper.GetStringSlice("grafiti.resourceTypes")
+		if rts != nil {
+			rtfs := make([]*string, 0, len(rts))
+			for _, rt := range rts {
+				rtfs = append(rtfs, aws.String(arn.NamespaceForResource(rt)))
+			}
+			params.SetResourceTypeFilters(rtfs)
+		}
+
 		for {
-			// Get batch of matching resources
+			// Request a batch of matching resources
 			req, resp := svc.GetResourcesRequest(params)
 			if err := req.Send(); err != nil {
 				return err
 			}
-			arns := make([]string, len(resp.ResourceTagMappingList))
-			for _, r := range resp.ResourceTagMappingList {
-				if r.ResourceARN != nil && *r.ResourceARN != "" {
-					arns = append(arns, *r.ResourceARN)
-				}
-			}
-			if resp.PaginationToken == nil {
-				break
-			}
-			params.PaginationToken = resp.PaginationToken
 
-			if len(arns) == 0 {
+			if len(resp.ResourceTagMappingList) == 0 {
 				fmt.Println("No resources match the specified tag filters")
 				return nil
 			}
 
-			fmt.Println(arns)
+			for _, r := range resp.ResourceTagMappingList {
+				if r.ResourceARN != nil && *r.ResourceARN != "" {
+					allARNs = append(allARNs, *r.ResourceARN)
+				}
+			}
 
-			// Delete batch of matching resources
-			if err := deleteARNs(arns); err != nil {
-				return err
+			if resp.PaginationToken == nil || *resp.PaginationToken == "" {
+				break
+			}
+			params.SetPaginationToken(*resp.PaginationToken)
+		}
+
+		// Request all AutoScalingGroups with the same tags, as these cannot be
+		// retrieved using the resource group tagging API
+		asgs := getAutoScalingGroups(&t.TagFilters)
+		if asgs != nil {
+			for _, asg := range *asgs {
+				allARNs = append(allARNs, *asg.AutoScalingGroupARN)
 			}
 		}
+	}
 
-		if isEOF {
-			break
-		}
+	// Delete batch of matching resources
+	if err := deleteARNs(&allARNs); err != nil {
+		return err
+	}
+
+	if !silent {
+		arnsJSON, _ := json.MarshalIndent(allARNs, "", " ")
+		fmt.Printf("{\"DeletedARNs\": %s}\n", arnsJSON)
 	}
 
 	return nil
 }
 
-func deleteARNs(ARNs []string) error {
-	switch viper.GetString("grafiti.resourceType") {
-	case "AWS::EC2::Instance":
-		return deleteEC2Instances(ARNs)
+func getAutoScalingGroups(rgtaTags *[]*rgta.TagFilter) *[]*autoscaling.Group {
+	if rgtaTags == nil {
+		return nil
 	}
-	fmt.Println("ResourceType not yet supported")
-	return nil
-}
-
-func deleteEC2Instances(ARNs []string) error {
-	instanceIDs := make([]*string, len(ARNs))
-	for _, a := range ARNs {
-		id := arn.InstanceIDFromARN(a)
-		if id != "" {
-			instanceIDs = append(instanceIDs, aws.String(id))
-		}
+	asgTags := make([]*autoscaling.Filter, 0, 2*len(*rgtaTags))
+	for _, tag := range *rgtaTags {
+		asgTags = append(asgTags, &autoscaling.Filter{
+			Name:   aws.String("key"),
+			Values: aws.StringSlice([]string{*tag.Key}),
+		})
+		asgTags = append(asgTags, &autoscaling.Filter{
+			Name:   aws.String("value"),
+			Values: tag.Values,
+		})
 	}
 
-	region := viper.GetString("grafiti.az")
 	sess := session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(region),
+			Region: aws.String(viper.GetString("grafiti.az")),
 		},
 	))
-	svc := ec2.New(sess)
-	params := &ec2.TerminateInstancesInput{
-		InstanceIds: instanceIDs,
-		DryRun:      aws.Bool(dryRun),
-	}
-	_, err := svc.TerminateInstances(params)
+	svc := autoscaling.New(sess)
 
-	if err != nil {
-		if ignoreErrors {
-			fmt.Printf(`{"error": "%s"}\n`, err.Error())
+	params := &autoscaling.DescribeTagsInput{
+		Filters:    asgTags,
+		MaxRecords: aws.Int64(100),
+	}
+
+	asgNames := make([]string, 0)
+	for {
+		ctx := aws.BackgroundContext()
+		resp, rerr := svc.DescribeTagsWithContext(ctx, params)
+		if rerr != nil {
 			return nil
 		}
-		return err
+
+		if resp.Tags == nil {
+			break
+		}
+		for _, t := range resp.Tags {
+			asgNames = append(asgNames, *t.ResourceId)
+		}
+
+		if resp.NextToken != nil && *resp.NextToken != "" {
+			params.SetNextToken(*resp.NextToken)
+			continue
+		}
+		break
+	}
+
+	asgs, aerr := describe.GetAutoScalingGroups(&asgNames)
+	if aerr != nil {
+		return nil
+	}
+
+	return asgs
+}
+
+// Traverse dependency graph and request all possible ID's of resource
+// dependencies, then bucket them according to ResourceType.
+func bucketARNs(ARNs *[]string) *map[string][]string {
+	if ARNs == nil {
+		return nil
+	}
+	// All ARN's stored here. Key is some arn.*RType, value is a slice of ARN's
+	rTypeToARNMap := make(map[string][]string)
+	seen := make(map[string]bool)
+
+	// Initialize with all ID's from ARN's tagged in CloudTrail logs
+	for _, a := range *ARNs {
+		rType, rName := arn.MapARNToRTypeAndRName(a)
+		// Remove duplicates and nil resources
+		if _, ok := seen[rName]; ok || rType == "" || rName == "" {
+			continue
+		}
+		seen[rName] = true
+		rTypeToARNMap[rType] = append(rTypeToARNMap[rType], rName)
+	}
+
+	deleter.TraverseDependencyGraph(&rTypeToARNMap)
+
+	return &rTypeToARNMap
+}
+
+type delResMap struct {
+	ResourceType string
+	IDs          []string
+}
+
+func appendToOrderedList(rt string, resMap *map[string][]string, sortedMap *[]*delResMap) {
+	if ids, ok := (*resMap)[rt]; ok {
+		drm := &delResMap{
+			ResourceType: rt,
+			IDs:          ids,
+		}
+		*sortedMap = append(*sortedMap, drm)
+		delete(*resMap, rt)
+	}
+}
+
+func deleteARNs(ARNs *[]string) error {
+	awsCfg := &aws.Config{
+		Region: aws.String(viper.GetString("grafiti.az")),
+	}
+	cfg := &deleter.DeleteConfig{
+		IgnoreErrors: ignoreErrors,
+		DryRun:       dryRun,
+	}
+
+	// Create a slice of ARN's for every ResourceType in ARNs
+	resMap := bucketARNs(ARNs)
+	if resMap == nil {
+		return nil
+	}
+	// Ensure deletion order. Most resources have dependencies, so a dependency
+	// graph must be constructed and executed. See README for deletion order.
+	sortedByDelOrder := make([]*delResMap, 0, len(*resMap))
+	revOrderOfDeletion := []string{
+		arn.EC2VPCRType,
+		arn.EC2SecurityGroupRType,
+		arn.EC2RouteTableRType,
+		arn.EC2SubnetRType,
+		arn.EC2VolumeRType,
+		arn.EC2CustomerGatewayRType,  //
+		arn.EC2NetworkACLRType,       //
+		arn.EC2NetworkInterfaceRType, //
+		arn.EC2InternetGatewayRType,
+		arn.IAMUserRType, //
+		arn.IAMRoleRType,
+		arn.IAMInstanceProfileRType,
+		arn.AutoScalingLaunchConfigurationRType,
+		arn.EC2EIPRType,
+		arn.EC2EIPAssociationRType,
+		arn.EC2NatGatewayRType,
+		arn.ElasticLoadBalancingLoadBalancerRType,
+		arn.AutoScalingGroupRType,
+		arn.EC2InstanceRType,
+		// Delete SecurityGroup Rule
+		// Delete RouteTable Routes
+		arn.EC2RouteTableAssociationRType,
+		arn.Route53HostedZoneRType, // TODO: set up tag and delete steps for R53
+		// Delete Route53 RecordSets
+		// Delete IAM Role Policies
+		arn.S3BucketRType,
+		// Delete S3 Objects
+	}
+	// Append ARN's to sortedByDelOrder in deletion order
+	for _, rt := range revOrderOfDeletion {
+		appendToOrderedList(rt, resMap, &sortedByDelOrder)
+	}
+	// Add the remaining ARN's
+	var drm *delResMap
+	for k, v := range *resMap {
+		drm = &delResMap{
+			ResourceType: k,
+			IDs:          v,
+		}
+		sortedByDelOrder = append(sortedByDelOrder, drm)
+	}
+
+	// Delete all ARN's in a slice mapped by ResourceType. Iterate in reverse to
+	// delete all non-dependent resources first
+	size := len(sortedByDelOrder)
+	for i := range sortedByDelOrder {
+		drm = sortedByDelOrder[size-1-i]
+		cfg.ResourceType = drm.ResourceType
+		cfg.AWSSession = session.Must(session.NewSession(awsCfg))
+
+		if err := deleter.DeleteAWSResourcesByIDs(cfg, &drm.IDs); err != nil {
+			fmt.Printf("Error deleting resources of type %s: %s\n", drm.ResourceType, err.Error())
+		}
+
 	}
 	return nil
 }
@@ -184,7 +348,7 @@ func decodeDeleteInput(decoder *json.Decoder) (*DeleteInput, bool, error) {
 			return &decoded, true, nil
 		}
 		if ignoreErrors {
-			fmt.Printf(`{"error": "%s"}\n`, err.Error())
+			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 			return nil, false, nil
 		}
 		return nil, false, err
