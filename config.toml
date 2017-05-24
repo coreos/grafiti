@@ -1,5 +1,5 @@
 [grafiti]
-resourceType = "AWS::EC2::Instance"
+resourceTypes = ["AWS::EC2::RouteTable"]
 hours = -8
 az = "us-east-1"
 includeEvent = false
@@ -12,5 +12,5 @@ tagPatterns = [
 ]
 filterPatterns = [
 #  ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
-#  ".TaggingMetadata.ResourceType == \"AWS::ElasticLoadBalancing::LoadBalancer\"",
+#  ".TaggingMetadata.ResourceType != \"AWS::CloudTrail::Trail\"",
 ]
