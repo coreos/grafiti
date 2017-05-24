@@ -189,7 +189,7 @@ func printEvent(event *cloudtrail.Event, parsedEvent gjson.Result) {
 		})
 		resourceJSON, err := json.Marshal(output)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("{\"error\": \"%s\"}\n", err.Error()))
+			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 		}
 		if jsonMatch := matchFilter(&resourceJSON); !jsonMatch {
 			continue

@@ -287,7 +287,7 @@ func tagARNBucket(svc *rgta.ResourceGroupsTaggingAPI, bucket []string, tag Tag) 
 	time.Sleep(time.Duration(2) * time.Second)
 	if _, err := svc.TagResources(params); err != nil {
 		if ignoreErrors {
-			fmt.Println(fmt.Sprintf("{\"error\": \"%s\"}\n", err.Error()))
+			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 			return nil
 		}
 		return err
@@ -303,7 +303,7 @@ func decodeInput(decoder *json.Decoder) (*TagInput, bool, error) {
 			return &decoded, true, nil
 		}
 		if ignoreErrors {
-			fmt.Println(fmt.Sprintf("{\"error\": \"%s\"}\n", err.Error()))
+			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 			return nil, false, nil
 		}
 		return nil, false, err
