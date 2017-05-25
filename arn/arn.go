@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/service/cloudtrail"
+	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/coreos/grafiti/describe"
 	"github.com/tidwall/gjson"
 )
@@ -177,6 +178,12 @@ const (
 	S3BucketRType = "AWS::S3::Bucket"
 )
 
+// CTUnsupportedResourceTypes holds values for which CloudTrail does not
+// collect logs
+var CTUnsupportedResourceTypes = map[string]bool{
+	Route53HostedZoneRType: true,
+}
+
 // NamespaceForResource maps ResourceType to an ARN namespace
 func NamespaceForResource(resourceType string) string {
 	switch {
@@ -198,6 +205,8 @@ func NamespaceForResource(resourceType string) string {
 		return "redshift"
 	case strings.HasPrefix(resourceType, "AWS::RDS::"):
 		return "rds"
+	case strings.HasPrefix(resourceType, "AWS::Route53::"):
+		return "route53"
 	case strings.HasPrefix(resourceType, "AWS::S3::"):
 		return "s3"
 	}
@@ -205,20 +214,41 @@ func NamespaceForResource(resourceType string) string {
 }
 
 // MapResourceTypeToARN maps ResourceType to ARN
-func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Result) string {
-	region := parsedEvent.Get("awsRegion").Str
+func MapResourceTypeToARN(resource interface{}, parsedEvent gjson.Result, region string) string {
+	eventRegion := parsedEvent.Get("awsRegion").Str
 	accountID := parsedEvent.Get("userIdentity.accountId").Str
-	ARNPrefix := fmt.Sprintf("arn:aws:%s:%s:%s", NamespaceForResource(*resource.ResourceType), region, accountID)
-	// ARN prefixes lack a region for IAM resources
-	// if is a ResourceType enum value
-	if strings.HasPrefix(*resource.ResourceType, "AWS::IAM::") {
-		ARNPrefix = fmt.Sprintf("arn:aws:%s::%s", NamespaceForResource(*resource.ResourceType), accountID)
+	ARNPrefix := ""
+
+	if eventRegion != "" {
+		if region != eventRegion {
+			return ""
+		}
+		region = eventRegion
 	}
 
-	switch *resource.ResourceType {
+	resType, resName := "", ""
+
+	switch resource.(type) {
+	case *route53.HostedZone:
+		hzr := resource.(*route53.HostedZone)
+		resType, resName = Route53HostedZoneRType, *hzr.Id
+		break
+	case *cloudtrail.Resource:
+		cr := resource.(*cloudtrail.Resource)
+		resType, resName = *cr.ResourceType, *cr.ResourceName
+		ARNPrefix = fmt.Sprintf("arn:aws:%s:%s:%s", NamespaceForResource(resType), region, accountID)
+		// ARN prefixes lack a region for IAM resources
+		// if is a ResourceType enum value
+		if strings.HasPrefix(*cr.ResourceType, "AWS::IAM::") {
+			ARNPrefix = fmt.Sprintf("arn:aws:%s::%s", NamespaceForResource(resType), accountID)
+		}
+		break
+	}
+
+	switch resType {
 	case AutoScalingGroupRType:
 		// arn:aws:autoscaling:region:account-id:autoScalingGroup:groupid:autoScalingGroupName/groupfriendlyname
-		asgs, err := describe.GetAutoScalingGroups(&[]string{*resource.ResourceName})
+		asgs, err := describe.GetAutoScalingGroups(&[]string{resName})
 		if asgs == nil || len(*asgs) == 0 || err != nil {
 			return ""
 		}
@@ -227,7 +257,7 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 	case AutoScalingLaunchConfigurationRType:
 		// NOTE: will not tag
 		// arn:aws:autoscaling:region:account-id:launchConfiguration:launchconfigid:launchConfigurationName/launchconfigfriendlyname
-		// lcs, err := describe.GetAutoScalingLaunchConfigurations(&[]string{*resource.ResourceName})
+		// lcs, err := describe.GetAutoScalingLaunchConfigurations(&[]string{resName})
 		// if lcs == nil || len(*lcs) == 0 || err != nil {
 		// 	return ""
 		// }
@@ -249,208 +279,208 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		break
 	case ACMCertificateRType:
 		// arn:aws:acm:region:account-id:certificate/certificate-id
-		return fmt.Sprintf("%s:certificate/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:certificate/%s", ARNPrefix, resName)
 	case CloudTrailTrailRType:
 		// arn:aws:cloudtrail:region:account-id:trail/trailname
 		return parsedEvent.Get("responseElements.trailARN").String()
 	case CodePipelinePipelineRType:
 		// arn:aws:codepipeline:region:account-id:resource-specifier
-		return fmt.Sprintf("%s:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:%s", ARNPrefix, resName)
 	case EC2AmiRType:
 		// arn:aws:ec2:region::image/image-id
-		return fmt.Sprintf("arn:aws:ec2:%s::image/%s", region, *resource.ResourceName)
+		return fmt.Sprintf("arn:aws:ec2:%s::image/%s", region, resName)
 	case EC2BundleTaskRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2ConversionTaskRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2CustomerGatewayRType:
 		// arn:aws:ec2:region:account-id:customer-gateway/cgw-id
-		return fmt.Sprintf("%s:customer-gateway/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:customer-gateway/%s", ARNPrefix, resName)
 	case EC2DHCPOptionsRType:
 		// arn:aws:ec2:region:account-id:dhcp-options/dhcp-options-id
-		return fmt.Sprintf("%s:dhcp-options/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:dhcp-options/%s", ARNPrefix, resName)
 	case EC2EIPRType:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2EIPAssociationRType:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2ExportTaskRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2FlowLogRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2HostRType:
 		// arn:aws:ec2:region:account-id:dedicated-host/host-id
-		return fmt.Sprintf("%s:dedicated-host/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:dedicated-host/%s", ARNPrefix, resName)
 	case EC2ImportTaskRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2InstanceRType:
 		// arn:aws:ec2:region:account-id:instance/instance-id
-		return fmt.Sprintf("%s:instance/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:instance/%s", ARNPrefix, resName)
 	case EC2InternetGatewayRType:
 		// arn:aws:ec2:region:account-id:internet-gateway/igw-id
-		return fmt.Sprintf("%s:internet-gateway/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:internet-gateway/%s", ARNPrefix, resName)
 	case EC2KeyPairRType:
 		// arn:aws:ec2:region:account-id:key-pair/key-pair-name
-		return fmt.Sprintf("%s:key-pair/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:key-pair/%s", ARNPrefix, resName)
 	case EC2NatGatewayRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2NetworkACLRType:
 		// arn:aws:ec2:region:account-id:network-acl/nacl-id
-		return fmt.Sprintf("%s:network-acl/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:network-acl/%s", ARNPrefix, resName)
 	case EC2NetworkInterfaceRType:
 		// arn:aws:ec2:region:account-id:network-interface/eni-id
-		return fmt.Sprintf("%s:network-interface/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:network-interface/%s", ARNPrefix, resName)
 	case EC2NetworkInterfaceAttachmentRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2PlacementGroupRType:
 		// arn:aws:ec2:region:account-id:placement-group/placement-group-name
-		return fmt.Sprintf("%s:placement-group/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:placement-group/%s", ARNPrefix, resName)
 	case EC2ReservedInstanceRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2ReservedInstancesListingRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2ReservedInstancesModificationRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2RouteTableRType:
 		// arn:aws:ec2:region:account-id:route-table/route-table-id
-		return fmt.Sprintf("%s:route-table/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:route-table/%s", ARNPrefix, resName)
 	case EC2ScheduledInstanceRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2SecurityGroupRType:
 		// arn:aws:ec2:region:account-id:security-group/security-group-id
-		return fmt.Sprintf("%s:security-group/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:security-group/%s", ARNPrefix, resName)
 	case EC2SnapshotRType:
 		// arn:aws:ec2:region:account-id:snapshot/snapshot-id
-		return fmt.Sprintf("%s:snapshot/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:snapshot/%s", ARNPrefix, resName)
 	case EC2SpotFleetRequestRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2SpotInstanceRequestRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2SubnetRType:
 		// arn:aws:ec2:region:account-id:subnet/subnet-id
-		return fmt.Sprintf("%s:subnet/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:subnet/%s", ARNPrefix, resName)
 	case EC2SubnetNetworkACLAssociationRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2SubnetRouteTableAssociationRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2VolumeRType:
 		// arn:aws:ec2:region:account-id:volume/volume-id
-		return fmt.Sprintf("%s:volume/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:volume/%s", ARNPrefix, resName)
 	case EC2VPCRType:
 		// arn:aws:ec2:region:account-id:vpc/vpc-id
-		return fmt.Sprintf("%s:vpc/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:vpc/%s", ARNPrefix, resName)
 	case EC2VPCEndpointRType:
 		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case EC2VPCPeeringConnectionRType:
 		// arn:aws:ec2:region:account-id:vpc-peering-connection/vpc-peering-connection-id
-		return fmt.Sprintf("%s:vpc-peering-connection/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:vpc-peering-connection/%s", ARNPrefix, resName)
 	case EC2VPNConnectionRType:
 		// arn:aws:ec2:region:account-id:vpn-connection/vpn-id
-		return fmt.Sprintf("%s:vpn-connection/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:vpn-connection/%s", ARNPrefix, resName)
 	case EC2VPNGatewayRType:
 		// arn:aws:ec2:region:account-id:vpn-gateway/vgw-id
-		return fmt.Sprintf("%s:vpn-gateway/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:vpn-gateway/%s", ARNPrefix, resName)
 	case ElasticLoadBalancingLoadBalancerRType:
 		// arn:aws:elasticloadbalancing:region:account-id:loadbalancer/name
-		return fmt.Sprintf("%s:loadbalancer/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:loadbalancer/%s", ARNPrefix, resName)
 	case IAMAccessKeyRType:
 		// arn:aws:iam::account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case IAMAccountAliasRType:
 		// arn:aws:iam::account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case IAMGroupRType:
 		// arn:aws:iam::account-id:group/group-name
-		return fmt.Sprintf("%s:group/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:group/%s", ARNPrefix, resName)
 	case IAMInstanceProfileRType:
 		// NOTE: will not tag
 		// arn:aws:iam::account-id:instance-profile/instance-profile-name
-		// NOTE: *resource.ResourceName gives non-deterministic results: sometimes
+		// NOTE: resName gives non-deterministic results: sometimes
 		// an ID, sometimes the full ARN
-		// rName := *resource.ResourceName
+		// rName := resName
 		// if strings.HasPrefix(rName, "arn:aws:iam::") {
 		// 	return rName
 		// }
-		// return fmt.Sprintf("%s:instance-profile/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:instance-profile/%s", ARNPrefix, resName)
 		break
 	case IAMMfaDeviceRType:
 		// arn:aws:iam::account-id:mfa/virtual-device-name
-		return fmt.Sprintf("%s:mfa/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:mfa/%s", ARNPrefix, resName)
 	case IAMOpenIDConnectProviderRType:
 		// arn:aws:iam::account-id:oidc-provider/provider-name
-		return fmt.Sprintf("%s:oidc-provider/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:oidc-provider/%s", ARNPrefix, resName)
 	case IAMPolicyRType:
 		// NOTE: will not tag
 		// arn:aws:iam::account-id:policy/policy-name
-		// return fmt.Sprintf("%s:policy/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:policy/%s", ARNPrefix, resName)
 		break
 	case IAMRoleRType:
 		// NOTE: will not tag
 		// arn:aws:iam::account-id:role/role-name
-		// return fmt.Sprintf("%s:role/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:role/%s", ARNPrefix, resName)
 		break
 	case IAMSamlProviderRType:
 		// arn:aws:iam::account-id:saml-provider/provider-name
-		return fmt.Sprintf("%s:saml-provider/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:saml-provider/%s", ARNPrefix, resName)
 	case IAMServerCertificateRType:
 		// arn:aws:iam::account-id:server-certificate/certificate-name
-		return fmt.Sprintf("%s:server-certificate/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:server-certificate/%s", ARNPrefix, resName)
 	case IAMSigningCertificateRType:
 		// arn:aws:iam::account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case IAMSshPublicKeyRType:
 		// arn:aws:iam::account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case IAMUserRType:
 		// arn:aws:iam::account-id:user/user-name
-		return fmt.Sprintf("%s:user/%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:user/%s", ARNPrefix, resName)
 		// return parsedEvent.Get("userIdentity.arn").String()
 	case RedshiftClusterRType:
 		// arn:aws:redshift:region:account-id:cluster:clustername
-		return fmt.Sprintf("%s:cluster:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:cluster:%s", ARNPrefix, resName)
 	case RedshiftClusterParameterGroupRType:
 		// arn:aws:redshift:region:account-id:parametergroup:parametergroupname
-		return fmt.Sprintf("%s:parametergroup:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:parametergroup:%s", ARNPrefix, resName)
 	case RedshiftClusterSecurityGroupRType:
 		// arn:aws:redshift:region:account-id:securitygroup:securitygroupname
-		return fmt.Sprintf("%s:securitygroup:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:securitygroup:%s", ARNPrefix, resName)
 	case RedshiftClusterSnapshotRType:
 		// arn:aws:redshift:region:account-id:snapshot:clustername/snapshotname
 		// cn := parsedEvent.Get("responseElements.clustername")
@@ -459,56 +489,56 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		break
 	case RedshiftClusterSubnetGroupRType:
 		// arn:aws:redshift:region:account-id:subnetgroup:subnetgroupname
-		return fmt.Sprintf("%s:subnetgroup:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:subnetgroup:%s", ARNPrefix, resName)
 	case RedshiftEventSubscriptionRType:
 		// arn:aws:redshift:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case RedshiftHsmClientCertificateRType:
 		// arn:aws:redshift:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case RedshiftHsmConfigurationRType:
 		// arn:aws:redshift:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case RDSDBClusterRType:
 		// arn:aws:rds:region:account-id:cluster:db-cluster-name
-		return fmt.Sprintf("%s:cluster:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:cluster:%s", ARNPrefix, resName)
 	case RDSDBClusterOptionGroupRType:
 		// arn:aws:rds:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case RDSDBClusterParameterGroupRType:
 		// arn:aws:rds:region:account-id:cluster-pg:cluster-parameter-group-name
-		return fmt.Sprintf("%s:cluster-pg:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:cluster-pg:%s", ARNPrefix, resName)
 	case RDSDBClusterSnapshotRType:
 		// arn:aws:rds:region:account-id:cluster-snapshot:cluster-snapshot-name
-		return fmt.Sprintf("%s:cluster-snapshot:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:cluster-snapshot:%s", ARNPrefix, resName)
 	case RDSDBInstanceRType:
 		// arn:aws:rds:region:account-id:db:db-instance-name
-		return fmt.Sprintf("%s:db:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:db:%s", ARNPrefix, resName)
 	case RDSDBOptionGroupRType:
 		// arn:aws:rds:region:account-id:og:option-group-name
-		return fmt.Sprintf("%s:og:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:og:%s", ARNPrefix, resName)
 	case RDSDBParameterGroupRType:
 		// arn:aws:rds:region:account-id:pg:parameter-group-name
-		return fmt.Sprintf("%s:pg:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:pg:%s", ARNPrefix, resName)
 	case RDSDBSecurityGroupRType:
 		// arn:aws:rds:region:account-id:secgrp:security-group-name
-		return fmt.Sprintf("%s:secgrp:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:secgrp:%s", ARNPrefix, resName)
 	case RDSDBSnapshotRType:
 		// arn:aws:rds:region:account-id:snapshot:snapshot-name
-		return fmt.Sprintf("%s:snapshot:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:snapshot:%s", ARNPrefix, resName)
 	case RDSDBSubnetGroupRType:
 		// arn:aws:rds:region:account-id:subgrp:subnet-group-name
-		return fmt.Sprintf("%s:subgrp:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:subgrp:%s", ARNPrefix, resName)
 	case RDSEventSubscriptionRType:
 		// arn:aws:rds:region:account-id:es:subscription-name
-		return fmt.Sprintf("%s:es:%s", ARNPrefix, *resource.ResourceName)
+		return fmt.Sprintf("%s:es:%s", ARNPrefix, resName)
 	case RDSReservedDBInstanceRType:
 		// arn:aws:rds:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, resName)
 		break
 	case Route53ChangeRType:
 		// arn:aws:route53:::change/changeid
@@ -517,12 +547,14 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		break
 	case Route53HostedZoneRType:
 		// arn:aws:route53:::hostedzone/zoneid
-		// zid := parsedEvent.Get("responseElements.zoneid")
-		// return fmt.Sprintf("arn:aws:route53:::hostedzone/%s", zid)
-		break
+		hzSplit := strings.Split(resName, "/hostedzone/")
+		if len(hzSplit) != 2 {
+			return ""
+		}
+		return fmt.Sprintf("arn:aws:route53:::hostedzone/%s", hzSplit[1])
 	case S3BucketRType:
 		// arn:aws:s3:::bucket-name
-		return fmt.Sprintf("arn:aws:s3:::%s", *resource.ResourceName)
+		return fmt.Sprintf("arn:aws:s3:::%s", resName)
 	}
 	return ""
 }
@@ -648,7 +680,7 @@ func MapARNToRTypeAndRName(ARN string) (string, string) {
 
 	case strings.HasPrefix(ARN, "arn:aws:route53:::"):
 		m := strings.Split(ARN, "arn:aws:route53:::")
-		if len(m) == 1 {
+		if len(m) == 2 {
 			sfx = m[1]
 		} else {
 			return "", ""

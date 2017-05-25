@@ -525,46 +525,94 @@ func GetIAMRolePoliciesByRoles(rns *[]string) (*map[string][]string, error) {
 	return &rpsMap, nil
 }
 
-// GetRoute53ResourceRecordSets retrieves a list of ResourceRecordSets
-// from a slice of hosted zone ID's
-func GetRoute53ResourceRecordSets(hzIDs *[]string) (*map[string][]*route53.ResourceRecordSet, error) {
+// GetRoute53HostedZones retrieves a list of all hosted zones
+func GetRoute53HostedZones() (*[]*route53.HostedZone, error) {
+	hzs := make([]*route53.HostedZone, 0)
+	svc := route53.New(setUpAWSSession())
+	params := &route53.ListHostedZonesInput{
+		MaxItems: aws.String("100"),
+	}
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := svc.ListHostedZonesWithContext(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+		for _, hz := range resp.HostedZones {
+			hzs = append(hzs, hz)
+		}
+
+		if resp.IsTruncated == nil || !*resp.IsTruncated {
+			break
+		}
+
+		if resp.NextMarker != nil && *resp.NextMarker != "" {
+			params.SetMarker(*resp.NextMarker)
+		}
+	}
+	return &hzs, nil
+}
+
+// GetRoute53HostedZonesByIDs retrieves a list of hosted zones by their ID's
+func GetRoute53HostedZonesByIDs(hzIDs *[]string) (*[]*route53.HostedZone, error) {
 	if hzIDs == nil {
 		return nil, nil
 	}
-	hzResMap := make(map[string][]*route53.ResourceRecordSet)
-	svc := route53.New(setUpAWSSession())
+	// Only way to filter is iteratively (no query params)
+	want := make(map[string]bool)
 	for _, id := range *hzIDs {
-		rrs := make([]*route53.ResourceRecordSet, 0)
-		params := &route53.ListResourceRecordSetsInput{
-			HostedZoneId: aws.String(id),
-			MaxItems:     aws.String("100"),
+		if _, ok := want["/hostedzone/"+id]; !ok {
+			want["/hostedzone/"+id] = true
 		}
-		for {
-			ctx := aws.BackgroundContext()
-			resp, err := svc.ListResourceRecordSetsWithContext(ctx, params)
-			if err != nil {
-				return nil, err
-			}
-			for _, r := range resp.ResourceRecordSets {
-				rrs = append(rrs, r)
-			}
-
-			if resp.IsTruncated == nil || !*resp.IsTruncated {
-				break
-			}
-			if resp.NextRecordIdentifier != nil && *resp.NextRecordIdentifier != "" {
-				params.SetStartRecordIdentifier(*resp.NextRecordIdentifier)
-			}
-			if resp.NextRecordType != nil && *resp.NextRecordType != "" {
-				params.SetStartRecordType(*resp.NextRecordType)
-			}
-			if resp.NextRecordName != nil && *resp.NextRecordName != "" {
-				params.SetStartRecordName(*resp.NextRecordName)
-			}
-		}
-		hzResMap[id] = rrs
 	}
-	return &hzResMap, nil
+
+	wantedHZs := make([]*route53.HostedZone, 0)
+	hzs, _ := GetRoute53HostedZones()
+
+	for _, hz := range *hzs {
+		if _, ok := want[*hz.Id]; ok {
+			wantedHZs = append(wantedHZs, hz)
+		}
+	}
+
+	return &wantedHZs, nil
+}
+
+// GetRoute53ResourceRecordSetsByID retrieves a list of ResourceRecordSets by hz id
+func GetRoute53ResourceRecordSetsByID(hzID string) (*[]*route53.ResourceRecordSet, error) {
+	if hzID == "" {
+		return nil, nil
+	}
+	rrs := make([]*route53.ResourceRecordSet, 0)
+	params := &route53.ListResourceRecordSetsInput{
+		HostedZoneId: aws.String(hzID),
+		MaxItems:     aws.String("100"),
+	}
+	svc := route53.New(setUpAWSSession())
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := svc.ListResourceRecordSetsWithContext(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range resp.ResourceRecordSets {
+			rrs = append(rrs, r)
+		}
+
+		if resp.IsTruncated == nil || !*resp.IsTruncated {
+			break
+		}
+		if resp.NextRecordIdentifier != nil && *resp.NextRecordIdentifier != "" {
+			params.SetStartRecordIdentifier(*resp.NextRecordIdentifier)
+		}
+		if resp.NextRecordType != nil && *resp.NextRecordType != "" {
+			params.SetStartRecordType(*resp.NextRecordType)
+		}
+		if resp.NextRecordName != nil && *resp.NextRecordName != "" {
+			params.SetStartRecordName(*resp.NextRecordName)
+		}
+	}
+	return &rrs, nil
 }
 
 // GetS3BucketObjects gets objects in an S3 bucket

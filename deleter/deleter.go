@@ -475,21 +475,21 @@ func deleteEC2InternetGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 	return nil
 }
 
-func deleteEC2NatGatewaysByIDs(cfg *DeleteConfig, ngwIDs *[]string) error {
-	if ngwIDs == nil {
+func deleteEC2NatGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
 		return nil
 	}
 
 	svc := ec2.New(cfg.AWSSession)
 	fmtStr := "Deleted EC2 NatGateway"
 	if cfg.DryRun {
-		for _, id := range *ngwIDs {
+		for _, id := range *ids {
 			fmt.Println(drStr, fmtStr, id)
 		}
 		return nil
 	}
 	var params *ec2.DeleteNatGatewayInput
-	for _, id := range *ngwIDs {
+	for _, id := range *ids {
 		params = &ec2.DeleteNatGatewayInput{
 			NatGatewayId: aws.String(id),
 		}
@@ -1186,12 +1186,12 @@ func deleteEC2VolumesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	return nil
 }
 
-func deleteEC2VPCCIDRBlocks(cfg *DeleteConfig, vpcIDs *[]string) error {
-	if vpcIDs == nil {
+func deleteEC2VPCCIDRBlocks(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
 		return nil
 	}
 
-	vpcs, verr := describe.GetEC2VPCs(vpcIDs)
+	vpcs, verr := describe.GetEC2VPCs(ids)
 	if verr != nil {
 		return verr
 	}
@@ -1201,7 +1201,7 @@ func deleteEC2VPCCIDRBlocks(cfg *DeleteConfig, vpcIDs *[]string) error {
 
 	svc := ec2.New(cfg.AWSSession)
 	if cfg.DryRun {
-		for _, id := range *vpcIDs {
+		for _, id := range *ids {
 			fmt.Printf("%s Deleted EC2 VPC %s CIDRBlockAssociation\n", drStr, id)
 		}
 		return nil
@@ -1333,7 +1333,7 @@ func removeIAMRolesFromInstanceProfilesByIPrs(cfg *DeleteConfig, iprs *[]*iam.In
 	svc := iam.New(cfg.AWSSession)
 	if cfg.DryRun {
 		for _, ipr := range *iprs {
-			fmt.Println("Removed Role from IAM InstanceProfile", ipr.InstanceProfileId)
+			fmt.Println(drStr, "Removed Role from IAM InstanceProfile", *ipr.InstanceProfileId)
 		}
 		return nil
 	}
@@ -1543,8 +1543,8 @@ func deleteIAMUsersByNames(cfg *DeleteConfig, ns *[]string) error {
 	return nil
 }
 
-func deleteS3Objects(cfg *DeleteConfig, bktIDs *[]string) error {
-	if bktIDs == nil {
+func deleteS3Objects(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
 		return nil
 	}
 
@@ -1552,15 +1552,15 @@ func deleteS3Objects(cfg *DeleteConfig, bktIDs *[]string) error {
 	svc := s3.New(cfg.AWSSession)
 
 	if cfg.DryRun {
-		for _, bkt := range *bktIDs {
-			fmt.Printf("%s %s from S3 Bucket %s\n", drStr, fmtStr, bkt)
+		for _, id := range *ids {
+			fmt.Printf("%s %s from S3 Bucket %s\n", drStr, fmtStr, id)
 		}
 		return nil
 	}
 
 	var params *s3.DeleteObjectsInput
-	for _, bkt := range *bktIDs {
-		objs, oerr := describe.GetS3BucketObjects(bkt)
+	for _, id := range *ids {
+		objs, oerr := describe.GetS3BucketObjects(id)
 		if oerr != nil || objs == nil {
 			continue
 		}
@@ -1570,7 +1570,7 @@ func deleteS3Objects(cfg *DeleteConfig, bktIDs *[]string) error {
 			objIDs = append(objIDs, &s3.ObjectIdentifier{Key: o.Key})
 		}
 		params = &s3.DeleteObjectsInput{
-			Bucket: aws.String(bkt),
+			Bucket: aws.String(id),
 			Delete: &s3.Delete{Objects: objIDs},
 		}
 		ctx := aws.BackgroundContext()
@@ -1580,14 +1580,14 @@ func deleteS3Objects(cfg *DeleteConfig, bktIDs *[]string) error {
 			if isAWSError {
 				aerrCode := herr.(awserr.Error).Code()
 				if aerrCode == depvCode || aerrCode == invpCode {
-					fmt.Printf("Could not delete %s (%s)\n", bkt, aerrCode)
+					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
 			return herr
 		}
 		for _, o := range resp.Deleted {
-			fmt.Printf("%s %s from S3 Bucket %s\n", fmtStr, *o.Key, bkt)
+			fmt.Printf("%s %s from S3 Bucket %s\n", fmtStr, *o.Key, id)
 		}
 	}
 	return nil
@@ -1635,75 +1635,89 @@ func deleteS3BucketsByNames(cfg *DeleteConfig, ns *[]string) error {
 	return nil
 }
 
-func deleteRoute53ResourceRecordSets(cfg *DeleteConfig, hzResMap *map[string][]*route53.ResourceRecordSet) error {
-	if hzResMap == nil {
+func deleteRoute53ResourceRecordSets(cfg *DeleteConfig, hzID string, rrs *[]*route53.ResourceRecordSet) error {
+	if rrs == nil {
 		return nil
 	}
-	svc := route53.New(cfg.AWSSession)
+
 	fmtStr := "Deleted Route53 ResourceRecordSet"
-	var params *route53.ChangeResourceRecordSetsInput
 	if cfg.DryRun {
-		for hz, rrs := range *hzResMap {
-			for _, rs := range rrs {
-				fmt.Printf("%s %s %s (HZ %s)\n", drStr, fmtStr, *rs.Name, hz)
-			}
+		for _, rs := range *rrs {
+			fmt.Printf("%s %s %s (HZ %s)\n", drStr, fmtStr, *rs.Name, hzID)
 		}
 		return nil
 	}
-	for hz, rrs := range *hzResMap {
-		changes := make([]*route53.Change, 0, len(rrs))
-		for _, rs := range rrs {
-			changes = append(changes, &route53.Change{
-				Action:            aws.String(route53.ChangeActionDelete),
-				ResourceRecordSet: rs,
-			})
+	changes := make([]*route53.Change, 0, len(*rrs))
+	for _, rs := range *rrs {
+		// Cannot delete NS/SOA type record sets
+		if *rs.Type == "NS" || *rs.Type == "SOA" {
+			continue
 		}
+		fmt.Printf("Adding RRS %s (%s)\n", *rs.Name, *rs.Type)
+		changes = append(changes, &route53.Change{
+			Action:            aws.String(route53.ChangeActionDelete),
+			ResourceRecordSet: rs,
+		})
+	}
 
-		params = &route53.ChangeResourceRecordSetsInput{
-			ChangeBatch:  &route53.ChangeBatch{Changes: changes},
-			HostedZoneId: aws.String(hz),
-		}
+	if len(changes) == 0 {
+		return nil
+	}
 
-		ctx := aws.BackgroundContext()
-		_, cerr := svc.ChangeResourceRecordSetsWithContext(ctx, params)
-		if cerr != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, cerr)
-			if isAWSError {
-				aerr := herr.(awserr.Error)
-				aerrCode, aerrMsg := aerr.Code(), aerr.Message()
-				if strings.Contains(aerrMsg, ".NotFound") {
-					for _, c := range changes {
-						fmt.Printf("%s Record Set %s not found\n", hz, *c.ResourceRecordSet.Name)
-					}
-					continue
+	params := &route53.ChangeResourceRecordSetsInput{
+		ChangeBatch:  &route53.ChangeBatch{Changes: changes},
+		HostedZoneId: aws.String(hzID),
+	}
+
+	svc := route53.New(cfg.AWSSession)
+	ctx := aws.BackgroundContext()
+	_, cerr := svc.ChangeResourceRecordSetsWithContext(ctx, params)
+	if cerr != nil {
+		isAWSError, herr := handleAWSError(cfg.IgnoreErrors, cerr)
+		if isAWSError {
+			aerr := herr.(awserr.Error)
+			aerrCode, aerrMsg := aerr.Code(), aerr.Message()
+			if strings.Contains(aerrMsg, ".NotFound") {
+				for _, c := range changes {
+					fmt.Printf("%s Record Set %s not found\n", hzID, *c.ResourceRecordSet.Name)
 				}
-				if aerrCode == depvCode || aerrCode == invpCode {
-					for _, c := range changes {
-						fmt.Printf("Could not delete %s Record Set %s (%s)\n", hz, *c.ResourceRecordSet.Name, aerrCode)
-					}
-					continue
-				}
+				return nil
 			}
-			return herr
+			if aerrCode == depvCode || aerrCode == invpCode {
+				for _, c := range changes {
+					fmt.Printf("Could not delete %s Record Set %s (%s)\n", hzID, *c.ResourceRecordSet.Name, aerrCode)
+				}
+				return nil
+			}
 		}
+		// return herr
+		fmt.Println(herr.Error())
+	}
+	for _, rs := range *rrs {
+		fmt.Printf("%s %s (HZ %s)\n", fmtStr, *rs.Name, hzID)
 	}
 	return nil
 }
 
 // NOTE: must delete all non-default resource record sets before deleting a
 // hosted zone. Will receive HostedZoneNotEmpty otherwise
+// TODO: only delete private hosted zones (config[private] == true). Otherwise
+// do NOT delete hosted zone completely, only disassociate vpc and delete record
+// sets
 func deleteRoute53HostedZonesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	if ids == nil {
 		return nil
 	}
+
 	// First delete all resource record sets
-	rrs, rerr := describe.GetRoute53ResourceRecordSets(ids)
-	if rerr != nil {
-		return rerr
+	for _, id := range *ids {
+		rrs, rerr := describe.GetRoute53ResourceRecordSetsByID(id)
+		if rerr != nil || rrs == nil {
+			continue
+		}
+		_ = deleteRoute53ResourceRecordSets(cfg, id, rrs)
 	}
-	if rrerr := deleteRoute53ResourceRecordSets(cfg, rrs); rrerr != nil {
-		return rrerr
-	}
+
 	// Then delete hosted zones
 	svc := route53.New(cfg.AWSSession)
 	fmtStr := "Deleted Route53 HostedZone"
@@ -1730,11 +1744,39 @@ func deleteRoute53HostedZonesByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			// return herr
+			fmt.Println(herr.Error())
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
+}
+
+// NOTE: must delete all non-default resource record sets before deleting a
+// hosted zone. Will receive HostedZoneNotEmpty otherwise
+// TODO: only delete private hosted zones (config[private] == true). Otherwise
+// do NOT delete hosted zone completely, only disassociate vpc and delete record
+// sets
+// Deletes only private hosted zones
+func deleteRoute53HostedZonesPrivate(cfg *DeleteConfig, ids *[]string) error {
+	hzs, err := describe.GetRoute53HostedZonesByIDs(ids)
+	if err != nil && hzs == nil {
+		return nil
+	}
+	hzIDs := make([]string, 0)
+	for _, hz := range *hzs {
+		if *hz.Config.PrivateZone {
+			hzSplit := strings.Split(*hz.Id, "/hostedzone/")
+			if len(hzSplit) != 2 {
+				continue
+			}
+			hzIDs = append(hzIDs, hzSplit[1])
+		}
+	}
+
+	return deleteRoute53HostedZonesByIDs(cfg, &hzIDs)
 }
 
 // TraverseDependencyGraph traverses necesssary linkages of each resource
@@ -1743,6 +1785,9 @@ func TraverseDependencyGraph(depMap *map[string][]string) {
 		return
 	}
 	for dt, ids := range *depMap {
+		if ids == nil {
+			continue
+		}
 		switch dt {
 		case arn.EC2VPCRType:
 			break
@@ -1903,7 +1948,8 @@ func DeleteAWSResourcesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		// case arn.Route53ChangeRType:
 		// 	return deleteRoute53ChangesByIDs(cfg, ids)
 	case arn.Route53HostedZoneRType:
-		return deleteRoute53HostedZonesByIDs(cfg, ids)
+		// TODO: implement public record set destruction (not full zone destruction)
+		return deleteRoute53HostedZonesPrivate(cfg, ids)
 	}
 	fmt.Printf("%s is not a supported ResourceType\n", cfg.ResourceType)
 	return nil
