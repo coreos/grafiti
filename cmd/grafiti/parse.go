@@ -99,28 +99,27 @@ func parse() error {
 		}
 	}
 
-	// If no CloudTrail-supported resource types were specified in resourceTypes,
-	// don't bother calling parseCloudTrailEvents (unless no resources are specified)
+	// If any resourceTypes were specified, ensure their parse handlers are called
+	// accordingly
 	switch {
-	case len(ctRts) > 0:
+	case len(rts) > 0:
 		if len(otherRts) > 0 {
 			for _, rt := range otherRts {
 				switch rt {
 				case arn.Route53HostedZoneRType:
 					_ = parseRoute53Events()
-					break
 				}
 			}
 		}
+		// If no CloudTrail-supported resourceTypes were specified don't bother
+		// calling parseCloudTrailEvents
 		if len(otherRts) == len(rts) {
 			break
 		}
 		_ = parseCloudTrailEvents(ctRts...)
-		break
-	case len(ctRts) == 0:
+	case len(rts) == 0:
 		_ = parseCloudTrailEvents()
 		_ = parseRoute53Events()
-		break
 	}
 
 	return nil
@@ -241,8 +240,11 @@ func printEvents(events interface{}) {
 func printCloudTrailEvent(event *cloudtrail.Event, parsedEvent gjson.Result) {
 	includeEvent := viper.GetBool("grafiti.includeEvent")
 	for _, r := range event.Resources {
+		if r.ResourceName == nil || r.ResourceType == nil {
+			continue
+		}
 		ARN := arn.MapResourceTypeToARN(r, parsedEvent)
-		if r.ResourceName == nil || r.ResourceType == nil || ARN == "" {
+		if ARN == "" {
 			continue
 		}
 		tags := getTags(event)
