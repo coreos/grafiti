@@ -1,0 +1,12 @@
+{
+	"TagFilters": [
+		{
+			"Key": "Purpose",
+			"Values": ["Testing", "Test"]
+		},
+		{
+			"Key": "KubernetesCluster",
+			"Values": ["release-test-1"]
+		}
+	]
+}
