@@ -27,6 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	rgta "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/coreos/grafiti/arn"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -184,9 +185,11 @@ func tag(reader io.Reader) error {
 
 		resARN := t.TaggingMetadata.ResourceARN
 
-		// AutoScalingGroups have their own tagging API that must be used
+		// AutoScalingGroups and Route53 HostedZones have their own tagging API's
 		if strings.HasPrefix(resARN, "arn:aws:autoscaling") {
 			tagAutoScalingGroup(resARN, t.Tags)
+		} else if strings.HasPrefix(resARN, "arn:aws:route53") {
+			tagRoute53HostedZone(resARN, t.Tags)
 		} else {
 			ARNBuckets.AddARNToBuckets(resARN, t.Tags)
 		}
@@ -251,10 +254,7 @@ func tagAutoScalingGroup(ARN string, tags Tags) {
 			ResourceId:        aws.String(rName),
 			PropagateAtLaunch: aws.Bool(true),
 		}
-		tj, _ := json.Marshal(tag)
-		if !tagsOnly {
-			fmt.Println(string(tj))
-		}
+
 		asTags = append(asTags, &tag)
 	}
 
@@ -263,11 +263,57 @@ func tagAutoScalingGroup(ARN string, tags Tags) {
 	}
 
 	ctx := aws.BackgroundContext()
-	_, err := svc.CreateOrUpdateTagsWithContext(ctx, params)
-	if err != nil {
+	if _, err := svc.CreateOrUpdateTagsWithContext(ctx, params); err != nil {
 		fmt.Println(err.Error())
-		// fmt.Println("Failed to tag", ARN)
+	} else {
+		if !tagsOnly {
+			pj, _ := json.Marshal(params)
+			fmt.Println(string(pj))
+		}
 	}
+
+	return
+}
+
+func tagRoute53HostedZone(ARN string, tags Tags) {
+	sess := session.Must(session.NewSession(
+		&aws.Config{
+			Region: aws.String(viper.GetString("grafiti.az")),
+		},
+	))
+	svc := route53.New(sess)
+	rType, rName := arn.MapARNToRTypeAndRName(ARN)
+	if rType != arn.Route53HostedZoneRType {
+		return
+	}
+
+	hzTags := make([]*route53.Tag, 0, len(tags))
+	for tk, tv := range tags {
+		tag := route53.Tag{
+			Key:   aws.String(tk),
+			Value: aws.String(tv),
+		}
+		hzTags = append(hzTags, &tag)
+	}
+
+	// Only hostedzones (and healthchecks, but they are not supported yet) allow
+	// tagging
+	params := &route53.ChangeTagsForResourceInput{
+		AddTags:      hzTags,
+		ResourceId:   aws.String(rName),
+		ResourceType: aws.String("hostedzone"),
+	}
+
+	ctx := aws.BackgroundContext()
+	if _, err := svc.ChangeTagsForResourceWithContext(ctx, params); err != nil {
+		fmt.Println(err.Error())
+	} else {
+		if !tagsOnly {
+			pj, _ := json.Marshal(params)
+			fmt.Println(string(pj))
+		}
+	}
+
 	return
 }
 

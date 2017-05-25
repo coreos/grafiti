@@ -20,11 +20,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	rgta "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/coreos/grafiti/arn"
 	"github.com/coreos/grafiti/deleter"
 	"github.com/coreos/grafiti/describe"
@@ -113,6 +115,9 @@ func deleteFromTags(reader io.Reader) error {
 		if rts != nil {
 			rtfs := make([]*string, 0, len(rts))
 			for _, rt := range rts {
+				if _, ok := arn.RGTAUnsupportedResourceTypes[rt]; ok {
+					continue
+				}
 				rtfs = append(rtfs, aws.String(arn.NamespaceForResource(rt)))
 			}
 			params.SetResourceTypeFilters(rtfs)
@@ -144,10 +149,19 @@ func deleteFromTags(reader io.Reader) error {
 
 		// Request all AutoScalingGroups with the same tags, as these cannot be
 		// retrieved using the resource group tagging API
-		asgs := getAutoScalingGroups(&t.TagFilters)
+		asgs := getAutoScalingGroupsByTags(&t.TagFilters)
 		if asgs != nil {
 			for _, asg := range *asgs {
 				allARNs = append(allARNs, *asg.AutoScalingGroupARN)
+			}
+		}
+		// Request all HostedZones with the same tags, as these cannot be
+		// retrieved using the resource group tagging API
+		hzIDs := getRoute53HostedZoneIDsByTags(&t.TagFilters)
+		if hzIDs != nil {
+			for _, id := range *hzIDs {
+				hzARN := fmt.Sprintf("arn:aws:route53:::hostedzone/%s", id)
+				allARNs = append(allARNs, hzARN)
 			}
 		}
 	}
@@ -165,7 +179,7 @@ func deleteFromTags(reader io.Reader) error {
 	return nil
 }
 
-func getAutoScalingGroups(rgtaTags *[]*rgta.TagFilter) *[]*autoscaling.Group {
+func getAutoScalingGroupsByTags(rgtaTags *[]*rgta.TagFilter) *[]*autoscaling.Group {
 	if rgtaTags == nil {
 		return nil
 	}
@@ -221,6 +235,78 @@ func getAutoScalingGroups(rgtaTags *[]*rgta.TagFilter) *[]*autoscaling.Group {
 	}
 
 	return asgs
+}
+
+func getRoute53HostedZoneIDsByTags(rgtaTags *[]*rgta.TagFilter) *[]string {
+	if rgtaTags == nil {
+		return nil
+	}
+	tagKeyMap := make(map[string][]string)
+	for _, tag := range *rgtaTags {
+		for _, v := range tag.Values {
+			if _, ok := tagKeyMap[*tag.Key]; !ok {
+				tagKeyMap[*tag.Key] = append(tagKeyMap[*tag.Key], *v)
+			}
+		}
+	}
+
+	hzs, herr := describe.GetRoute53HostedZones()
+	if herr != nil || hzs == nil {
+		return nil
+	}
+
+	hzIDs := make([]string, 0, len(*hzs))
+	for _, hz := range *hzs {
+		hzSplit := strings.Split(*hz.Id, "/hostedzone/")
+		if len(hzSplit) != 2 {
+			continue
+		}
+		hzIDs = append(hzIDs, hzSplit[1])
+	}
+
+	params := &route53.ListTagsForResourcesInput{
+		ResourceType: aws.String("hostedzone"),
+	}
+
+	sess := session.Must(session.NewSession(
+		&aws.Config{
+			Region: aws.String(viper.GetString("grafiti.az")),
+		},
+	))
+	svc := route53.New(sess)
+
+	size := len(hzIDs)
+	filteredIDs := make([]string, 0, len(hzIDs))
+	// Can only request hosted zones in batches of 10
+	for i := 0; i < size; i += 10 {
+		stop := i + 10
+		if size-stop < 0 {
+			stop = i + size%10
+		}
+		params.SetResourceIds(aws.StringSlice(hzIDs[i:stop]))
+
+		ctx := aws.BackgroundContext()
+		resp, rerr := svc.ListTagsForResourcesWithContext(ctx, params)
+		if rerr != nil {
+			fmt.Println(rerr.Error())
+			return nil
+		}
+
+		for _, rts := range resp.ResourceTagSets {
+			for _, tag := range rts.Tags {
+				if vals, ok := tagKeyMap[*tag.Key]; ok {
+					for _, v := range vals {
+						if v == *tag.Value {
+							filteredIDs = append(filteredIDs, *rts.ResourceId)
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return &filteredIDs
 }
 
 // Traverse dependency graph and request all possible ID's of resource
@@ -305,7 +391,7 @@ func deleteARNs(ARNs *[]string) error {
 		// Delete SecurityGroup Rule
 		// Delete RouteTable Routes
 		arn.EC2RouteTableAssociationRType,
-		arn.Route53HostedZoneRType, // TODO: set up tag and delete steps for R53
+		arn.Route53HostedZoneRType,
 		// Delete Route53 RecordSets
 		// Delete IAM Role Policies
 		arn.S3BucketRType,

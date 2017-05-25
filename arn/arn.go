@@ -177,6 +177,22 @@ const (
 	S3BucketRType = "AWS::S3::Bucket"
 )
 
+// CTUnsupportedResourceTypes holds values for which CloudTrail does not
+// collect logs
+var CTUnsupportedResourceTypes = map[string]bool{
+	Route53HostedZoneRType: true,
+}
+
+// RGTAUnsupportedResourceTypes holds values the Resource Group Tagging
+// API does not support
+var RGTAUnsupportedResourceTypes = map[string]bool{
+	Route53HostedZoneRType:              true,
+	AutoScalingGroupRType:               true,
+	AutoScalingLaunchConfigurationRType: true,
+	AutoScalingPolicyRType:              true,
+	AutoScalingScheduledActionRType:     true,
+}
+
 // NamespaceForResource maps ResourceType to an ARN namespace
 func NamespaceForResource(resourceType string) string {
 	switch {
@@ -210,11 +226,9 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 	accountID := parsedEvent.Get("userIdentity.accountId").Str
 	ARNPrefix := fmt.Sprintf("arn:aws:%s:%s:%s", NamespaceForResource(*resource.ResourceType), region, accountID)
 	// ARN prefixes lack a region for IAM resources
-	// if is a ResourceType enum value
 	if strings.HasPrefix(*resource.ResourceType, "AWS::IAM::") {
 		ARNPrefix = fmt.Sprintf("arn:aws:%s::%s", NamespaceForResource(*resource.ResourceType), accountID)
 	}
-
 	switch *resource.ResourceType {
 	case AutoScalingGroupRType:
 		// arn:aws:autoscaling:region:account-id:autoScalingGroup:groupid:autoScalingGroupName/groupfriendlyname
@@ -517,9 +531,11 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		break
 	case Route53HostedZoneRType:
 		// arn:aws:route53:::hostedzone/zoneid
-		// zid := parsedEvent.Get("responseElements.zoneid")
-		// return fmt.Sprintf("arn:aws:route53:::hostedzone/%s", zid)
-		break
+		hzSplit := strings.Split(*resource.ResourceName, "/hostedzone/")
+		if len(hzSplit) != 2 {
+			return ""
+		}
+		return fmt.Sprintf("arn:aws:route53:::hostedzone/%s", hzSplit[1])
 	case S3BucketRType:
 		// arn:aws:s3:::bucket-name
 		return fmt.Sprintf("arn:aws:s3:::%s", *resource.ResourceName)
@@ -648,7 +664,7 @@ func MapARNToRTypeAndRName(ARN string) (string, string) {
 
 	case strings.HasPrefix(ARN, "arn:aws:route53:::"):
 		m := strings.Split(ARN, "arn:aws:route53:::")
-		if len(m) == 1 {
+		if len(m) == 2 {
 			sfx = m[1]
 		} else {
 			return "", ""
