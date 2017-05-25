@@ -101,23 +101,32 @@ func parse() error {
 
 	// If no CloudTrail-supported resource types were specified in resourceTypes,
 	// don't bother calling parseCloudTrailEvents (unless no resources are specified)
-	if len(ctRts) > 0 {
-		_ = parseCloudTrailEvents(&ctRts)
-	}
-
-	// Parse other event types, if any
-	for _, rt := range otherRts {
-		switch rt {
-		case arn.Route53HostedZoneRType:
-			_ = parseRoute53Events()
+	switch {
+	case len(ctRts) > 0:
+		if len(otherRts) > 0 {
+			for _, rt := range otherRts {
+				switch rt {
+				case arn.Route53HostedZoneRType:
+					_ = parseRoute53Events()
+					break
+				}
+			}
+		}
+		if len(otherRts) == len(rts) {
 			break
 		}
+		_ = parseCloudTrailEvents(ctRts...)
+		break
+	case len(ctRts) == 0:
+		_ = parseCloudTrailEvents()
+		_ = parseRoute53Events()
+		break
 	}
 
 	return nil
 }
 
-func parseCloudTrailEvents(rts *[]string) error {
+func parseCloudTrailEvents(rts ...string) error {
 	sess := session.Must(session.NewSession(
 		&aws.Config{
 			Region: aws.String(viper.GetString("grafiti.az")),
@@ -127,8 +136,8 @@ func parseCloudTrailEvents(rts *[]string) error {
 	// types are requested
 	var paramsSlice []*cloudtrail.LookupEventsInput
 	if rts != nil {
-		paramsSlice = make([]*cloudtrail.LookupEventsInput, 0, len(*rts))
-		for _, rt := range *rts {
+		paramsSlice = make([]*cloudtrail.LookupEventsInput, 0, len(rts))
+		for _, rt := range rts {
 			paramsSlice = append(paramsSlice, &cloudtrail.LookupEventsInput{
 				EndTime:    aws.Time(time.Now()),
 				MaxResults: aws.Int64(50),
@@ -231,16 +240,16 @@ func printEvents(events interface{}) {
 
 func printCloudTrailEvent(event *cloudtrail.Event, parsedEvent gjson.Result) {
 	includeEvent := viper.GetBool("grafiti.includeEvent")
-	region := viper.GetString("grafiti.az")
 	for _, r := range event.Resources {
-		if r.ResourceName == nil || r.ResourceType == nil {
+		ARN := arn.MapResourceTypeToARN(r, parsedEvent)
+		if r.ResourceName == nil || r.ResourceType == nil || ARN == "" {
 			continue
 		}
 		tags := getTags(event)
 		output := getOutput(includeEvent, event, tags, &TaggingMetadata{
 			ResourceName: *r.ResourceName,
 			ResourceType: *r.ResourceType,
-			ResourceARN:  arn.MapResourceTypeToARN(r, parsedEvent, region),
+			ResourceARN:  ARN,
 			CreatorARN:   parsedEvent.Get("userIdentity.arn").Str,
 			CreatorName:  parsedEvent.Get("userIdentity.userName").Str,
 		})
@@ -256,7 +265,6 @@ func printCloudTrailEvent(event *cloudtrail.Event, parsedEvent gjson.Result) {
 }
 
 func printRoute53Event(event *route53.HostedZone, parsedEvent gjson.Result) {
-	region := viper.GetString("grafiti.az")
 	hzSplit := strings.Split(*event.Id, "/hostedzone/")
 	if len(hzSplit) != 2 {
 		return
@@ -264,7 +272,7 @@ func printRoute53Event(event *route53.HostedZone, parsedEvent gjson.Result) {
 	tm := &TaggingMetadata{
 		ResourceName: hzSplit[1],
 		ResourceType: arn.Route53HostedZoneRType,
-		ResourceARN:  arn.MapResourceTypeToARN(event, parsedEvent, region),
+		ResourceARN:  fmt.Sprintf("arn:aws:route53:::hostedzone/%s", hzSplit[1]),
 	}
 	resourceJSON, err := json.Marshal(Output{
 		TaggingMetadata: tm,

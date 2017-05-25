@@ -43,13 +43,9 @@ type DeleteConfig struct {
 type DelFunc func(*DeleteConfig, *[]string) error
 
 // TODO: add write-to-file step for subsequent removal of resources (parsable JSON)
-func handleAWSError(ignoreError bool, err error) (bool, error) {
-	if ignoreError {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-		return false, nil
-	}
-	_, ok := err.(awserr.Error)
-	return ok, err
+func handleAWSError(err error) (bool, error) {
+	aerr, ok := err.(awserr.Error)
+	return ok, aerr
 }
 
 func deleteAutoScalingGroupsByIDs(cfg *DeleteConfig, ids *[]string) error {
@@ -75,15 +71,19 @@ func deleteAutoScalingGroupsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteAutoScalingGroupWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == riuCode {
 					fmt.Printf("Could not delete AutoScalingGroup %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
 	}
@@ -113,17 +113,23 @@ func deleteAutoScalingLaunchConfigurationsByIDs(cfg *DeleteConfig, ids *[]string
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteLaunchConfigurationWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == riuCode {
 					fmt.Printf("Could not delete LaunchConfiguration %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -153,17 +159,23 @@ func deleteAutoScalingPoliciesByIDs(cfg *DeleteConfig, ids *[][]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeletePolicyWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == depvCode || aerrCode == invpCode {
 					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id[2])
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -188,9 +200,13 @@ func deleteEC2AmisByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeregisterImageWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
 					continue
@@ -200,7 +216,7 @@ func deleteEC2AmisByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
 	}
@@ -228,9 +244,13 @@ func deleteEC2CustomerGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteCustomerGatewayWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
 					continue
@@ -240,9 +260,11 @@ func deleteEC2CustomerGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -265,11 +287,15 @@ func deleteEC2EIPAssocationsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 
 		ctx := aws.BackgroundContext()
-		_, derr := svc.DisassociateAddressWithContext(ctx, params)
-		if derr != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, derr)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+		_, err := svc.DisassociateAddressWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
 					continue
@@ -279,9 +305,11 @@ func deleteEC2EIPAssocationsByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -305,11 +333,15 @@ func deleteEC2EIPAddresses(cfg *DeleteConfig, ids *[]string) error {
 		}
 
 		ctx := aws.BackgroundContext()
-		_, rerr := svc.ReleaseAddressWithContext(ctx, params)
-		if rerr != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, rerr)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+		_, err := svc.ReleaseAddressWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
 					continue
@@ -319,9 +351,11 @@ func deleteEC2EIPAddresses(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -360,9 +394,13 @@ func deleteEC2InstancesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	ctx := aws.BackgroundContext()
 	_, err := svc.TerminateInstancesWithContext(ctx, params)
 	if err != nil {
-		isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-		if isAWSError {
-			aerrCode := herr.(awserr.Error).Code()
+		if cfg.IgnoreErrors {
+			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			return nil
+		}
+		aerr, ok := err.(awserr.Error)
+		if ok {
+			aerrCode := aerr.Code()
 			if aerrCode == drCode {
 				for _, id := range iIDs {
 					fmt.Println(drStr, fmtStr, id)
@@ -373,7 +411,7 @@ func deleteEC2InstancesByIDs(cfg *DeleteConfig, ids *[]string) error {
 				return nil
 			}
 		}
-		return herr
+		return err
 	}
 	for _, id := range iIDs {
 		fmt.Println(fmtStr, id)
@@ -406,9 +444,13 @@ func deleteEC2InternetGatewayAttachments(cfg *DeleteConfig, igws *[]*ec2.Interne
 			ctx := aws.BackgroundContext()
 			_, err := svc.DetachInternetGatewayWithContext(ctx, params)
 			if err != nil {
-				isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-				if isAWSError {
-					aerrCode := herr.(awserr.Error).Code()
+				if cfg.IgnoreErrors {
+					fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+					continue
+				}
+				aerr, ok := err.(awserr.Error)
+				if ok {
+					aerrCode := aerr.Code()
 					if aerrCode == drCode {
 						fmt.Println(fmtStr, *igw.InternetGatewayId, "from", *a.VpcId)
 						continue
@@ -417,9 +459,11 @@ func deleteEC2InternetGatewayAttachments(cfg *DeleteConfig, igws *[]*ec2.Interne
 						continue
 					}
 				}
-				return herr
+				return err
 			}
 			fmt.Printf("%s %s from VPC %s\n", fmtStr, *igw.InternetGatewayId, *a.VpcId)
+			// Prevent throttling
+			time.Sleep(time.Duration(100) * time.Millisecond)
 		}
 	}
 	return nil
@@ -456,9 +500,13 @@ func deleteEC2InternetGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteInternetGatewayWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
 					continue
@@ -468,9 +516,11 @@ func deleteEC2InternetGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -497,15 +547,19 @@ func deleteEC2NatGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteNatGatewayWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == depvCode || aerrCode == invpCode {
 					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
 	}
@@ -540,9 +594,13 @@ func deleteEC2NetworkACLEntries(cfg *DeleteConfig, acls *[]*ec2.NetworkAcl) erro
 			ctx := aws.BackgroundContext()
 			_, err := svc.DeleteNetworkAclEntryWithContext(ctx, params)
 			if err != nil {
-				isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-				if isAWSError {
-					aerrCode := herr.(awserr.Error).Code()
+				if cfg.IgnoreErrors {
+					fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+					continue
+				}
+				aerr, ok := err.(awserr.Error)
+				if ok {
+					aerrCode := aerr.Code()
 					if aerrCode == invpCode {
 						fmt.Printf("NetworkAcl %s Entry %d skipped (%s)\n", *acl.NetworkAclId, *a.RuleNumber, aerrCode)
 						continue
@@ -554,6 +612,8 @@ func deleteEC2NetworkACLEntries(cfg *DeleteConfig, acls *[]*ec2.NetworkAcl) erro
 				return err
 			}
 			fmt.Printf("%s %s Entry %d\n", fmtStr, *acl.NetworkAclId, *a.RuleNumber)
+			// Prevent throttling
+			time.Sleep(time.Duration(100) * time.Millisecond)
 		}
 	}
 	return nil
@@ -590,9 +650,12 @@ func deleteEC2NetworkACLsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteNetworkAclWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerr := herr.(awserr.Error)
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
 				aerrCode, aerrMsg := aerr.Code(), aerr.Message()
 				if aerrCode == invpCode && strings.Contains(aerrMsg, "default") {
 					fmt.Printf("Default Network ACL %s skipped\n", *acl.NetworkAclId)
@@ -607,9 +670,11 @@ func deleteEC2NetworkACLsByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, *acl.NetworkAclId)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -637,9 +702,12 @@ func detachEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DetachNetworkInterfaceWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerr := herr.(awserr.Error)
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
 				// aerrCode, aerrMsg := aerr.Code(), aerr.Message()
 				aerrCode := aerr.Code()
 				if aerrCode == nopCode {
@@ -655,9 +723,11 @@ func detachEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -719,9 +789,12 @@ func deleteEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteNetworkInterfaceWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerr := herr.(awserr.Error)
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
 				aerrCode, aerrMsg := aerr.Code(), aerr.Message()
 				// fmt.Println(aerrMsg, aerrCode)
 				if strings.Contains(aerrMsg, "in use") {
@@ -740,9 +813,12 @@ func deleteEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			fmt.Println(err.Error())
+			continue
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -758,7 +834,7 @@ func deleteEC2RouteTableRoutes(cfg *DeleteConfig, rtID *string, rs *[]*ec2.Route
 	}
 	var params *ec2.DeleteRouteInput
 	for _, r := range *rs {
-		if *r.GatewayId == "local" {
+		if r.GatewayId != nil && *r.GatewayId == "local" {
 			continue
 		}
 		params = &ec2.DeleteRouteInput{
@@ -770,9 +846,12 @@ func deleteEC2RouteTableRoutes(cfg *DeleteConfig, rtID *string, rs *[]*ec2.Route
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteRouteWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerr := herr.(awserr.Error)
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
 				aerrCode, aerrMsg := aerr.Code(), aerr.Message()
 				if strings.Contains(aerrMsg, ".NotFound") {
 					fmt.Printf("%s CIDR %s not found\n", *rtID, *r.DestinationCidrBlock)
@@ -787,9 +866,11 @@ func deleteEC2RouteTableRoutes(cfg *DeleteConfig, rtID *string, rs *[]*ec2.Route
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Printf("%s: Dst CIDR Block %s\n", fmtStr, *r.DestinationCidrBlock)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -814,9 +895,12 @@ func deleteEC2RouteTableAssociationsByIDs(cfg *DeleteConfig, ids *[]string) erro
 		ctx := aws.BackgroundContext()
 		_, err := svc.DisassociateRouteTableWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerr := err.(awserr.Error)
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
 				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
@@ -832,9 +916,11 @@ func deleteEC2RouteTableAssociationsByIDs(cfg *DeleteConfig, ids *[]string) erro
 					}
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -883,19 +969,25 @@ func deleteEC2RouteTablesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 
 		ctx := aws.BackgroundContext()
-		_, derr := svc.DeleteRouteTableWithContext(ctx, params)
+		_, err := svc.DeleteRouteTableWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, derr)
-			if isAWSError {
-				aerrCode := err.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == depvCode || aerrCode == invpCode {
 					fmt.Printf("Could not delete RouteTable %s (%s)\n", *rt.RouteTableId, aerrCode)
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, *rt.RouteTableId)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -926,9 +1018,12 @@ func deleteEC2SecurityGroupIngressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityG
 		ctx := aws.BackgroundContext()
 		_, err := svc.RevokeSecurityGroupIngressWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerr := herr.(awserr.Error)
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
 				aerrCode, aerrMsg := aerr.Code(), aerr.Message()
 				if strings.Contains(aerrMsg, ".NotFound") {
 					fmt.Printf("SecurityGroup Ingress Rule for %s not found\n", *sg.GroupId)
@@ -947,9 +1042,11 @@ func deleteEC2SecurityGroupIngressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityG
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -978,9 +1075,12 @@ func deleteEC2SecurityGroupEgressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityGr
 		ctx := aws.BackgroundContext()
 		_, err := svc.RevokeSecurityGroupEgressWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerr := herr.(awserr.Error)
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
 				aerrCode, aerrMsg := aerr.Code(), aerr.Message()
 				if strings.Contains(aerrMsg, ".NotFound") {
 					fmt.Printf("SecurityGroup Egress Rule for %s not found\n", *sg.GroupId)
@@ -999,9 +1099,11 @@ func deleteEC2SecurityGroupEgressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityGr
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -1049,9 +1151,13 @@ func deleteEC2SecurityGroupsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteSecurityGroupWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, *sg.GroupId)
 					continue
@@ -1061,9 +1167,11 @@ func deleteEC2SecurityGroupsByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, *sg.GroupId)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -1088,9 +1196,13 @@ func deleteEC2SnapshotsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteSnapshotWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
 					continue
@@ -1100,9 +1212,11 @@ func deleteEC2SnapshotsByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -1128,9 +1242,13 @@ func deleteEC2SubnetsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteSubnetWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
 					continue
@@ -1140,9 +1258,11 @@ func deleteEC2SubnetsByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -1167,9 +1287,13 @@ func deleteEC2VolumesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteVolumeWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
 					continue
@@ -1179,9 +1303,11 @@ func deleteEC2VolumesByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -1216,16 +1342,22 @@ func deleteEC2VPCCIDRBlocks(cfg *DeleteConfig, ids *[]string) error {
 			ctx := aws.BackgroundContext()
 			_, err := svc.DisassociateVpcCidrBlockWithContext(ctx, params)
 			if err != nil {
-				isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-				if isAWSError {
-					aerrCode := herr.(awserr.Error).Code()
+				if cfg.IgnoreErrors {
+					fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+					continue
+				}
+				aerr, ok := err.(awserr.Error)
+				if ok {
+					aerrCode := aerr.Code()
 					if aerrCode == depvCode || aerrCode == invpCode {
 						continue
 					}
 				}
-				return herr
+				return err
 			}
 			fmt.Printf("%s Deleted EC2 VPC %s CIDRBlockAssociation %s\n", drStr, *vpc.VpcId, *b.AssociationId)
+			// Prevent throttling
+			time.Sleep(time.Duration(100) * time.Millisecond)
 		}
 	}
 	return nil
@@ -1266,9 +1398,13 @@ func deleteEC2VPCsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteVpcWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
 					continue
@@ -1278,9 +1414,11 @@ func deleteEC2VPCsByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -1308,15 +1446,19 @@ func deleteElasticLoadBalancersByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteLoadBalancerWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == depvCode || aerrCode == invpCode {
 					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
 	}
@@ -1348,17 +1490,23 @@ func removeIAMRolesFromInstanceProfilesByIPrs(cfg *DeleteConfig, iprs *[]*iam.In
 			ctx := aws.BackgroundContext()
 			_, err := svc.RemoveRoleFromInstanceProfileWithContext(ctx, params)
 			if err != nil {
-				isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-				if isAWSError {
-					aerrCode := herr.(awserr.Error).Code()
+				if cfg.IgnoreErrors {
+					fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+					continue
+				}
+				aerr, ok := err.(awserr.Error)
+				if ok {
+					aerrCode := aerr.Code()
 					if aerrCode == depvCode || aerrCode == invpCode || aerrCode == dcfCode {
 						fmt.Printf("Could not delete %s from InstanceProfile %s (%s)\n", *rl.RoleName, *ipr.InstanceProfileName, aerrCode)
 						continue
 					}
 				}
-				return herr
+				return err
 			}
 			fmt.Printf("Removed Role %s from IAM InstanceProfile %s\n", *ipr.InstanceProfileName, *rl.RoleName)
+			// Prevent throttling
+			time.Sleep(time.Duration(100) * time.Millisecond)
 		}
 	}
 	return nil
@@ -1399,9 +1547,13 @@ func deleteIAMInstanceProfilesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteInstanceProfileWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == nseCode {
 					fmt.Printf("Instance Profile %s cannot be found\n", *ipr.InstanceProfileName)
 					continue
@@ -1411,9 +1563,11 @@ func deleteIAMInstanceProfilesByIDs(cfg *DeleteConfig, ids *[]string) error {
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, *ipr.InstanceProfileName)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -1443,17 +1597,23 @@ func deleteIAMRolePoliciesByRoles(cfg *DeleteConfig, rpsMap *map[string][]string
 			ctx := aws.BackgroundContext()
 			_, err := svc.DeleteRolePolicyWithContext(ctx, params)
 			if err != nil {
-				isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-				if isAWSError {
-					aerrCode := herr.(awserr.Error).Code()
+				if cfg.IgnoreErrors {
+					fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+					continue
+				}
+				aerr, ok := err.(awserr.Error)
+				if ok {
+					aerrCode := aerr.Code()
 					if aerrCode == depvCode || aerrCode == invpCode || aerrCode == dcfCode {
 						fmt.Printf("Could not delete %s RolePolicy %s (%s)\n", rn, rp, aerrCode)
 						continue
 					}
 				}
-				return herr
+				return err
 			}
 			fmt.Println(fmtStr, rp)
+			// Prevent throttling
+			time.Sleep(time.Duration(100) * time.Millisecond)
 		}
 	}
 	return nil
@@ -1491,17 +1651,23 @@ func deleteIAMRolesByNames(cfg *DeleteConfig, ns *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteRoleWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == dcfCode {
 					fmt.Printf("Could not delete %s (%s)\n", n, aerrCode)
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, n)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -1528,17 +1694,23 @@ func deleteIAMUsersByNames(cfg *DeleteConfig, ns *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteUserWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == depvCode || aerrCode == invpCode {
 					fmt.Printf("Could not delete %s (%s)\n", n, aerrCode)
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, n)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -1576,19 +1748,25 @@ func deleteS3Objects(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		resp, err := svc.DeleteObjectsWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == depvCode || aerrCode == invpCode {
 					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		for _, o := range resp.Deleted {
 			fmt.Printf("%s %s from S3 Bucket %s\n", fmtStr, *o.Key, id)
 		}
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -1620,17 +1798,23 @@ func deleteS3BucketsByNames(cfg *DeleteConfig, ns *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteBucketWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == depvCode || aerrCode == invpCode {
 					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
-			return herr
+			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
 	return nil
 }
@@ -1653,7 +1837,6 @@ func deleteRoute53ResourceRecordSets(cfg *DeleteConfig, hzID string, rrs *[]*rou
 		if *rs.Type == "NS" || *rs.Type == "SOA" {
 			continue
 		}
-		fmt.Printf("Adding RRS %s (%s)\n", *rs.Name, *rs.Type)
 		changes = append(changes, &route53.Change{
 			Action:            aws.String(route53.ChangeActionDelete),
 			ResourceRecordSet: rs,
@@ -1671,11 +1854,14 @@ func deleteRoute53ResourceRecordSets(cfg *DeleteConfig, hzID string, rrs *[]*rou
 
 	svc := route53.New(cfg.AWSSession)
 	ctx := aws.BackgroundContext()
-	_, cerr := svc.ChangeResourceRecordSetsWithContext(ctx, params)
-	if cerr != nil {
-		isAWSError, herr := handleAWSError(cfg.IgnoreErrors, cerr)
-		if isAWSError {
-			aerr := herr.(awserr.Error)
+	_, err := svc.ChangeResourceRecordSetsWithContext(ctx, params)
+	if err != nil {
+		if cfg.IgnoreErrors {
+			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			return nil
+		}
+		aerr, ok := err.(awserr.Error)
+		if ok {
 			aerrCode, aerrMsg := aerr.Code(), aerr.Message()
 			if strings.Contains(aerrMsg, ".NotFound") {
 				for _, c := range changes {
@@ -1690,8 +1876,8 @@ func deleteRoute53ResourceRecordSets(cfg *DeleteConfig, hzID string, rrs *[]*rou
 				return nil
 			}
 		}
-		// return herr
-		fmt.Println(herr.Error())
+		fmt.Println(err.Error())
+		return nil
 	}
 	for _, rs := range *rrs {
 		fmt.Printf("%s %s (HZ %s)\n", fmtStr, *rs.Name, hzID)
@@ -1736,16 +1922,19 @@ func deleteRoute53HostedZonesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteHostedZoneWithContext(ctx, params)
 		if err != nil {
-			isAWSError, herr := handleAWSError(cfg.IgnoreErrors, err)
-			if isAWSError {
-				aerrCode := herr.(awserr.Error).Code()
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
 				if aerrCode == depvCode || aerrCode == invpCode {
 					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
-			// return herr
-			fmt.Println(herr.Error())
+			fmt.Println(aerr.Error())
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling

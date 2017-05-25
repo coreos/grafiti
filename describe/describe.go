@@ -247,13 +247,19 @@ func GetEC2NatGatewaysBySubnetIDs(snIDs *[]string) (*[]*ec2.NatGateway, error) {
 }
 
 // GetEC2NetworkInterfaces retrieves network interfaces by network interface ID
+// NOTE: if eniIDs is passed into the 'NetworkInterfaceId' field and an interface
+// with one of those ID's does not exist, DescribeNetworkInterfaces will error.
+// The 'Filters' field is used to avoid this issue.
 func GetEC2NetworkInterfaces(eniIDs *[]string) (*[]*ec2.NetworkInterface, error) {
 	if eniIDs == nil {
 		return nil, nil
 	}
+
 	svc := ec2.New(setUpAWSSession())
 	params := &ec2.DescribeNetworkInterfacesInput{
-		NetworkInterfaceIds: aws.StringSlice(*eniIDs),
+		Filters: []*ec2.Filter{
+			{Name: aws.String("network-interface-id"), Values: aws.StringSlice(*eniIDs)},
+		},
 	}
 
 	ctx := aws.BackgroundContext()

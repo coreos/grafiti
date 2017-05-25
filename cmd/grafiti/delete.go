@@ -115,7 +115,7 @@ func deleteFromTags(reader io.Reader) error {
 		if rts != nil {
 			rtfs := make([]*string, 0, len(rts))
 			for _, rt := range rts {
-				if _, ok := arn.CTUnsupportedResourceTypes[rt]; ok {
+				if _, ok := arn.RGTAUnsupportedResourceTypes[rt]; ok {
 					continue
 				}
 				rtfs = append(rtfs, aws.String(arn.NamespaceForResource(rt)))
@@ -123,30 +123,28 @@ func deleteFromTags(reader io.Reader) error {
 			params.SetResourceTypeFilters(rtfs)
 		}
 
-		if len(params.ResourceTypeFilters) != 0 {
-			for {
-				// Request a batch of matching resources
-				req, resp := svc.GetResourcesRequest(params)
-				if err := req.Send(); err != nil {
-					return err
-				}
-
-				if len(resp.ResourceTagMappingList) == 0 {
-					fmt.Println("No resources match the specified tag filters")
-					return nil
-				}
-
-				for _, r := range resp.ResourceTagMappingList {
-					if r.ResourceARN != nil && *r.ResourceARN != "" {
-						allARNs = append(allARNs, *r.ResourceARN)
-					}
-				}
-
-				if resp.PaginationToken == nil || *resp.PaginationToken == "" {
-					break
-				}
-				params.SetPaginationToken(*resp.PaginationToken)
+		for {
+			// Request a batch of matching resources
+			req, resp := svc.GetResourcesRequest(params)
+			if err := req.Send(); err != nil {
+				return err
 			}
+
+			if len(resp.ResourceTagMappingList) == 0 {
+				fmt.Println("No resources match the specified tag filters")
+				return nil
+			}
+
+			for _, r := range resp.ResourceTagMappingList {
+				if r.ResourceARN != nil && *r.ResourceARN != "" {
+					allARNs = append(allARNs, *r.ResourceARN)
+				}
+			}
+
+			if resp.PaginationToken == nil || *resp.PaginationToken == "" {
+				break
+			}
+			params.SetPaginationToken(*resp.PaginationToken)
 		}
 
 		// Request all AutoScalingGroups with the same tags, as these cannot be
