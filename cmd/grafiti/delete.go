@@ -25,9 +25,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	rgta "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
-	"github.com/estroz/grafiti/arn"
-	"github.com/estroz/grafiti/deleter"
-	"github.com/estroz/grafiti/describe"
+	"github.com/coreos/grafiti/arn"
+	"github.com/coreos/grafiti/deleter"
+	"github.com/coreos/grafiti/describe"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

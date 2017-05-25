@@ -14,8 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/estroz/grafiti/arn"
-	"github.com/estroz/grafiti/describe"
+	"github.com/coreos/grafiti/arn"
+	"github.com/coreos/grafiti/describe"
 )
 
 const (

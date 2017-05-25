@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/service/cloudtrail"
-	"github.com/estroz/grafiti/describe"
+	"github.com/coreos/grafiti/describe"
 	"github.com/tidwall/gjson"
 )
 

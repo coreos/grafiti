@@ -24,12 +24,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudtrail"
+	"github.com/coreos/grafiti/arn"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	jq "github.com/threatgrid/jqpipe-go"
 	"github.com/tidwall/gjson"
-
-	"github.com/estroz/grafiti/arn"
 )
 
 var (
