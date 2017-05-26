@@ -30,6 +30,7 @@ import (
 	"github.com/coreos/grafiti/arn"
 	"github.com/coreos/grafiti/deleter"
 	"github.com/coreos/grafiti/describe"
+	"github.com/coreos/grafiti/graph"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -38,6 +39,37 @@ var (
 	deleteFile string
 	silent     bool
 )
+
+// DeleteOrder contains the REVERSE order of deletion for all resource types
+var DeleteOrder = []string{
+	arn.EC2VPCRType,
+	arn.EC2SecurityGroupRType,
+	arn.EC2RouteTableRType,
+	arn.EC2SubnetRType,
+	arn.EC2VolumeRType,
+	arn.EC2CustomerGatewayRType,
+	arn.EC2NetworkACLRType,
+	arn.EC2NetworkInterfaceRType,
+	arn.EC2InternetGatewayRType,
+	arn.IAMUserRType,
+	arn.IAMRoleRType,
+	arn.IAMInstanceProfileRType,
+	arn.AutoScalingLaunchConfigurationRType,
+	arn.EC2EIPRType,
+	arn.EC2EIPAssociationRType,
+	arn.EC2NatGatewayRType,
+	arn.ElasticLoadBalancingLoadBalancerRType,
+	arn.AutoScalingGroupRType,
+	arn.EC2InstanceRType,
+	// Delete SecurityGroup Rule
+	// Delete RouteTable Routes
+	arn.EC2RouteTableAssociationRType,
+	arn.Route53HostedZoneRType,
+	// Delete Route53 RecordSets
+	// Delete IAM Role Policies
+	arn.S3BucketRType,
+	// Delete S3 Objects
+}
 
 // DeleteInput holds a list of all tags to be deleted
 type DeleteInput struct {
@@ -229,7 +261,7 @@ func getAutoScalingGroupsByTags(rgtaTags *[]*rgta.TagFilter) *[]*autoscaling.Gro
 		break
 	}
 
-	asgs, aerr := describe.GetAutoScalingGroups(&asgNames)
+	asgs, aerr := describe.GetAutoScalingGroupsByNames(&asgNames)
 	if aerr != nil {
 		return nil
 	}
@@ -330,7 +362,7 @@ func bucketARNs(ARNs *[]string) *map[string][]string {
 		rTypeToARNMap[rType] = append(rTypeToARNMap[rType], rName)
 	}
 
-	deleter.TraverseDependencyGraph(&rTypeToARNMap)
+	graph.FillDependencyGraph(&rTypeToARNMap)
 
 	return &rTypeToARNMap
 }
@@ -368,37 +400,8 @@ func deleteARNs(ARNs *[]string) error {
 	// Ensure deletion order. Most resources have dependencies, so a dependency
 	// graph must be constructed and executed. See README for deletion order.
 	sortedByDelOrder := make([]*delResMap, 0, len(*resMap))
-	revOrderOfDeletion := []string{
-		arn.EC2VPCRType,
-		arn.EC2SecurityGroupRType,
-		arn.EC2RouteTableRType,
-		arn.EC2SubnetRType,
-		arn.EC2VolumeRType,
-		arn.EC2CustomerGatewayRType,  //
-		arn.EC2NetworkACLRType,       //
-		arn.EC2NetworkInterfaceRType, //
-		arn.EC2InternetGatewayRType,
-		arn.IAMUserRType, //
-		arn.IAMRoleRType,
-		arn.IAMInstanceProfileRType,
-		arn.AutoScalingLaunchConfigurationRType,
-		arn.EC2EIPRType,
-		arn.EC2EIPAssociationRType,
-		arn.EC2NatGatewayRType,
-		arn.ElasticLoadBalancingLoadBalancerRType,
-		arn.AutoScalingGroupRType,
-		arn.EC2InstanceRType,
-		// Delete SecurityGroup Rule
-		// Delete RouteTable Routes
-		arn.EC2RouteTableAssociationRType,
-		arn.Route53HostedZoneRType,
-		// Delete Route53 RecordSets
-		// Delete IAM Role Policies
-		arn.S3BucketRType,
-		// Delete S3 Objects
-	}
 	// Append ARN's to sortedByDelOrder in deletion order
-	for _, rt := range revOrderOfDeletion {
+	for _, rt := range DeleteOrder {
 		appendToOrderedList(rt, resMap, &sortedByDelOrder)
 	}
 	// Add the remaining ARN's
