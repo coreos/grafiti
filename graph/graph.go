@@ -5,20 +5,20 @@ import (
 	"github.com/coreos/grafiti/describe"
 )
 
-// DepGraph is the top-level container for a DepNode graph
-type DepGraph struct {
-	DepNodes *[]*DepNode
+// depGraph is the top-level container for a depNode graph
+type depGraph struct {
+	DepNodes *[]*depNode
 }
 
-// DepNode has a Type (resource type) and a slice of ChildDepNodes that should
+// depNode has a Type (resource type) and a slice of ChildDepNodes that should
 // only be travelled to after all Values (ex. *[]*ec2.Instance) have been deleted
-type DepNode struct {
+type depNode struct {
 	Type          string
-	ChildDepNodes *[]*DepNode
+	ChildDepNodes *[]*depNode
 }
 
-func newDepNode(t string, children *[]*DepNode) *DepNode {
-	return &DepNode{
+func newDepNode(t string, children *[]*depNode) *depNode {
+	return &depNode{
 		Type:          t,
 		ChildDepNodes: children,
 	}
@@ -57,23 +57,14 @@ var r2 = map[string][]string{
 	arn.EC2SubnetRType: []string{
 		arn.EC2NetworkACLRType,
 	},
-	// arn.AutoScalingLaunchConfigurationRType: []string{
-	// 	arn.IAMInstanceProfileRType,
-	// },
 }
-
-// var r3 = map[string][]string{
-// 	arn.IAMInstanceProfileRType: []string{
-// 		arn.IAMRoleRType,
-// 	},
-// }
 
 var rounds = []map[string][]string{r1, r2}
 
 // InitDepGraph creates a new dep graph
-func InitDepGraph() DepGraph {
-	nodes := make([]*DepNode, 0, 3)
-	dg := DepGraph{DepNodes: &nodes}
+func initDepGraph() depGraph {
+	nodes := make([]*depNode, 0)
+	dg := depGraph{DepNodes: &nodes}
 
 	// Initial round
 	for _, t := range r0 {
@@ -83,7 +74,7 @@ func InitDepGraph() DepGraph {
 
 	// Subsequent rounds
 	tmpNodes := *dg.DepNodes
-	var childNodes, roundNodes []*DepNode
+	var childNodes, roundNodes []*depNode
 	for _, r := range rounds {
 		for _, node := range tmpNodes {
 			if cts, ok := r[node.Type]; ok {
@@ -94,7 +85,7 @@ func InitDepGraph() DepGraph {
 				}
 			}
 			if node.ChildDepNodes == nil {
-				node.ChildDepNodes = new([]*DepNode)
+				node.ChildDepNodes = new([]*depNode)
 				*node.ChildDepNodes = childNodes
 			}
 			childNodes = nil
@@ -105,17 +96,17 @@ func InitDepGraph() DepGraph {
 	return dg
 }
 
-// FillDependencyGraph creates a DepGraph starting from an inital set of
+// FillDependencyGraph creates a depGraph starting from an inital set of
 // resources found by tags
 func FillDependencyGraph(initDepMap *map[string][]string) {
 	if initDepMap == nil {
 		return
 	}
 
-	depGraph := InitDepGraph()
+	depGraph := initDepGraph()
 
 	tmpNodes := *depGraph.DepNodes
-	var nextNodes []*DepNode
+	var nextNodes []*depNode
 	for {
 		for _, node := range tmpNodes {
 			if _, ok := (*initDepMap)[node.Type]; ok {
