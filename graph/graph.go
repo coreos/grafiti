@@ -72,30 +72,35 @@ var rounds = []map[string][]string{r1, r2}
 
 // InitDepGraph creates a new dep graph
 func InitDepGraph() DepGraph {
-	dns := make([]*DepNode, 0, 3)
-	dg := DepGraph{DepNodes: &dns}
+	nodes := make([]*DepNode, 0, 3)
+	dg := DepGraph{DepNodes: &nodes}
 
 	// Initial round
 	for _, t := range r0 {
 		ndn := newDepNode(t, nil)
 		*dg.DepNodes = append(*dg.DepNodes, ndn)
 	}
+
 	// Subsequent rounds
-	dnsp := dg.DepNodes
-	var ndns []*DepNode
+	tmpNodes := *dg.DepNodes
+	var childNodes, roundNodes []*DepNode
 	for _, r := range rounds {
-		tmp := *dnsp
-		for _, dn := range tmp {
-			if cts, ok := r[dn.Type]; ok {
+		for _, node := range tmpNodes {
+			if cts, ok := r[node.Type]; ok {
 				for _, ct := range cts {
-					ndn := newDepNode(ct, nil)
-					*dnsp = append(*dnsp, ndn)
-					ndns = append(ndns, ndn)
+					newNode := newDepNode(ct, nil)
+					childNodes = append(childNodes, newNode)
+					roundNodes = append(roundNodes, newNode)
 				}
 			}
+			if node.ChildDepNodes == nil {
+				node.ChildDepNodes = new([]*DepNode)
+				*node.ChildDepNodes = childNodes
+			}
+			childNodes = nil
 		}
-		dnsp = &ndns
-		ndns = nil
+		tmpNodes = roundNodes
+		roundNodes = nil
 	}
 	return dg
 }
@@ -109,29 +114,24 @@ func FillDependencyGraph(initDepMap *map[string][]string) {
 
 	depGraph := InitDepGraph()
 
-	dns := depGraph.DepNodes
-	var cdns []*DepNode
+	tmpNodes := *depGraph.DepNodes
+	var nextNodes []*DepNode
 	for {
-		cdns = nil
-		for i, dn := range *dns {
-			if _, ok := (*initDepMap)[dn.Type]; ok {
-				traverseDependencyGraph(dn.Type, initDepMap)
+		for _, node := range tmpNodes {
+			if _, ok := (*initDepMap)[node.Type]; ok {
+				traverseDependencyGraph(node.Type, initDepMap)
 			}
-			if i == len(*dns)-1 {
-				if cdns != nil {
-					dns = &cdns
-				}
-				break
-			}
-			if dn.ChildDepNodes != nil {
-				for _, cdn := range *dn.ChildDepNodes {
-					cdns = append(cdns, cdn)
+			if node.ChildDepNodes != nil {
+				for _, cnode := range *node.ChildDepNodes {
+					nextNodes = append(nextNodes, cnode)
 				}
 			}
 		}
-		if cdns == nil {
+		if nextNodes == nil {
 			break
 		}
+		tmpNodes = nextNodes
+		nextNodes = nil
 	}
 
 	return
