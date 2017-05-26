@@ -246,13 +246,11 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// 	return ""
 		// }
 		// return *(*lcs)[0].LaunchConfigurationARN
-		// break
 	case AutoScalingPolicyRType:
 		// arn:aws:autoscaling:region:account-id:scalingPolicy:policyid:autoScalingGroupName/groupfriendlyname:policyname/policyfriendlyname
 		// gid := parsedEvent.Get("responseElements.groupid")
 		// gfn := parsedEvent.Get("responseElements.groupfriendlyname")
 		// return fmt.Sprintf("%s:autoScalingGroup:%s:autoScalingGroupName/%s", ARNPrefix, gid, gfn)
-		break
 	case AutoScalingScheduledActionRType:
 		// arn:aws:autoscaling:region:account-id:scheduledUpdateGroupAction:scheduleactionid:autoScalingGroupName/autoscalinggroupfriendlyname:scheduledActionName/scheduledactionfriendlyname
 		// said := parsedEvent.Get("responseElements.scheduleactionid")
@@ -260,7 +258,6 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// san := parsedEvent.Get("responseElements.scheduledactionfriendlyname")
 		// asString := fmt.Sprintf("%s:scheduledUpdateGroupAction:%s", ARNPrefix, said)
 		// return fmt.Sprintf("%s:autoScalingGroupName/%s:scheduledActionName/%s", asString, asgfn, san)
-		break
 	case ACMCertificateRType:
 		// arn:aws:acm:region:account-id:certificate/certificate-id
 		return fmt.Sprintf("%s:certificate/%s", ARNPrefix, *resource.ResourceName)
@@ -276,11 +273,9 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 	case EC2BundleTaskRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2ConversionTaskRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2CustomerGatewayRType:
 		// arn:aws:ec2:region:account-id:customer-gateway/cgw-id
 		return fmt.Sprintf("%s:customer-gateway/%s", ARNPrefix, *resource.ResourceName)
@@ -289,25 +284,20 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		return fmt.Sprintf("%s:dhcp-options/%s", ARNPrefix, *resource.ResourceName)
 	case EC2EIPRType:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2EIPAssociationRType:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2ExportTaskRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2FlowLogRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2HostRType:
 		// arn:aws:ec2:region:account-id:dedicated-host/host-id
 		return fmt.Sprintf("%s:dedicated-host/%s", ARNPrefix, *resource.ResourceName)
 	case EC2ImportTaskRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2InstanceRType:
 		// arn:aws:ec2:region:account-id:instance/instance-id
 		return fmt.Sprintf("%s:instance/%s", ARNPrefix, *resource.ResourceName)
@@ -320,7 +310,6 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 	case EC2NatGatewayRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2NetworkACLRType:
 		// arn:aws:ec2:region:account-id:network-acl/nacl-id
 		return fmt.Sprintf("%s:network-acl/%s", ARNPrefix, *resource.ResourceName)
@@ -330,29 +319,24 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 	case EC2NetworkInterfaceAttachmentRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2PlacementGroupRType:
 		// arn:aws:ec2:region:account-id:placement-group/placement-group-name
 		return fmt.Sprintf("%s:placement-group/%s", ARNPrefix, *resource.ResourceName)
 	case EC2ReservedInstanceRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2ReservedInstancesListingRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2ReservedInstancesModificationRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2RouteTableRType:
 		// arn:aws:ec2:region:account-id:route-table/route-table-id
 		return fmt.Sprintf("%s:route-table/%s", ARNPrefix, *resource.ResourceName)
 	case EC2ScheduledInstanceRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2SecurityGroupRType:
 		// arn:aws:ec2:region:account-id:security-group/security-group-id
 		return fmt.Sprintf("%s:security-group/%s", ARNPrefix, *resource.ResourceName)
@@ -362,22 +346,18 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 	case EC2SpotFleetRequestRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2SpotInstanceRequestRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2SubnetRType:
 		// arn:aws:ec2:region:account-id:subnet/subnet-id
 		return fmt.Sprintf("%s:subnet/%s", ARNPrefix, *resource.ResourceName)
 	case EC2SubnetNetworkACLAssociationRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2SubnetRouteTableAssociationRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2VolumeRType:
 		// arn:aws:ec2:region:account-id:volume/volume-id
 		return fmt.Sprintf("%s:volume/%s", ARNPrefix, *resource.ResourceName)
@@ -387,7 +367,6 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 	case EC2VPCEndpointRType:
 		// arn:aws:ec2:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case EC2VPCPeeringConnectionRType:
 		// arn:aws:ec2:region:account-id:vpc-peering-connection/vpc-peering-connection-id
 		return fmt.Sprintf("%s:vpc-peering-connection/%s", ARNPrefix, *resource.ResourceName)
@@ -403,11 +382,9 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 	case IAMAccessKeyRType:
 		// arn:aws:iam::account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case IAMAccountAliasRType:
 		// arn:aws:iam::account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case IAMGroupRType:
 		// arn:aws:iam::account-id:group/group-name
 		return fmt.Sprintf("%s:group/%s", ARNPrefix, *resource.ResourceName)
@@ -421,7 +398,6 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// 	return rName
 		// }
 		// return fmt.Sprintf("%s:instance-profile/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case IAMMfaDeviceRType:
 		// arn:aws:iam::account-id:mfa/virtual-device-name
 		return fmt.Sprintf("%s:mfa/%s", ARNPrefix, *resource.ResourceName)
@@ -432,12 +408,10 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// NOTE: will not tag
 		// arn:aws:iam::account-id:policy/policy-name
 		// return fmt.Sprintf("%s:policy/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case IAMRoleRType:
 		// NOTE: will not tag
 		// arn:aws:iam::account-id:role/role-name
 		// return fmt.Sprintf("%s:role/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case IAMSamlProviderRType:
 		// arn:aws:iam::account-id:saml-provider/provider-name
 		return fmt.Sprintf("%s:saml-provider/%s", ARNPrefix, *resource.ResourceName)
@@ -447,14 +421,13 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 	case IAMSigningCertificateRType:
 		// arn:aws:iam::account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case IAMSshPublicKeyRType:
 		// arn:aws:iam::account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case IAMUserRType:
 		// arn:aws:iam::account-id:user/user-name
-		return fmt.Sprintf("%s:user/%s", ARNPrefix, *resource.ResourceName)
+		// NOTE: will not tag
+		// return fmt.Sprintf("%s:user/%s", ARNPrefix, *resource.ResourceName)
 		// return parsedEvent.Get("userIdentity.arn").String()
 	case RedshiftClusterRType:
 		// arn:aws:redshift:region:account-id:cluster:clustername
@@ -470,29 +443,24 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// cn := parsedEvent.Get("responseElements.clustername")
 		// ssn := parsedEvent.Get("responseElements.clustername.snapshotname")
 		// return fmt.Sprintf("%s:snapshot:%s/%s", ARNPrefix, cn, ssn)
-		break
 	case RedshiftClusterSubnetGroupRType:
 		// arn:aws:redshift:region:account-id:subnetgroup:subnetgroupname
 		return fmt.Sprintf("%s:subnetgroup:%s", ARNPrefix, *resource.ResourceName)
 	case RedshiftEventSubscriptionRType:
 		// arn:aws:redshift:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case RedshiftHsmClientCertificateRType:
 		// arn:aws:redshift:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case RedshiftHsmConfigurationRType:
 		// arn:aws:redshift:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case RDSDBClusterRType:
 		// arn:aws:rds:region:account-id:cluster:db-cluster-name
 		return fmt.Sprintf("%s:cluster:%s", ARNPrefix, *resource.ResourceName)
 	case RDSDBClusterOptionGroupRType:
 		// arn:aws:rds:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case RDSDBClusterParameterGroupRType:
 		// arn:aws:rds:region:account-id:cluster-pg:cluster-parameter-group-name
 		return fmt.Sprintf("%s:cluster-pg:%s", ARNPrefix, *resource.ResourceName)
@@ -523,12 +491,10 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 	case RDSReservedDBInstanceRType:
 		// arn:aws:rds:region:account-id:
 		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-		break
 	case Route53ChangeRType:
 		// arn:aws:route53:::change/changeid
 		// cid := parsedEvent.Get("responseElements.changeid")
 		// return fmt.Sprintf("arn:aws:route53:::change/%s", cid)
-		break
 	case Route53HostedZoneRType:
 		// arn:aws:route53:::hostedzone/zoneid
 		hzSplit := strings.Split(*resource.ResourceName, "/hostedzone/")

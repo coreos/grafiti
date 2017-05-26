@@ -19,6 +19,7 @@ import (
 )
 
 // TODO: add write-to-file step for subsequent removal of resources (parsable JSON)
+// TODO: raise sleep's in between resource deletion to 1 second in production
 
 const (
 	drStr       = "(dry-run)"
