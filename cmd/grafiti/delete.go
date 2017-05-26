@@ -349,7 +349,7 @@ func bucketARNs(ARNs *[]string) *map[string][]string {
 	}
 	// All ARN's stored here. Key is some arn.*RType, value is a slice of ARN's
 	rTypeToARNMap := make(map[string][]string)
-	seen := make(map[string]bool)
+	seen := map[string]struct{}{}
 
 	// Initialize with all ID's from ARN's tagged in CloudTrail logs
 	for _, a := range *ARNs {
@@ -358,7 +358,7 @@ func bucketARNs(ARNs *[]string) *map[string][]string {
 		if _, ok := seen[rName]; ok || rType == "" || rName == "" {
 			continue
 		}
-		seen[rName] = true
+		seen[rName] = struct{}{}
 		rTypeToARNMap[rType] = append(rTypeToARNMap[rType], rName)
 	}
 

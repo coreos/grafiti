@@ -179,18 +179,18 @@ const (
 
 // CTUnsupportedResourceTypes holds values for which CloudTrail does not
 // collect logs
-var CTUnsupportedResourceTypes = map[string]bool{
-	Route53HostedZoneRType: true,
+var CTUnsupportedResourceTypes = map[string]struct{}{
+	Route53HostedZoneRType: struct{}{},
 }
 
 // RGTAUnsupportedResourceTypes holds values the Resource Group Tagging
 // API does not support
-var RGTAUnsupportedResourceTypes = map[string]bool{
-	Route53HostedZoneRType:              true,
-	AutoScalingGroupRType:               true,
-	AutoScalingLaunchConfigurationRType: true,
-	AutoScalingPolicyRType:              true,
-	AutoScalingScheduledActionRType:     true,
+var RGTAUnsupportedResourceTypes = map[string]struct{}{
+	Route53HostedZoneRType:              struct{}{},
+	AutoScalingGroupRType:               struct{}{},
+	AutoScalingLaunchConfigurationRType: struct{}{},
+	AutoScalingPolicyRType:              struct{}{},
+	AutoScalingScheduledActionRType:     struct{}{},
 }
 
 // NamespaceForResource maps ResourceType to an ARN namespace
@@ -534,7 +534,6 @@ func MapARNToRTypeAndRName(ARN string) (string, string) {
 			return AutoScalingGroupRType, arnToID("autoScalingGroupName/", sfx)
 		case strings.HasPrefix(sfx, "launchConfiguration:"):
 			return AutoScalingLaunchConfigurationRType, arnToID("launchConfigurationName/", sfx)
-		// TODO: get asg name and policy name, which are both req'd for deletion
 		case strings.HasPrefix(sfx, "scalingPolicy:"):
 			return AutoScalingPolicyRType, arnToID("policyname/", sfx)
 		case strings.HasPrefix(sfx, "scheduledUpdateGroupAction:"):

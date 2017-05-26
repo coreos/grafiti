@@ -119,7 +119,7 @@ func GetIAMInstanceProfilesByLaunchConfigNames(lcNames *[]string) (*[]*iam.Insta
 	}
 	// We cannot request instance profiles by their ID's so we must search
 	// iteratively with a map
-	want := make(map[string]bool)
+	want := map[string]struct{}{}
 	var iprName string
 	for _, lc := range *lcs {
 		// The docs say that IamInstanceProfile can be either an ARN or Name; if an
@@ -133,7 +133,7 @@ func GetIAMInstanceProfilesByLaunchConfigNames(lcNames *[]string) (*[]*iam.Insta
 			iprName = iprSplit[1]
 		}
 		if _, ok := want[iprName]; !ok {
-			want[iprName] = true
+			want[iprName] = struct{}{}
 		}
 	}
 
@@ -588,10 +588,10 @@ func GetIAMInstanceProfilesByIDs(iprIDs *[]string) (*[]*iam.InstanceProfile, err
 	}
 	// We cannot request a filtered list of instance profiles, so we must
 	// iterate through all returned profiles and select the ones we want.
-	want := make(map[string]bool)
+	want := map[string]struct{}{}
 	for _, n := range *iprIDs {
 		if _, ok := want[n]; !ok {
-			want[n] = true
+			want[n] = struct{}{}
 		}
 	}
 
@@ -664,10 +664,10 @@ func GetRoute53HostedZonesByIDs(hzIDs *[]string) (*[]*route53.HostedZone, error)
 		return nil, nil
 	}
 	// Only way to filter is iteratively (no query params)
-	want := make(map[string]bool)
+	want := map[string]struct{}{}
 	for _, id := range *hzIDs {
 		if _, ok := want["/hostedzone/"+id]; !ok {
-			want["/hostedzone/"+id] = true
+			want["/hostedzone/"+id] = struct{}{}
 		}
 	}
 

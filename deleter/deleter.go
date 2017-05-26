@@ -18,9 +18,6 @@ import (
 	"github.com/coreos/grafiti/describe"
 )
 
-// TODO: add write-to-file step for subsequent removal of resources (parsable JSON)
-// TODO: raise sleep's in between resource deletion to 1 second in production
-
 const (
 	drStr       = "(dry-run)"
 	drCode      = "DryRunOperation"
@@ -86,7 +83,7 @@ func deleteAutoScalingGroupsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	time.Sleep(time.Duration(30) * time.Second)
 	return nil
@@ -130,7 +127,7 @@ func deleteAutoScalingLaunchConfigurationsByIDs(cfg *DeleteConfig, ids *[]string
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -176,7 +173,7 @@ func deleteAutoScalingPoliciesByIDs(cfg *DeleteConfig, ids *[][]string) error {
 		}
 		fmt.Println(fmtStr, id[2])
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -221,9 +218,8 @@ func deleteEC2AmisByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
-	// TODO: find and delete any snapshots after deregistering AMI
 	return nil
 }
 
@@ -267,7 +263,7 @@ func deleteEC2CustomerGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -312,7 +308,7 @@ func deleteEC2EIPAssocationsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -358,7 +354,7 @@ func deleteEC2EIPAddresses(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -466,7 +462,7 @@ func deleteEC2InternetGatewayAttachments(cfg *DeleteConfig, igws *[]*ec2.Interne
 			}
 			fmt.Printf("%s %s from VPC %s\n", fmtStr, *igw.InternetGatewayId, *a.VpcId)
 			// Prevent throttling
-			time.Sleep(time.Duration(200) * time.Millisecond)
+			time.Sleep(time.Duration(500) * time.Millisecond)
 		}
 	}
 	return nil
@@ -523,7 +519,7 @@ func deleteEC2InternetGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -566,7 +562,7 @@ func deleteEC2NatGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	// Wait for NAT Gateways to delete
 	time.Sleep(time.Duration(30) * time.Second)
@@ -606,19 +602,21 @@ func deleteEC2NetworkACLEntries(cfg *DeleteConfig, acls *[]*ec2.NetworkAcl) erro
 				aerr, ok := err.(awserr.Error)
 				if ok {
 					aerrCode := aerr.Code()
+					if aerrCode == drCode {
+						fmt.Printf("%s %s Entry %d\n", fmtStr, *acl.NetworkAclId, *a.RuleNumber)
+					}
 					if aerrCode == invpCode {
 						fmt.Printf("NetworkAcl %s Entry %d skipped (%s)\n", *acl.NetworkAclId, *a.RuleNumber, aerrCode)
-						continue
 					} else {
 						fmt.Printf("Could not delete NetworkAcl %s Entry %d (%s)\n", *acl.NetworkAclId, *a.RuleNumber, aerrCode)
-						continue
 					}
+					continue
 				}
 				return err
 			}
 			fmt.Printf("%s %s Entry %d\n", fmtStr, *acl.NetworkAclId, *a.RuleNumber)
 			// Prevent throttling
-			time.Sleep(time.Duration(200) * time.Millisecond)
+			time.Sleep(time.Duration(500) * time.Millisecond)
 		}
 	}
 	return nil
@@ -679,7 +677,7 @@ func deleteEC2NetworkACLsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, *acl.NetworkAclId)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -731,7 +729,7 @@ func detachEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -800,7 +798,6 @@ func deleteEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 			aerr, ok := err.(awserr.Error)
 			if ok {
 				aerrCode, aerrMsg := aerr.Code(), aerr.Message()
-				// fmt.Println(aerrMsg, aerrCode)
 				if strings.Contains(aerrMsg, "in use") {
 					fmt.Printf("Network interface %s in use\n", id)
 					continue
@@ -822,7 +819,7 @@ func deleteEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -874,7 +871,7 @@ func deleteEC2RouteTableRoutes(cfg *DeleteConfig, rtID *string, rs *[]*ec2.Route
 		}
 		fmt.Printf("%s: Dst CIDR Block %s\n", fmtStr, *r.DestinationCidrBlock)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -924,7 +921,7 @@ func deleteEC2RouteTableAssociationsByIDs(cfg *DeleteConfig, ids *[]string) erro
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -982,6 +979,10 @@ func deleteEC2RouteTablesByIDs(cfg *DeleteConfig, ids *[]string) error {
 			aerr, ok := err.(awserr.Error)
 			if ok {
 				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Println(fmtStr, *rt.RouteTableId)
+					continue
+				}
 				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
 					fmt.Printf("Could not delete RouteTable %s (%s)\n", *rt.RouteTableId, aerrCode)
 					continue
@@ -991,7 +992,7 @@ func deleteEC2RouteTablesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, *rt.RouteTableId)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1050,7 +1051,7 @@ func deleteEC2SecurityGroupIngressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityG
 		}
 		fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1107,7 +1108,7 @@ func deleteEC2SecurityGroupEgressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityGr
 		}
 		fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1175,7 +1176,7 @@ func deleteEC2SecurityGroupsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, *sg.GroupId)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1220,7 +1221,7 @@ func deleteEC2SnapshotsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1269,7 +1270,7 @@ func deleteEC2SubnetsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1314,7 +1315,7 @@ func deleteEC2VolumesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1364,7 +1365,7 @@ func deleteEC2VPCCIDRBlocks(cfg *DeleteConfig, ids *[]string) error {
 			}
 			fmt.Printf("%s Deleted EC2 VPC %s CIDRBlockAssociation %s\n", drStr, *vpc.VpcId, *b.AssociationId)
 			// Prevent throttling
-			time.Sleep(time.Duration(200) * time.Millisecond)
+			time.Sleep(time.Duration(500) * time.Millisecond)
 		}
 	}
 	return nil
@@ -1416,7 +1417,7 @@ func deleteEC2VPCsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1460,7 +1461,7 @@ func deleteElasticLoadBalancersByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	// Wait for ELB's to delete
 	time.Sleep(time.Duration(30) * time.Second)
@@ -1506,7 +1507,7 @@ func removeIAMRolesFromInstanceProfilesByIPrs(cfg *DeleteConfig, iprs *[]*iam.In
 			}
 			fmt.Printf("Removed Role %s from IAM InstanceProfile %s\n", *ipr.InstanceProfileName, *rl.RoleName)
 			// Prevent throttling
-			time.Sleep(time.Duration(200) * time.Millisecond)
+			time.Sleep(time.Duration(500) * time.Millisecond)
 		}
 	}
 	return nil
@@ -1558,7 +1559,7 @@ func deleteIAMInstanceProfilesByIDs(cfg *DeleteConfig, ids *[]string) error {
 					fmt.Printf("Instance Profile %s cannot be found\n", *ipr.InstanceProfileName)
 					continue
 				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
+				if aerrCode == depvCode || aerrCode == invpCode {
 					fmt.Printf("Could not delete %s (%s)\n", *ipr.InstanceProfileName, aerrCode)
 					continue
 				}
@@ -1567,7 +1568,7 @@ func deleteIAMInstanceProfilesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, *ipr.InstanceProfileName)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1613,7 +1614,7 @@ func deleteIAMRolePoliciesByRoles(cfg *DeleteConfig, rpsMap *map[string][]string
 			}
 			fmt.Println(fmtStr, rp)
 			// Prevent throttling
-			time.Sleep(time.Duration(200) * time.Millisecond)
+			time.Sleep(time.Duration(500) * time.Millisecond)
 		}
 	}
 	return nil
@@ -1667,7 +1668,7 @@ func deleteIAMRolesByNames(cfg *DeleteConfig, ns *[]string) error {
 		}
 		fmt.Println(fmtStr, n)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1710,7 +1711,7 @@ func deleteIAMUsersByNames(cfg *DeleteConfig, ns *[]string) error {
 		}
 		fmt.Println(fmtStr, n)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1766,7 +1767,7 @@ func deleteS3Objects(cfg *DeleteConfig, ids *[]string) error {
 			fmt.Printf("%s %s from S3 Bucket %s\n", fmtStr, *o.Key, id)
 		}
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1814,7 +1815,7 @@ func deleteS3BucketsByNames(cfg *DeleteConfig, ns *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
@@ -1887,8 +1888,6 @@ func deleteRoute53ResourceRecordSets(cfg *DeleteConfig, hzID string, rrs *[]*rou
 
 // NOTE: must delete all non-default resource record sets before deleting a
 // hosted zone. Will receive HostedZoneNotEmpty otherwise
-// TODO: do NOT delete public hosted zone completely, only disassociate vpc's
-// and delete record sets
 func deleteRoute53HostedZonesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	if ids == nil {
 		return nil
@@ -1937,7 +1936,7 @@ func deleteRoute53HostedZonesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(200) * time.Millisecond)
+		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
