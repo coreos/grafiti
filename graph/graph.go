@@ -152,6 +152,7 @@ func traverseDependencyGraph(rType string, depMap *map[string][]string) {
 		igwt, ngwt := arn.EC2InternetGatewayRType, arn.EC2NatGatewayRType
 		sgt, rtt := arn.EC2SecurityGroupRType, arn.EC2RouteTableRType
 		enit := arn.EC2NetworkInterfaceRType
+		// Get Subnet
 		sns, _ := describe.GetEC2SubnetsByVPCIDs(&ids)
 		if sns != nil {
 			for _, sn := range *sns {
@@ -196,7 +197,6 @@ func traverseDependencyGraph(rType string, depMap *map[string][]string) {
 				(*depMap)[enit] = append((*depMap)[enit], *eni.NetworkInterfaceId)
 			}
 		}
-		break
 	case arn.EC2SubnetRType:
 		// Get Network ACL's
 		nacls, nerr := describe.GetEC2NetworkACLsBySubnetIDs(&ids)
@@ -209,21 +209,18 @@ func traverseDependencyGraph(rType string, depMap *map[string][]string) {
 				(*depMap)[naclt] = append((*depMap)[naclt], *nacl.NetworkAclId)
 			}
 		}
-		break
 	case arn.EC2SecurityGroupRType:
 		// Get SecurityGroup Rule
 		// IP permissions Ingress/Egress will be deleted when deleting SecurityGroups
-		break
 	case arn.EC2InstanceRType:
 		// Get EBS Volumes
-		break
 	case arn.EC2NetworkInterfaceRType:
 		adrs, aerr := describe.GetEC2EIPAddressesByENIIDs(&ids)
 		if aerr != nil || adrs == nil {
 			break
 		}
-		// Get EC2EIPRType
-		// Get EC2EIPAssociationRType
+		// Get EIP Addresses
+		// Get EIP Associations
 		eipt, eipat := arn.EC2EIPRType, arn.EC2EIPAssociationRType
 		for _, adr := range *adrs {
 			if adr.AllocationId != nil {
@@ -233,13 +230,10 @@ func traverseDependencyGraph(rType string, depMap *map[string][]string) {
 				(*depMap)[eipat] = append((*depMap)[eipat], *adr.AssociationId)
 			}
 		}
-		break
 	case arn.ElasticLoadBalancingLoadBalancerRType:
-		// Get ELB Policies
-		break
 	case arn.EC2RouteTableRType:
 		// RouteTable Routes will be deleted when deleting a RouteTable
-		rts, rerr := describe.GetEC2RouteTables(&ids)
+		rts, rerr := describe.GetEC2RouteTablesByIDs(&ids)
 		if rerr != nil || rts == nil {
 			break
 		}
@@ -252,7 +246,6 @@ func traverseDependencyGraph(rType string, depMap *map[string][]string) {
 				}
 			}
 		}
-		break
 	case arn.AutoScalingGroupRType:
 		asgs, aerr := describe.GetAutoScalingGroupsByNames(&ids)
 		if aerr != nil || asgs == nil {
@@ -271,7 +264,7 @@ func traverseDependencyGraph(rType string, depMap *map[string][]string) {
 			}
 		}
 		// Get IAM instance profiles
-		iprs, ierr := describe.GetIAMInstanceProfilesByLaunchConfigs(&lcs)
+		iprs, ierr := describe.GetIAMInstanceProfilesByLaunchConfigNames(&lcs)
 		if ierr != nil || iprs == nil {
 			break
 		}
@@ -284,13 +277,10 @@ func traverseDependencyGraph(rType string, depMap *map[string][]string) {
 			}
 		}
 		// IAM RolePolicies will be deleted when deleting Roles
-		break
 	case arn.Route53HostedZoneRType:
 		// Route53 RecordSets will be deleted when deleting HostedZones
-		break
 	case arn.S3BucketRType:
 		// S3 Objects will be deleted when deleting a Bucket
-		break
 	}
 	return
 }
