@@ -232,7 +232,7 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 	switch *resource.ResourceType {
 	case AutoScalingGroupRType:
 		// arn:aws:autoscaling:region:account-id:autoScalingGroup:groupid:autoScalingGroupName/groupfriendlyname
-		asgs, err := describe.GetAutoScalingGroups(&[]string{*resource.ResourceName})
+		asgs, err := describe.GetAutoScalingGroupsByNames(&[]string{*resource.ResourceName})
 		if asgs == nil || len(*asgs) == 0 || err != nil {
 			return ""
 		}

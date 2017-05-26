@@ -1,8 +1,6 @@
 package describe
 
 import (
-	"fmt"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
@@ -25,8 +23,8 @@ func setUpAWSSession() *session.Session {
 	))
 }
 
-// GetAutoScalingGroups returns AutoScalingGroups by AutoScalingGroupNames
-func GetAutoScalingGroups(asgNames *[]string) (*[]*autoscaling.Group, error) {
+// GetAutoScalingGroupsByNames returns AutoScalingGroups by AutoScalingGroupNames
+func GetAutoScalingGroupsByNames(asgNames *[]string) (*[]*autoscaling.Group, error) {
 	if asgNames == nil {
 		return nil, nil
 	}
@@ -55,9 +53,9 @@ func GetAutoScalingGroups(asgNames *[]string) (*[]*autoscaling.Group, error) {
 	return &asgs, nil
 }
 
-// GetAutoScalingLaunchConfigurations returns launch configurations by
+// GetAutoScalingLaunchConfigurationsByNames returns launch configurations by
 // configuration name
-func GetAutoScalingLaunchConfigurations(lcNames *[]string) (*[]*autoscaling.LaunchConfiguration, error) {
+func GetAutoScalingLaunchConfigurationsByNames(lcNames *[]string) (*[]*autoscaling.LaunchConfiguration, error) {
 	if lcNames == nil {
 		return nil, nil
 	}
@@ -107,8 +105,8 @@ func GetEC2EIPAddressesByENIIDs(eniIDs *[]string) (*[]*ec2.Address, error) {
 	return &resp.Addresses, nil
 }
 
-// GetInstanceProfilesByLaunchConfigs retrieves instance profiles from launch configuration ID's
-func GetInstanceProfilesByLaunchConfigs(lcIDs *[]string) (*[]*iam.InstanceProfile, error) {
+// GetIAMInstanceProfilesByLaunchConfigs retrieves instance profiles from launch configuration ID's
+func GetIAMInstanceProfilesByLaunchConfigs(lcIDs *[]string) (*[]*iam.InstanceProfile, error) {
 	if lcIDs == nil {
 		return nil, nil
 	}
@@ -136,8 +134,41 @@ func GetInstanceProfilesByLaunchConfigs(lcIDs *[]string) (*[]*iam.InstanceProfil
 	return &iprs, nil
 }
 
-// GetEC2InternetGatewaysByVPC retrieves internet gateways by vpc ID
-func GetEC2InternetGatewaysByVPC(vpcIDs *[]string) (*[]*ec2.InternetGateway, error) {
+// GetEC2InstanceReservationsByVPCIDs retrieves instance reservations from vpc ID's
+func GetEC2InstanceReservationsByVPCIDs(vpcIDs *[]string) (*[]*ec2.Reservation, error) {
+	if vpcIDs == nil {
+		return nil, nil
+	}
+	svc := ec2.New(setUpAWSSession())
+	irs := make([]*ec2.Reservation, 0)
+
+	params := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("vpc-id"), Values: aws.StringSlice(*vpcIDs)},
+		},
+	}
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := svc.DescribeInstancesWithContext(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, r := range resp.Reservations {
+			irs = append(irs, r)
+		}
+
+		if resp.NextToken == nil || *resp.NextToken == "" {
+			break
+		}
+		params.SetNextToken(*resp.NextToken)
+	}
+
+	return &irs, nil
+}
+
+// GetEC2InternetGatewaysByVPCIDs retrieves internet gateways by vpc ID
+func GetEC2InternetGatewaysByVPCIDs(vpcIDs *[]string) (*[]*ec2.InternetGateway, error) {
 	if vpcIDs == nil {
 		return nil, nil
 	}
@@ -193,8 +224,8 @@ func GetEC2InstanceReservations(ids *[]string) (*[]*ec2.Reservation, error) {
 	return &resp.Reservations, nil
 }
 
-// GetEC2NetworkInterfacesBySubnet retrieves network interfaces by subnet ID
-func GetEC2NetworkInterfacesBySubnet(snIDs *[]string) (*[]*ec2.NetworkInterface, error) {
+// GetEC2NetworkInterfacesBySubnetIDs retrieves network interfaces by subnet ID
+func GetEC2NetworkInterfacesBySubnetIDs(snIDs *[]string) (*[]*ec2.NetworkInterface, error) {
 	if snIDs == nil {
 		return nil, nil
 	}
@@ -222,6 +253,39 @@ func GetEC2NatGatewaysBySubnetIDs(snIDs *[]string) (*[]*ec2.NatGateway, error) {
 	params := &ec2.DescribeNatGatewaysInput{
 		Filter: []*ec2.Filter{
 			{Name: aws.String("subnet-id"), Values: aws.StringSlice(*snIDs)},
+		},
+	}
+
+	ngws := make([]*ec2.NatGateway, 0)
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := svc.DescribeNatGatewaysWithContext(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, ngw := range resp.NatGateways {
+			ngws = append(ngws, ngw)
+		}
+
+		if resp.NextToken == nil || *resp.NextToken == "" {
+			break
+		}
+		params.SetNextToken(*resp.NextToken)
+	}
+
+	return &ngws, nil
+}
+
+// GetEC2NatGatewaysByVPCIDs retrieves nat gateways by vpc ID
+func GetEC2NatGatewaysByVPCIDs(vpcIDs *[]string) (*[]*ec2.NatGateway, error) {
+	if vpcIDs == nil {
+		return nil, nil
+	}
+	svc := ec2.New(setUpAWSSession())
+	params := &ec2.DescribeNatGatewaysInput{
+		Filter: []*ec2.Filter{
+			{Name: aws.String("vpc-id"), Values: aws.StringSlice(*vpcIDs)},
 		},
 	}
 
@@ -288,8 +352,8 @@ func GetEC2NetworkACLs(aclIDs *[]string) (*[]*ec2.NetworkAcl, error) {
 	return &resp.NetworkAcls, nil
 }
 
-// GetEC2NetworkACLsBySubnet retrieves network acl's by subnet ID
-func GetEC2NetworkACLsBySubnet(snIDs *[]string) (*[]*ec2.NetworkAcl, error) {
+// GetEC2NetworkACLsBySubnetIDs retrieves network acl's by subnet ID
+func GetEC2NetworkACLsBySubnetIDs(snIDs *[]string) (*[]*ec2.NetworkAcl, error) {
 	if snIDs == nil {
 		return nil, nil
 	}
@@ -308,11 +372,11 @@ func GetEC2NetworkACLsBySubnet(snIDs *[]string) (*[]*ec2.NetworkAcl, error) {
 	return &resp.NetworkAcls, nil
 }
 
-// GetEC2NetworkInterfacesByVPC gathers resources directly tied to a
+// GetEC2NetworkInterfacesByVPCIDs gathers resources directly tied to a
 // NetworkInterface that cannot be found by tags but must be deleted before
 // have a wealth of resource information. Describing their associations helps
 // construct the dependency graph for deletion.
-func GetEC2NetworkInterfacesByVPC(vpcIDs *[]string) (*[]*ec2.NetworkInterface, error) {
+func GetEC2NetworkInterfacesByVPCIDs(vpcIDs *[]string) (*[]*ec2.NetworkInterface, error) {
 	if vpcIDs == nil {
 		return nil, nil
 	}
@@ -325,13 +389,32 @@ func GetEC2NetworkInterfacesByVPC(vpcIDs *[]string) (*[]*ec2.NetworkInterface, e
 	ctx := aws.BackgroundContext()
 	resp, err := svc.DescribeNetworkInterfacesWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 		return nil, err
 	}
 	return &resp.NetworkInterfaces, nil
 }
 
-// GetEC2RouteTables retrieves subnet-routetable associations by routetable ID
+// GetEC2RouteTablesByVPCIDs retrieves subnet-routetable associations by vpc ID's
+func GetEC2RouteTablesByVPCIDs(vpcIDs *[]string) (*[]*ec2.RouteTable, error) {
+	if vpcIDs == nil {
+		return nil, nil
+	}
+	svc := ec2.New(setUpAWSSession())
+	params := &ec2.DescribeRouteTablesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("vpc-id"), Values: aws.StringSlice(*vpcIDs)},
+		},
+	}
+	ctx := aws.BackgroundContext()
+	resp, err := svc.DescribeRouteTablesWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp.RouteTables, nil
+}
+
+// GetEC2RouteTables retrieves route tables by routetable ID
 func GetEC2RouteTables(rtIDs *[]string) (*[]*ec2.RouteTable, error) {
 	if rtIDs == nil {
 		return nil, nil
@@ -343,15 +426,14 @@ func GetEC2RouteTables(rtIDs *[]string) (*[]*ec2.RouteTable, error) {
 	ctx := aws.BackgroundContext()
 	resp, err := svc.DescribeRouteTablesWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 		return nil, err
 	}
 
 	return &resp.RouteTables, nil
 }
 
-// GetEC2SecurityGroupsByVPC retrieves securitygroup info by vpc ID
-func GetEC2SecurityGroupsByVPC(vpcIDs *[]string) (*[]*ec2.SecurityGroup, error) {
+// GetEC2SecurityGroupsByVPCIDs retrieves securitygroup info by vpc ID
+func GetEC2SecurityGroupsByVPCIDs(vpcIDs *[]string) (*[]*ec2.SecurityGroup, error) {
 	if vpcIDs == nil {
 		return nil, nil
 	}
@@ -364,7 +446,6 @@ func GetEC2SecurityGroupsByVPC(vpcIDs *[]string) (*[]*ec2.SecurityGroup, error) 
 	ctx := aws.BackgroundContext()
 	resp, err := svc.DescribeSecurityGroupsWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 		return nil, err
 	}
 
@@ -383,7 +464,6 @@ func GetEC2SecurityGroupReferences(sgIDs *[]string) (*[]*ec2.SecurityGroupRefere
 	ctx := aws.BackgroundContext()
 	resp, err := svc.DescribeSecurityGroupReferencesWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 		return nil, err
 	}
 
@@ -402,7 +482,6 @@ func GetEC2SecurityGroups(sgIDs *[]string) (*[]*ec2.SecurityGroup, error) {
 	ctx := aws.BackgroundContext()
 	resp, err := svc.DescribeSecurityGroupsWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 		return nil, err
 	}
 
@@ -416,7 +495,27 @@ func GetEC2SecurityGroups(sgIDs *[]string) (*[]*ec2.SecurityGroup, error) {
 	return &filteredSGs, nil
 }
 
-// GetEC2Subnets retrieves securitygroup info by securitygroup ID
+// GetEC2SubnetsByVPCIDs retrieves subnets by vpc ID's
+func GetEC2SubnetsByVPCIDs(vpcIDs *[]string) (*[]*ec2.Subnet, error) {
+	if vpcIDs == nil {
+		return nil, nil
+	}
+	svc := ec2.New(setUpAWSSession())
+	params := &ec2.DescribeSubnetsInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("vpc-id"), Values: aws.StringSlice(*vpcIDs)},
+		},
+	}
+	ctx := aws.BackgroundContext()
+	resp, err := svc.DescribeSubnetsWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp.Subnets, nil
+}
+
+// GetEC2Subnets retrieves subnets by subnet ID
 func GetEC2Subnets(snIDs *[]string) (*[]*ec2.Subnet, error) {
 	if snIDs == nil {
 		return nil, nil
@@ -428,7 +527,6 @@ func GetEC2Subnets(snIDs *[]string) (*[]*ec2.Subnet, error) {
 	ctx := aws.BackgroundContext()
 	resp, err := svc.DescribeSubnetsWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 		return nil, err
 	}
 
@@ -447,7 +545,6 @@ func GetEC2VPCs(vpcIDs *[]string) (*[]*ec2.Vpc, error) {
 	ctx := aws.BackgroundContext()
 	resp, err := svc.DescribeVpcsWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 		return nil, err
 	}
 
@@ -584,8 +681,8 @@ func GetRoute53HostedZonesByIDs(hzIDs *[]string) (*[]*route53.HostedZone, error)
 	return &wantedHZs, nil
 }
 
-// GetRoute53ResourceRecordSetsByID retrieves a list of ResourceRecordSets by hz id
-func GetRoute53ResourceRecordSetsByID(hzID string) (*[]*route53.ResourceRecordSet, error) {
+// GetRoute53ResourceRecordSetsByHZID retrieves a list of ResourceRecordSets by hz id
+func GetRoute53ResourceRecordSetsByHZID(hzID string) (*[]*route53.ResourceRecordSet, error) {
 	if hzID == "" {
 		return nil, nil
 	}

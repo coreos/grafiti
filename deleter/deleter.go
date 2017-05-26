@@ -19,15 +19,17 @@ import (
 )
 
 const (
-	drStr    = "(dry-run)"
-	drCode   = "DryRunOperation"
-	invpCode = "InvalidParameterValue"
-	mprmCode = "MissingParameter"
-	depvCode = "DependencyViolation"
-	nopCode  = "OperationNotPermitted"
-	riuCode  = "ResourceInUse"
-	nseCode  = "NoSuchEntity"
-	dcfCode  = "DeleteConflict"
+	drStr       = "(dry-run)"
+	drCode      = "DryRunOperation"
+	invpCode    = "InvalidParameterValue"
+	mprmCode    = "MissingParameter"
+	depvCode    = "DependencyViolation"
+	nopCode     = "OperationNotPermitted"
+	riuCode     = "ResourceInUse"
+	nseCode     = "NoSuchEntity"
+	dcfCode     = "DeleteConflict"
+	authCode    = "AuthFailure"
+	notFoundSfx = ".NotFound"
 )
 
 // DeleteConfig holds configuration info for resource deletion
@@ -129,7 +131,7 @@ func deleteAutoScalingLaunchConfigurationsByIDs(cfg *DeleteConfig, ids *[]string
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -175,7 +177,7 @@ func deleteAutoScalingPoliciesByIDs(cfg *DeleteConfig, ids *[][]string) error {
 		}
 		fmt.Println(fmtStr, id[2])
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -264,7 +266,7 @@ func deleteEC2CustomerGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -300,7 +302,7 @@ func deleteEC2EIPAssocationsByIDs(cfg *DeleteConfig, ids *[]string) error {
 					fmt.Println(fmtStr, id)
 					continue
 				}
-				if aerrCode == depvCode || aerrCode == invpCode {
+				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == authCode {
 					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
@@ -309,7 +311,7 @@ func deleteEC2EIPAssocationsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -346,7 +348,7 @@ func deleteEC2EIPAddresses(cfg *DeleteConfig, ids *[]string) error {
 					fmt.Println(fmtStr, id)
 					continue
 				}
-				if aerrCode == depvCode || aerrCode == invpCode {
+				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == authCode {
 					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
@@ -355,7 +357,7 @@ func deleteEC2EIPAddresses(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -463,7 +465,7 @@ func deleteEC2InternetGatewayAttachments(cfg *DeleteConfig, igws *[]*ec2.Interne
 			}
 			fmt.Printf("%s %s from VPC %s\n", fmtStr, *igw.InternetGatewayId, *a.VpcId)
 			// Prevent throttling
-			time.Sleep(time.Duration(100) * time.Millisecond)
+			time.Sleep(time.Duration(200) * time.Millisecond)
 		}
 	}
 	return nil
@@ -520,7 +522,7 @@ func deleteEC2InternetGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -613,7 +615,7 @@ func deleteEC2NetworkACLEntries(cfg *DeleteConfig, acls *[]*ec2.NetworkAcl) erro
 			}
 			fmt.Printf("%s %s Entry %d\n", fmtStr, *acl.NetworkAclId, *a.RuleNumber)
 			// Prevent throttling
-			time.Sleep(time.Duration(100) * time.Millisecond)
+			time.Sleep(time.Duration(200) * time.Millisecond)
 		}
 	}
 	return nil
@@ -674,7 +676,7 @@ func deleteEC2NetworkACLsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, *acl.NetworkAclId)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -727,7 +729,7 @@ func detachEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -818,7 +820,7 @@ func deleteEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -870,7 +872,7 @@ func deleteEC2RouteTableRoutes(cfg *DeleteConfig, rtID *string, rs *[]*ec2.Route
 		}
 		fmt.Printf("%s: Dst CIDR Block %s\n", fmtStr, *r.DestinationCidrBlock)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -920,7 +922,7 @@ func deleteEC2RouteTableAssociationsByIDs(cfg *DeleteConfig, ids *[]string) erro
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -987,7 +989,7 @@ func deleteEC2RouteTablesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, *rt.RouteTableId)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1046,7 +1048,7 @@ func deleteEC2SecurityGroupIngressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityG
 		}
 		fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1103,7 +1105,7 @@ func deleteEC2SecurityGroupEgressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityGr
 		}
 		fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1171,7 +1173,7 @@ func deleteEC2SecurityGroupsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, *sg.GroupId)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1216,7 +1218,7 @@ func deleteEC2SnapshotsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1257,12 +1259,15 @@ func deleteEC2SubnetsByIDs(cfg *DeleteConfig, ids *[]string) error {
 					fmt.Printf("Subnet %s skipped (%s)\n", id, aerrCode)
 					continue
 				}
+				if strings.HasSuffix(aerrCode, notFoundSfx) {
+					continue
+				}
 			}
 			return err
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1307,7 +1312,7 @@ func deleteEC2VolumesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1357,7 +1362,7 @@ func deleteEC2VPCCIDRBlocks(cfg *DeleteConfig, ids *[]string) error {
 			}
 			fmt.Printf("%s Deleted EC2 VPC %s CIDRBlockAssociation %s\n", drStr, *vpc.VpcId, *b.AssociationId)
 			// Prevent throttling
-			time.Sleep(time.Duration(100) * time.Millisecond)
+			time.Sleep(time.Duration(200) * time.Millisecond)
 		}
 	}
 	return nil
@@ -1418,7 +1423,7 @@ func deleteEC2VPCsByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1475,7 +1480,7 @@ func removeIAMRolesFromInstanceProfilesByIPrs(cfg *DeleteConfig, iprs *[]*iam.In
 	svc := iam.New(cfg.AWSSession)
 	if cfg.DryRun {
 		for _, ipr := range *iprs {
-			fmt.Println(drStr, "Removed Role from IAM InstanceProfile", *ipr.InstanceProfileId)
+			fmt.Println(drStr, "Removed Role from IAM InstanceProfile", *ipr.InstanceProfileName)
 		}
 		return nil
 	}
@@ -1506,7 +1511,7 @@ func removeIAMRolesFromInstanceProfilesByIPrs(cfg *DeleteConfig, iprs *[]*iam.In
 			}
 			fmt.Printf("Removed Role %s from IAM InstanceProfile %s\n", *ipr.InstanceProfileName, *rl.RoleName)
 			// Prevent throttling
-			time.Sleep(time.Duration(100) * time.Millisecond)
+			time.Sleep(time.Duration(200) * time.Millisecond)
 		}
 	}
 	return nil
@@ -1567,7 +1572,7 @@ func deleteIAMInstanceProfilesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, *ipr.InstanceProfileName)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1613,7 +1618,7 @@ func deleteIAMRolePoliciesByRoles(cfg *DeleteConfig, rpsMap *map[string][]string
 			}
 			fmt.Println(fmtStr, rp)
 			// Prevent throttling
-			time.Sleep(time.Duration(100) * time.Millisecond)
+			time.Sleep(time.Duration(200) * time.Millisecond)
 		}
 	}
 	return nil
@@ -1667,7 +1672,7 @@ func deleteIAMRolesByNames(cfg *DeleteConfig, ns *[]string) error {
 		}
 		fmt.Println(fmtStr, n)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1710,7 +1715,7 @@ func deleteIAMUsersByNames(cfg *DeleteConfig, ns *[]string) error {
 		}
 		fmt.Println(fmtStr, n)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1766,7 +1771,7 @@ func deleteS3Objects(cfg *DeleteConfig, ids *[]string) error {
 			fmt.Printf("%s %s from S3 Bucket %s\n", fmtStr, *o.Key, id)
 		}
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1814,7 +1819,7 @@ func deleteS3BucketsByNames(cfg *DeleteConfig, ns *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1897,7 +1902,7 @@ func deleteRoute53HostedZonesByIDs(cfg *DeleteConfig, ids *[]string) error {
 
 	// First delete all resource record sets
 	for _, id := range *ids {
-		rrs, rerr := describe.GetRoute53ResourceRecordSetsByID(id)
+		rrs, rerr := describe.GetRoute53ResourceRecordSetsByHZID(id)
 		if rerr != nil || rrs == nil {
 			continue
 		}
@@ -1938,7 +1943,7 @@ func deleteRoute53HostedZonesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
-		time.Sleep(time.Duration(100) * time.Millisecond)
+		time.Sleep(time.Duration(200) * time.Millisecond)
 	}
 	return nil
 }
@@ -1966,122 +1971,6 @@ func deleteRoute53HostedZonesPrivate(cfg *DeleteConfig, ids *[]string) error {
 	}
 
 	return deleteRoute53HostedZonesByIDs(cfg, &hzIDs)
-}
-
-// TraverseDependencyGraph traverses necesssary linkages of each resource
-func TraverseDependencyGraph(depMap *map[string][]string) {
-	if depMap == nil {
-		return
-	}
-	for dt, ids := range *depMap {
-		if ids == nil {
-			continue
-		}
-		switch dt {
-		case arn.EC2VPCRType:
-			break
-		case arn.EC2SubnetRType:
-			// Get NAT Gateways
-			ngws, serr := describe.GetEC2NatGatewaysBySubnetIDs(&ids)
-			if serr != nil || ngws == nil {
-				break
-			}
-			ngwt := arn.EC2NatGatewayRType
-			for _, ngw := range *ngws {
-				(*depMap)[ngwt] = append((*depMap)[ngwt], *ngw.NatGatewayId)
-			}
-			// Get Network ACL's
-			nacls, nerr := describe.GetEC2NetworkACLsBySubnet(&ids)
-			if nerr != nil || nacls == nil {
-				break
-			}
-			naclt := arn.EC2NetworkACLRType
-			for _, nacl := range *nacls {
-				if !*nacl.IsDefault {
-					(*depMap)[naclt] = append((*depMap)[naclt], *nacl.NetworkAclId)
-				}
-			}
-			break
-		case arn.EC2SecurityGroupRType:
-			// Get SecurityGroup Rule
-			// IP permissions Ingress/Egress will be deleted when deleting SecurityGroups
-			break
-		case arn.EC2InstanceRType:
-			// Get EBS Volumes
-			break
-		case arn.EC2NetworkInterfaceRType:
-			adrs, aerr := describe.GetEC2EIPAddressesByENIIDs(&ids)
-			if aerr != nil || adrs == nil {
-				break
-			}
-			// Get EC2EIPRType
-			// Get EC2EIPAssociationRType
-			eipt, eipat := arn.EC2EIPRType, arn.EC2EIPAssociationRType
-			for _, adr := range *adrs {
-				fmt.Println(*adr.AllocationId, *adr.AssociationId)
-				if adr.AllocationId != nil {
-					(*depMap)[eipt] = append((*depMap)[eipt], *adr.AllocationId)
-				}
-				if adr.AssociationId != nil {
-					(*depMap)[eipat] = append((*depMap)[eipat], *adr.AssociationId)
-				}
-			}
-			break
-		case arn.ElasticLoadBalancingLoadBalancerRType:
-			// Get ELB Policies
-			break
-		case arn.EC2RouteTableRType:
-			// RouteTable Routes will be deleted when deleting a RouteTable
-			rts, rerr := describe.GetEC2RouteTables(&ids)
-			if rerr != nil || rts == nil {
-				break
-			}
-			// Get Subnet-RouteTable Association
-			rtat := arn.EC2RouteTableAssociationRType
-			for _, rtb := range *rts {
-				for _, a := range rtb.Associations {
-					if !*a.Main {
-						(*depMap)[rtat] = append((*depMap)[rtat], *a.RouteTableAssociationId)
-					}
-				}
-			}
-			break
-		case arn.AutoScalingGroupRType:
-			asgs, aerr := describe.GetAutoScalingGroups(&ids)
-			if aerr != nil || asgs == nil {
-				break
-			}
-			// Get AS LaunchConfigurations
-			lcs := make([]string, 0, len(*asgs))
-			lct := arn.AutoScalingLaunchConfigurationRType
-			for _, asg := range *asgs {
-				lcs = append(lcs, *asg.LaunchConfigurationName)
-				(*depMap)[lct] = append((*depMap)[lct], *asg.LaunchConfigurationName)
-			}
-			// Get IAM instance profiles
-			iprs, ierr := describe.GetInstanceProfilesByLaunchConfigs(&lcs)
-			if ierr != nil || iprs == nil {
-				break
-			}
-			iprt, rlt := arn.IAMInstanceProfileRType, arn.IAMRoleRType
-			for _, ipr := range *iprs {
-				(*depMap)[iprt] = append((*depMap)[iprt], *ipr.InstanceProfileId)
-				// Get IAM roles
-				for _, rl := range ipr.Roles {
-					(*depMap)[rlt] = append((*depMap)[rlt], *rl.RoleName)
-				}
-			}
-			// IAM RolePolicies will be deleted when deleting Roles
-			break
-		case arn.Route53HostedZoneRType:
-			// Route53 RecordSets will be deleted when deleting HostedZones
-			break
-		case arn.S3BucketRType:
-			// S3 Objects will be deleted when deleting a Bucket
-			break
-		}
-	}
-	return
 }
 
 // DeleteAWSResourcesByIDs deletes resources by ID's that are supported by the aws-sdk-go
