@@ -71,14 +71,6 @@ func deleteAutoScalingGroupsByIDs(cfg *DeleteConfig, ids *[]string) error {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
 			}
-			aerr, ok := err.(awserr.Error)
-			if ok {
-				aerrCode := aerr.Code()
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == riuCode {
-					fmt.Printf("Could not delete AutoScalingGroup %s (%s)\n", id, aerrCode)
-					continue
-				}
-			}
 			return err
 		}
 		fmt.Println(fmtStr, id)
@@ -114,14 +106,6 @@ func deleteAutoScalingLaunchConfigurationsByIDs(cfg *DeleteConfig, ids *[]string
 			if cfg.IgnoreErrors {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
-			}
-			aerr, ok := err.(awserr.Error)
-			if ok {
-				aerrCode := aerr.Code()
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == riuCode {
-					fmt.Printf("Could not delete LaunchConfiguration %s (%s)\n", id, aerrCode)
-					continue
-				}
 			}
 			return err
 		}
@@ -161,14 +145,6 @@ func deleteAutoScalingPoliciesByIDs(cfg *DeleteConfig, ids *[][]string) error {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
 			}
-			aerr, ok := err.(awserr.Error)
-			if ok {
-				aerrCode := aerr.Code()
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
-					continue
-				}
-			}
 			return err
 		}
 		fmt.Println(fmtStr, id[2])
@@ -207,10 +183,6 @@ func deleteEC2AmisByIDs(cfg *DeleteConfig, ids *[]string) error {
 				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
-					continue
-				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
@@ -254,10 +226,6 @@ func deleteEC2CustomerGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 					fmt.Println(fmtStr, id)
 					continue
 				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
-					continue
-				}
 			}
 			return err
 		}
@@ -297,10 +265,6 @@ func deleteEC2EIPAssocationsByIDs(cfg *DeleteConfig, ids *[]string) error {
 				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
-					continue
-				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == authCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
@@ -343,10 +307,6 @@ func deleteEC2EIPAddresses(cfg *DeleteConfig, ids *[]string) error {
 				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
-					continue
-				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == authCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
@@ -406,9 +366,6 @@ func deleteEC2InstancesByIDs(cfg *DeleteConfig, ids *[]string) error {
 				}
 				return nil
 			}
-			if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-				return nil
-			}
 		}
 		return err
 	}
@@ -452,9 +409,6 @@ func deleteEC2InternetGatewayAttachments(cfg *DeleteConfig, igws *[]*ec2.Interne
 					aerrCode := aerr.Code()
 					if aerrCode == drCode {
 						fmt.Println(fmtStr, *igw.InternetGatewayId, "from", *a.VpcId)
-						continue
-					}
-					if aerrCode == drCode || aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
 						continue
 					}
 				}
@@ -510,10 +464,6 @@ func deleteEC2InternetGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 					fmt.Println(fmtStr, id)
 					continue
 				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
-					continue
-				}
 			}
 			return err
 		}
@@ -549,14 +499,6 @@ func deleteEC2NatGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 			if cfg.IgnoreErrors {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
-			}
-			aerr, ok := err.(awserr.Error)
-			if ok {
-				aerrCode := aerr.Code()
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
-					continue
-				}
 			}
 			return err
 		}
@@ -604,13 +546,8 @@ func deleteEC2NetworkACLEntries(cfg *DeleteConfig, acls *[]*ec2.NetworkAcl) erro
 					aerrCode := aerr.Code()
 					if aerrCode == drCode {
 						fmt.Printf("%s %s Entry %d\n", fmtStr, *acl.NetworkAclId, *a.RuleNumber)
+						continue
 					}
-					if aerrCode == invpCode {
-						fmt.Printf("NetworkAcl %s Entry %d skipped (%s)\n", *acl.NetworkAclId, *a.RuleNumber, aerrCode)
-					} else {
-						fmt.Printf("Could not delete NetworkAcl %s Entry %d (%s)\n", *acl.NetworkAclId, *a.RuleNumber, aerrCode)
-					}
-					continue
 				}
 				return err
 			}
@@ -659,17 +596,9 @@ func deleteEC2NetworkACLsByIDs(cfg *DeleteConfig, ids *[]string) error {
 			}
 			aerr, ok := err.(awserr.Error)
 			if ok {
-				aerrCode, aerrMsg := aerr.Code(), aerr.Message()
-				if aerrCode == invpCode && strings.Contains(aerrMsg, "default") {
-					fmt.Printf("Default Network ACL %s skipped\n", *acl.NetworkAclId)
-					continue
-				}
+				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, *acl.NetworkAclId)
-					continue
-				}
-				if aerrCode == depvCode {
-					fmt.Printf("Could not delete %s (%s)\n", *acl.NetworkAclId, aerrCode)
 					continue
 				}
 			}
@@ -712,16 +641,8 @@ func detachEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 			aerr, ok := err.(awserr.Error)
 			if ok {
 				aerrCode := aerr.Code()
-				if aerrCode == nopCode {
-					fmt.Printf("Could not detach NetworkInterface %s (%s)\n", id, aerrCode)
-					continue
-				}
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
-					continue
-				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
@@ -797,25 +718,13 @@ func deleteEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 			}
 			aerr, ok := err.(awserr.Error)
 			if ok {
-				aerrCode, aerrMsg := aerr.Code(), aerr.Message()
-				if strings.Contains(aerrMsg, "in use") {
-					fmt.Printf("Network interface %s in use\n", id)
-					continue
-				}
+				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
 					continue
 				}
-				if aerrCode == invpCode || aerrCode == depvCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
-					continue
-				}
-				if strings.HasSuffix(aerrCode, notFoundSfx) {
-					continue
-				}
 			}
-			fmt.Println(err.Error())
-			continue
+			return err
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
@@ -854,16 +763,8 @@ func deleteEC2RouteTableRoutes(cfg *DeleteConfig, rtID *string, rs *[]*ec2.Route
 			aerr, ok := err.(awserr.Error)
 			if ok {
 				aerrCode := aerr.Code()
-				if strings.Contains(aerrCode, notFoundSfx) {
-					fmt.Printf("%s CIDR %s not found\n", *rtID, *r.DestinationCidrBlock)
-					continue
-				}
 				if aerrCode == drCode {
 					fmt.Printf("%s: Dst CIDR Block %s\n", fmtStr, *r.DestinationCidrBlock)
-					continue
-				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s CIDR %s (%s)\n", *rtID, *r.DestinationCidrBlock, aerrCode)
 					continue
 				}
 			}
@@ -906,15 +807,6 @@ func deleteEC2RouteTableAssociationsByIDs(cfg *DeleteConfig, ids *[]string) erro
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
 					continue
-				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					if strings.Contains(aerr.Message(), "main route table") {
-						fmt.Printf("Main RouteTableAssociation %s skipped\n", id)
-						continue
-					} else {
-						fmt.Printf("Could not delete RouteTableAssociation %s\n", id)
-						continue
-					}
 				}
 			}
 			return err
@@ -983,10 +875,6 @@ func deleteEC2RouteTablesByIDs(cfg *DeleteConfig, ids *[]string) error {
 					fmt.Println(fmtStr, *rt.RouteTableId)
 					continue
 				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete RouteTable %s (%s)\n", *rt.RouteTableId, aerrCode)
-					continue
-				}
 			}
 			return err
 		}
@@ -1030,20 +918,8 @@ func deleteEC2SecurityGroupIngressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityG
 			aerr, ok := err.(awserr.Error)
 			if ok {
 				aerrCode := aerr.Code()
-				if strings.Contains(aerrCode, notFoundSfx) {
-					fmt.Printf("SecurityGroup Ingress Rule for %s not found\n", *sg.GroupId)
-					continue
-				}
 				if aerrCode == drCode {
 					fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
-					continue
-				}
-				if aerrCode == mprmCode {
-					fmt.Printf("Ingress IpPermissions for %s missing\n", *sg.GroupId)
-					continue
-				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("SecurityGroup Ingress Rule for %s skipped (%s)\n", *sg.GroupId, aerrCode)
 					continue
 				}
 			}
@@ -1087,20 +963,8 @@ func deleteEC2SecurityGroupEgressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityGr
 			aerr, ok := err.(awserr.Error)
 			if ok {
 				aerrCode := aerr.Code()
-				if strings.Contains(aerrCode, notFoundSfx) {
-					fmt.Printf("SecurityGroup Egress Rule for %s not found\n", *sg.GroupId)
-					continue
-				}
 				if aerrCode == drCode {
 					fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
-					continue
-				}
-				if aerrCode == mprmCode {
-					fmt.Printf("Egress IpPermissions for %s missing\n", *sg.GroupId)
-					continue
-				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("SecurityGroup Egress Rule for %s skipped (%s)\n", *sg.GroupId, aerrCode)
 					continue
 				}
 			}
@@ -1167,10 +1031,6 @@ func deleteEC2SecurityGroupsByIDs(cfg *DeleteConfig, ids *[]string) error {
 					fmt.Println(fmtStr, *sg.GroupId)
 					continue
 				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("SecurityGroup %s skipped (%s)\n", *sg.GroupId, aerrCode)
-					continue
-				}
 			}
 			return err
 		}
@@ -1210,10 +1070,6 @@ func deleteEC2SnapshotsByIDs(cfg *DeleteConfig, ids *[]string) error {
 				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
-					continue
-				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
@@ -1258,13 +1114,6 @@ func deleteEC2SubnetsByIDs(cfg *DeleteConfig, ids *[]string) error {
 					fmt.Println(fmtStr, id)
 					continue
 				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Subnet %s skipped (%s)\n", id, aerrCode)
-					continue
-				}
-				if strings.HasSuffix(aerrCode, notFoundSfx) {
-					continue
-				}
 			}
 			return err
 		}
@@ -1304,10 +1153,6 @@ func deleteEC2VolumesByIDs(cfg *DeleteConfig, ids *[]string) error {
 				aerrCode := aerr.Code()
 				if aerrCode == drCode {
 					fmt.Println(fmtStr, id)
-					continue
-				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
 					continue
 				}
 			}
@@ -1353,13 +1198,6 @@ func deleteEC2VPCCIDRBlocks(cfg *DeleteConfig, ids *[]string) error {
 				if cfg.IgnoreErrors {
 					fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 					continue
-				}
-				aerr, ok := err.(awserr.Error)
-				if ok {
-					aerrCode := aerr.Code()
-					if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-						continue
-					}
 				}
 				return err
 			}
@@ -1408,10 +1246,6 @@ func deleteEC2VPCsByIDs(cfg *DeleteConfig, ids *[]string) error {
 					fmt.Println(fmtStr, id)
 					continue
 				}
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
-					continue
-				}
 			}
 			return err
 		}
@@ -1448,14 +1282,6 @@ func deleteElasticLoadBalancersByIDs(cfg *DeleteConfig, ids *[]string) error {
 			if cfg.IgnoreErrors {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
-			}
-			aerr, ok := err.(awserr.Error)
-			if ok {
-				aerrCode := aerr.Code()
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
-					continue
-				}
 			}
 			return err
 		}
@@ -1494,14 +1320,6 @@ func removeIAMRolesFromInstanceProfilesByIPrs(cfg *DeleteConfig, iprs *[]*iam.In
 				if cfg.IgnoreErrors {
 					fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 					continue
-				}
-				aerr, ok := err.(awserr.Error)
-				if ok {
-					aerrCode := aerr.Code()
-					if aerrCode == depvCode || aerrCode == invpCode || aerrCode == dcfCode {
-						fmt.Printf("Could not delete %s from InstanceProfile %s (%s)\n", *rl.RoleName, *ipr.InstanceProfileName, aerrCode)
-						continue
-					}
 				}
 				return err
 			}
@@ -1552,18 +1370,6 @@ func deleteIAMInstanceProfilesByIDs(cfg *DeleteConfig, ids *[]string) error {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
 			}
-			aerr, ok := err.(awserr.Error)
-			if ok {
-				aerrCode := aerr.Code()
-				if aerrCode == nseCode {
-					fmt.Printf("Instance Profile %s cannot be found\n", *ipr.InstanceProfileName)
-					continue
-				}
-				if aerrCode == depvCode || aerrCode == invpCode {
-					fmt.Printf("Could not delete %s (%s)\n", *ipr.InstanceProfileName, aerrCode)
-					continue
-				}
-			}
 			return err
 		}
 		fmt.Println(fmtStr, *ipr.InstanceProfileName)
@@ -1601,14 +1407,6 @@ func deleteIAMRolePoliciesByRoles(cfg *DeleteConfig, rpsMap *map[string][]string
 				if cfg.IgnoreErrors {
 					fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 					continue
-				}
-				aerr, ok := err.(awserr.Error)
-				if ok {
-					aerrCode := aerr.Code()
-					if aerrCode == depvCode || aerrCode == invpCode || aerrCode == dcfCode {
-						fmt.Printf("Could not delete %s RolePolicy %s (%s)\n", rn, rp, aerrCode)
-						continue
-					}
 				}
 				return err
 			}
@@ -1656,14 +1454,6 @@ func deleteIAMRolesByNames(cfg *DeleteConfig, ns *[]string) error {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
 			}
-			aerr, ok := err.(awserr.Error)
-			if ok {
-				aerrCode := aerr.Code()
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == dcfCode {
-					fmt.Printf("Could not delete %s (%s)\n", n, aerrCode)
-					continue
-				}
-			}
 			return err
 		}
 		fmt.Println(fmtStr, n)
@@ -1698,14 +1488,6 @@ func deleteIAMUsersByNames(cfg *DeleteConfig, ns *[]string) error {
 			if cfg.IgnoreErrors {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
-			}
-			aerr, ok := err.(awserr.Error)
-			if ok {
-				aerrCode := aerr.Code()
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", n, aerrCode)
-					continue
-				}
 			}
 			return err
 		}
@@ -1753,14 +1535,6 @@ func deleteS3Objects(cfg *DeleteConfig, ids *[]string) error {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
 			}
-			aerr, ok := err.(awserr.Error)
-			if ok {
-				aerrCode := aerr.Code()
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
-					continue
-				}
-			}
 			return err
 		}
 		for _, o := range resp.Deleted {
@@ -1802,14 +1576,6 @@ func deleteS3BucketsByNames(cfg *DeleteConfig, ns *[]string) error {
 			if cfg.IgnoreErrors {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
-			}
-			aerr, ok := err.(awserr.Error)
-			if ok {
-				aerrCode := aerr.Code()
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
-					continue
-				}
 			}
 			return err
 		}
@@ -1861,24 +1627,7 @@ func deleteRoute53ResourceRecordSets(cfg *DeleteConfig, hzID string, rrs *[]*rou
 			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 			return nil
 		}
-		aerr, ok := err.(awserr.Error)
-		if ok {
-			aerrCode := aerr.Code()
-			if strings.Contains(aerrCode, notFoundSfx) {
-				for _, c := range changes {
-					fmt.Printf("%s Record Set %s not found\n", hzID, *c.ResourceRecordSet.Name)
-				}
-				return nil
-			}
-			if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-				for _, c := range changes {
-					fmt.Printf("Could not delete %s Record Set %s (%s)\n", hzID, *c.ResourceRecordSet.Name, aerrCode)
-				}
-				return nil
-			}
-		}
-		fmt.Println(err.Error())
-		return nil
+		return err
 	}
 	for _, rs := range *rrs {
 		fmt.Printf("%s %s (HZ %s)\n", fmtStr, *rs.Name, hzID)
@@ -1924,15 +1673,7 @@ func deleteRoute53HostedZonesByIDs(cfg *DeleteConfig, ids *[]string) error {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
 			}
-			aerr, ok := err.(awserr.Error)
-			if ok {
-				aerrCode := aerr.Code()
-				if aerrCode == depvCode || aerrCode == invpCode || aerrCode == nseCode {
-					fmt.Printf("Could not delete %s (%s)\n", id, aerrCode)
-					continue
-				}
-			}
-			fmt.Println(aerr.Error())
+			return err
 		}
 		fmt.Println(fmtStr, id)
 		// Prevent throttling
@@ -2017,7 +1758,6 @@ func DeleteAWSResourcesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	case arn.S3BucketRType:
 		return deleteS3BucketsByNames(cfg, ids)
 	case arn.Route53HostedZoneRType:
-		// TODO: implement public record set destruction (not full zone destruction)
 		return deleteRoute53HostedZonesPrivate(cfg, ids)
 	}
 	fmt.Printf("%s is not a supported ResourceType\n", cfg.ResourceType)

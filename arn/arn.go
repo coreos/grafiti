@@ -11,170 +11,195 @@ import (
 )
 
 const (
-	// AutoScalingGroupRType is a ResourceType enum value
+	// AutoScalingGroupRType is an AWS ResourceType enum value
 	AutoScalingGroupRType = "AWS::AutoScaling::AutoScalingGroup"
-	// AutoScalingLaunchConfigurationRType is a ResourceType enum value
+	// AutoScalingLaunchConfigurationRType is an AWS ResourceType enum value
 	AutoScalingLaunchConfigurationRType = "AWS::AutoScaling::LaunchConfiguration"
-	// AutoScalingPolicyRType is a ResourceType enum value
+	// AutoScalingPolicyRType is an AWS ResourceType enum value
 	AutoScalingPolicyRType = "AWS::AutoScaling::ScalingPolicy"
-	// AutoScalingScheduledActionRType is a ResourceType enum value
+	// AutoScalingScheduledActionRType is an AWS ResourceType enum value
 	AutoScalingScheduledActionRType = "AWS::AutoScaling::ScheduledAction"
-	// ACMCertificateRType is a ResourceType enum value
+	// ACMCertificateRType is an AWS ResourceType enum value
 	ACMCertificateRType = "AWS::ACM::Certificate"
-	// CloudTrailTrailRType is a ResourceType enum value
+	// CloudTrailTrailRType is an AWS ResourceType enum value
 	CloudTrailTrailRType = "AWS::CloudTrail::Trail"
-	// CodePipelinePipelineRType is a ResourceType enum value
+	// CodePipelinePipelineRType is an AWS ResourceType enum value
 	CodePipelinePipelineRType = "AWS::CodePipeline::Pipeline"
-	// EC2AmiRType is a ResourceType enum value
+	// EC2AmiRType is an AWS ResourceType enum value
 	EC2AmiRType = "AWS::EC2::Ami"
-	// EC2BundleTaskRType is a ResourceType enum value
+	// EC2BundleTaskRType is an AWS ResourceType enum value
 	EC2BundleTaskRType = "AWS::EC2::BundleTask"
-	// EC2ConversionTaskRType is a ResourceType enum value
+	// EC2ConversionTaskRType is an AWS ResourceType enum value
 	EC2ConversionTaskRType = "AWS::EC2::ConversionTask"
-	// EC2CustomerGatewayRType is a ResourceType enum value
+	// EC2CustomerGatewayRType is an AWS ResourceType enum value
 	EC2CustomerGatewayRType = "AWS::EC2::CustomerGateway"
-	// EC2DHCPOptionsRType is a ResourceType enum value
+	// EC2DHCPOptionsRType is an AWS ResourceType enum value
 	EC2DHCPOptionsRType = "AWS::EC2::DHCPOptions"
-	// EC2EIPRType is a ResourceType enum value
+	// EC2EIPRType is an AWS ResourceType enum value
 	EC2EIPRType = "AWS::EC2::EIP"
-	// EC2EIPAssociationRType is a ResourceType enum value
+	// EC2EIPAssociationRType is an AWS ResourceType enum value
 	EC2EIPAssociationRType = "AWS::EC2::EIPAssociation"
-	// EC2ExportTaskRType is a ResourceType enum value
+	// EC2ExportTaskRType is an AWS ResourceType enum value
 	EC2ExportTaskRType = "AWS::EC2::ExportTask"
-	// EC2FlowLogRType is a ResourceType enum value
+	// EC2FlowLogRType is an AWS ResourceType enum value
 	EC2FlowLogRType = "AWS::EC2::FlowLog"
-	// EC2HostRType is a ResourceType enum value
+	// EC2HostRType is an AWS ResourceType enum value
 	EC2HostRType = "AWS::EC2::Host"
-	// EC2ImportTaskRType is a ResourceType enum value
+	// EC2ImportTaskRType is an AWS ResourceType enum value
 	EC2ImportTaskRType = "AWS::EC2::ImportTask"
-	// EC2InstanceRType is a ResourceType enum value
+	// EC2InstanceRType is an AWS ResourceType enum value
 	EC2InstanceRType = "AWS::EC2::Instance"
-	// EC2InternetGatewayRType is a ResourceType enum value
+	// EC2InternetGatewayRType is an AWS ResourceType enum value
 	EC2InternetGatewayRType = "AWS::EC2::InternetGateway"
-	// EC2KeyPairRType is a ResourceType enum value
+	// EC2KeyPairRType is an AWS ResourceType enum value
 	EC2KeyPairRType = "AWS::EC2::KeyPair"
-	// EC2NatGatewayRType is a ResourceType enum value
+	// EC2NatGatewayRType is an AWS ResourceType enum value
 	EC2NatGatewayRType = "AWS::EC2::NatGateway"
-	// EC2NetworkACLRType is a ResourceType enum value
+	// EC2NetworkACLRType is an AWS ResourceType enum value
 	EC2NetworkACLRType = "AWS::EC2::NetworkAcl"
-	// EC2NetworkInterfaceRType is a ResourceType enum value
+	// EC2NetworkInterfaceRType is an AWS ResourceType enum value
 	EC2NetworkInterfaceRType = "AWS::EC2::NetworkInterface"
-	// EC2NetworkInterfaceAttachmentRType is a ResourceType enum value
+	// EC2NetworkInterfaceAttachmentRType is an AWS ResourceType enum value
 	EC2NetworkInterfaceAttachmentRType = "AWS::EC2::NetworkInterfaceAttachment"
-	// EC2PlacementGroupRType is a ResourceType enum value
+	// EC2PlacementGroupRType is an AWS ResourceType enum value
 	EC2PlacementGroupRType = "AWS::EC2::PlacementGroup"
-	// EC2ReservedInstanceRType is a ResourceType enum value
+	// EC2ReservedInstanceRType is an AWS ResourceType enum value
 	EC2ReservedInstanceRType = "AWS::EC2::ReservedInstance"
-	// EC2ReservedInstancesListingRType is a ResourceType enum value
+	// EC2ReservedInstancesListingRType is an AWS ResourceType enum value
 	EC2ReservedInstancesListingRType = "AWS::EC2::ReservedInstancesListing"
-	// EC2ReservedInstancesModificationRType is a ResourceType enum value
+	// EC2ReservedInstancesModificationRType is an AWS ResourceType enum value
 	EC2ReservedInstancesModificationRType = "AWS::EC2::ReservedInstancesModification"
-	// EC2RouteTableRType is a ResourceType enum value
+	// EC2RouteTableRType is an AWS ResourceType enum value
 	EC2RouteTableRType = "AWS::EC2::RouteTable"
-	// EC2RouteTableAssociationRType is a grafiti-specific ResourceType enum value
+	// EC2RouteTableAssociationRType is a grafiti-specificn AWS ResourceType enum value
 	EC2RouteTableAssociationRType = "AWS::EC2::RouteTableAssociation"
-	// EC2ScheduledInstanceRType is a ResourceType enum value
+	// EC2ScheduledInstanceRType is an AWS ResourceType enum value
 	EC2ScheduledInstanceRType = "AWS::EC2::ScheduledInstance"
-	// EC2SecurityGroupRType is a ResourceType enum value
+	// EC2SecurityGroupRType is an AWS ResourceType enum value
 	EC2SecurityGroupRType = "AWS::EC2::SecurityGroup"
-	// EC2SnapshotRType is a ResourceType enum value
+	// EC2SnapshotRType is an AWS ResourceType enum value
 	EC2SnapshotRType = "AWS::EC2::Snapshot"
-	// EC2SpotFleetRequestRType is a ResourceType enum value
+	// EC2SpotFleetRequestRType is an AWS ResourceType enum value
 	EC2SpotFleetRequestRType = "AWS::EC2::SpotFleetRequest"
-	// EC2SpotInstanceRequestRType is a ResourceType enum value
+	// EC2SpotInstanceRequestRType is an AWS ResourceType enum value
 	EC2SpotInstanceRequestRType = "AWS::EC2::SpotInstanceRequest"
-	// EC2SubnetRType is a ResourceType enum value
+	// EC2SubnetRType is an AWS ResourceType enum value
 	EC2SubnetRType = "AWS::EC2::Subnet"
-	// EC2SubnetNetworkACLAssociationRType is a ResourceType enum value
+	// EC2SubnetNetworkACLAssociationRType is an AWS ResourceType enum value
 	EC2SubnetNetworkACLAssociationRType = "AWS::EC2::SubnetNetworkAclAssociation"
-	// EC2SubnetRouteTableAssociationRType is a ResourceType enum value
+	// EC2SubnetRouteTableAssociationRType is an AWS ResourceType enum value
 	EC2SubnetRouteTableAssociationRType = "AWS::EC2::SubnetRouteTableAssociation"
-	// EC2VolumeRType is a ResourceType enum value
+	// EC2VolumeRType is an AWS ResourceType enum value
 	EC2VolumeRType = "AWS::EC2::Volume"
-	// EC2VPCRType is a ResourceType enum value
+	// EC2VPCRType is an AWS ResourceType enum value
 	EC2VPCRType = "AWS::EC2::VPC"
-	// EC2VPCEndpointRType is a ResourceType enum value
+	// EC2VPCEndpointRType is an AWS ResourceType enum value
 	EC2VPCEndpointRType = "AWS::EC2::VPCEndpoint"
-	// EC2VPCPeeringConnectionRType is a ResourceType enum value
+	// EC2VPCPeeringConnectionRType is an AWS ResourceType enum value
 	EC2VPCPeeringConnectionRType = "AWS::EC2::VPCPeeringConnection"
-	// EC2VPNConnectionRType is a ResourceType enum value
+	// EC2VPNConnectionRType is an AWS ResourceType enum value
 	EC2VPNConnectionRType = "AWS::EC2::VPNConnection"
-	// EC2VPNGatewayRType is a ResourceType enum value
+	// EC2VPNGatewayRType is an AWS ResourceType enum value
 	EC2VPNGatewayRType = "AWS::EC2::VPNGateway"
-	// ElasticLoadBalancingLoadBalancerRType is a ResourceType enum value
+	// ElasticLoadBalancingLoadBalancerRType is an AWS ResourceType enum value
 	ElasticLoadBalancingLoadBalancerRType = "AWS::ElasticLoadBalancing::LoadBalancer"
-	// IAMAccessKeyRType is a ResourceType enum value
+	// IAMAccessKeyRType is an AWS ResourceType enum value
 	IAMAccessKeyRType = "AWS::IAM::AccessKey"
-	// IAMAccountAliasRType is a ResourceType enum value
+	// IAMAccountAliasRType is an AWS ResourceType enum value
 	IAMAccountAliasRType = "AWS::IAM::AccountAlias"
-	// IAMGroupRType is a ResourceType enum value
+	// IAMGroupRType is an AWS ResourceType enum value
 	IAMGroupRType = "AWS::IAM::Group"
-	// IAMInstanceProfileRType is a ResourceType enum value
+	// IAMInstanceProfileRType is an AWS ResourceType enum value
 	IAMInstanceProfileRType = "AWS::IAM::InstanceProfile"
-	// IAMMfaDeviceRType is a ResourceType enum value
+	// IAMMfaDeviceRType is an AWS ResourceType enum value
 	IAMMfaDeviceRType = "AWS::IAM::MfaDevice"
-	// IAMOpenIDConnectProviderRType is a ResourceType enum value
+	// IAMOpenIDConnectProviderRType is an AWS ResourceType enum value
 	IAMOpenIDConnectProviderRType = "AWS::IAM::OpenIDConnectProvider"
-	// IAMPolicyRType is a ResourceType enum value
+	// IAMPolicyRType is an AWS ResourceType enum value
 	IAMPolicyRType = "AWS::IAM::Policy"
-	// IAMRoleRType is a ResourceType enum value
+	// IAMRoleRType is an AWS ResourceType enum value
 	IAMRoleRType = "AWS::IAM::Role"
-	// IAMSamlProviderRType is a ResourceType enum value
+	// IAMSamlProviderRType is an AWS ResourceType enum value
 	IAMSamlProviderRType = "AWS::IAM::SamlProvider"
-	// IAMServerCertificateRType is a ResourceType enum value
+	// IAMServerCertificateRType is an AWS ResourceType enum value
 	IAMServerCertificateRType = "AWS::IAM::ServerCertificate"
-	// IAMSigningCertificateRType is a ResourceType enum value
+	// IAMSigningCertificateRType is an AWS ResourceType enum value
 	IAMSigningCertificateRType = "AWS::IAM::SigningCertificate"
-	// IAMSshPublicKeyRType is a ResourceType enum value
-	IAMSshPublicKeyRType = "AWS::IAM::SshPublicKey"
-	// IAMUserRType is a ResourceType enum value
+	// IAMSSHPublicKeyRType is an AWS ResourceType enum value
+	IAMSSHPublicKeyRType = "AWS::IAM::SshPublicKey"
+	// IAMUserRType is an AWS ResourceType enum value
 	IAMUserRType = "AWS::IAM::User"
-	// RedshiftClusterRType is a ResourceType enum value
+	// RedshiftClusterRType is an AWS ResourceType enum value
 	RedshiftClusterRType = "AWS::Redshift::Cluster"
-	// RedshiftClusterParameterGroupRType is a ResourceType enum value
+	// RedshiftClusterParameterGroupRType is an AWS ResourceType enum value
 	RedshiftClusterParameterGroupRType = "AWS::Redshift::ClusterParameterGroup"
-	// RedshiftClusterSecurityGroupRType is a ResourceType enum value
+	// RedshiftClusterSecurityGroupRType is an AWS ResourceType enum value
 	RedshiftClusterSecurityGroupRType = "AWS::Redshift::ClusterSecurityGroup"
-	// RedshiftClusterSnapshotRType is a ResourceType enum value
+	// RedshiftClusterSnapshotRType is an AWS ResourceType enum value
 	RedshiftClusterSnapshotRType = "AWS::Redshift::ClusterSnapshot"
-	// RedshiftClusterSubnetGroupRType is a ResourceType enum value
+	// RedshiftClusterSubnetGroupRType is an AWS ResourceType enum value
 	RedshiftClusterSubnetGroupRType = "AWS::Redshift::ClusterSubnetGroup"
-	// RedshiftEventSubscriptionRType is a ResourceType enum value
+	// RedshiftEventSubscriptionRType is an AWS ResourceType enum value
 	RedshiftEventSubscriptionRType = "AWS::Redshift::EventSubscription"
-	// RedshiftHsmClientCertificateRType is a ResourceType enum value
+	// RedshiftHsmClientCertificateRType is an AWS ResourceType enum value
 	RedshiftHsmClientCertificateRType = "AWS::Redshift::HsmClientCertificate"
-	// RedshiftHsmConfigurationRType is a ResourceType enum value
+	// RedshiftHsmConfigurationRType is an AWS ResourceType enum value
 	RedshiftHsmConfigurationRType = "AWS::Redshift::HsmConfiguration"
-	// RDSDBClusterRType is a ResourceType enum value
+	// RDSDBClusterRType is an AWS ResourceType enum value
 	RDSDBClusterRType = "AWS::RDS::DBCluster"
-	// RDSDBClusterOptionGroupRType is a ResourceType enum value
+	// RDSDBClusterOptionGroupRType is an AWS ResourceType enum value
 	RDSDBClusterOptionGroupRType = "AWS::RDS::DBClusterOptionGroup"
-	// RDSDBClusterParameterGroupRType is a ResourceType enum value
+	// RDSDBClusterParameterGroupRType is an AWS ResourceType enum value
 	RDSDBClusterParameterGroupRType = "AWS::RDS::DBClusterParameterGroup"
-	// RDSDBClusterSnapshotRType is a ResourceType enum value
+	// RDSDBClusterSnapshotRType is an AWS ResourceType enum value
 	RDSDBClusterSnapshotRType = "AWS::RDS::DBClusterSnapshot"
-	// RDSDBInstanceRType is a ResourceType enum value
+	// RDSDBInstanceRType is an AWS ResourceType enum value
 	RDSDBInstanceRType = "AWS::RDS::DBInstance"
-	// RDSDBOptionGroupRType is a ResourceType enum value
+	// RDSDBOptionGroupRType is an AWS ResourceType enum value
 	RDSDBOptionGroupRType = "AWS::RDS::DBOptionGroup"
-	// RDSDBParameterGroupRType is a ResourceType enum value
+	// RDSDBParameterGroupRType is an AWS ResourceType enum value
 	RDSDBParameterGroupRType = "AWS::RDS::DBParameterGroup"
-	// RDSDBSecurityGroupRType is a ResourceType enum value
+	// RDSDBSecurityGroupRType is an AWS ResourceType enum value
 	RDSDBSecurityGroupRType = "AWS::RDS::DBSecurityGroup"
-	// RDSDBSnapshotRType is a ResourceType enum value
+	// RDSDBSnapshotRType is an AWS ResourceType enum value
 	RDSDBSnapshotRType = "AWS::RDS::DBSnapshot"
-	// RDSDBSubnetGroupRType is a ResourceType enum value
+	// RDSDBSubnetGroupRType is an AWS ResourceType enum value
 	RDSDBSubnetGroupRType = "AWS::RDS::DBSubnetGroup"
-	// RDSEventSubscriptionRType is a ResourceType enum value
+	// RDSEventSubscriptionRType is an AWS ResourceType enum value
 	RDSEventSubscriptionRType = "AWS::RDS::EventSubscription"
-	// RDSReservedDBInstanceRType is a ResourceType enum value
+	// RDSReservedDBInstanceRType is an AWS ResourceType enum value
 	RDSReservedDBInstanceRType = "AWS::RDS::ReservedDBInstance"
-	// Route53ChangeRType is a ResourceType enum value
+	// Route53ChangeRType is an AWS ResourceType enum value
 	Route53ChangeRType = "AWS::Route53::Change"
-	// Route53HostedZoneRType is a ResourceType enum value
+	// Route53HostedZoneRType is an AWS ResourceType enum value
 	Route53HostedZoneRType = "AWS::Route53::HostedZone"
-	// S3BucketRType is a ResourceType enum value
+	// S3BucketRType is an AWS ResourceType enum value
 	S3BucketRType = "AWS::S3::Bucket"
+)
+
+const (
+	// EC2Namespace is an AWS Service Namespace enum value
+	EC2Namespace = "ec2"
+	// AutoScalingNamespace is an AWS Service Namespace enum value
+	AutoScalingNamespace = "autoscaling"
+	// ACMNamespace is an AWS Service Namespace enum value
+	ACMNamespace = "acm"
+	// CloudTrailNamespace is an AWS Service Namespace enum value
+	CloudTrailNamespace = "cloudtrail"
+	// CodePipelineNamespace is an AWS Service Namespace enum value
+	CodePipelineNamespace = "codepipeline"
+	// ElasticLoadBalancingNamespace is an AWS Service Namespace enum value
+	ElasticLoadBalancingNamespace = "elasticloadbalancing"
+	// IAMNamespace is an AWS Service Namespace enum value
+	IAMNamespace = "iam"
+	// RedshiftNamespace is an AWS Service Namespace enum value
+	RedshiftNamespace = "redshift"
+	// RDSNamespace is an AWS Service Namespace enum value
+	RDSNamespace = "rds"
+	// Route53Namespace is an AWS Service Namespace enum value
+	Route53Namespace = "route53"
+	// S3Namespace is an AWS Service Namespace enum value
+	S3Namespace = "s3"
 )
 
 // CTUnsupportedResourceTypes holds values for which CloudTrail does not
@@ -191,31 +216,37 @@ var RGTAUnsupportedResourceTypes = map[string]struct{}{
 	AutoScalingLaunchConfigurationRType: struct{}{},
 	AutoScalingPolicyRType:              struct{}{},
 	AutoScalingScheduledActionRType:     struct{}{},
+	IAMInstanceProfileRType:             struct{}{},
+	IAMUserRType:                        struct{}{},
+	IAMRoleRType:                        struct{}{},
+	IAMPolicyRType:                      struct{}{},
 }
 
 // NamespaceForResource maps ResourceType to an ARN namespace
 func NamespaceForResource(resourceType string) string {
 	switch {
 	case strings.HasPrefix(resourceType, "AWS::EC2::"):
-		return "ec2"
+		return EC2Namespace
 	case strings.HasPrefix(resourceType, "AWS::AutoScaling::"):
-		return "autoscaling"
+		return AutoScalingNamespace
 	case strings.HasPrefix(resourceType, "AWS::ACM::"):
-		return "acm"
+		return ACMNamespace
 	case strings.HasPrefix(resourceType, "AWS::CloudTrail::"):
-		return "cloudtrail"
+		return CloudTrailNamespace
 	case strings.HasPrefix(resourceType, "AWS::CodePipeline::"):
-		return "codepipeline"
+		return CodePipelineNamespace
 	case strings.HasPrefix(resourceType, "AWS::ElasticLoadBalancing::"):
-		return "elasticloadbalancing"
+		return ElasticLoadBalancingNamespace
 	case strings.HasPrefix(resourceType, "AWS::IAM::"):
-		return "iam"
+		return IAMNamespace
 	case strings.HasPrefix(resourceType, "AWS::Redshift::"):
-		return "redshift"
+		return RedshiftNamespace
 	case strings.HasPrefix(resourceType, "AWS::RDS::"):
-		return "rds"
+		return RDSNamespace
+	case strings.HasPrefix(resourceType, "AWS::Route53::"):
+		return Route53Namespace
 	case strings.HasPrefix(resourceType, "AWS::S3::"):
-		return "s3"
+		return S3Namespace
 	}
 	return ""
 }
@@ -239,25 +270,14 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		return *(*asgs)[0].AutoScalingGroupARN
 		// break
 	case AutoScalingLaunchConfigurationRType:
-		// NOTE: will not tag
 		// arn:aws:autoscaling:region:account-id:launchConfiguration:launchconfigid:launchConfigurationName/launchconfigfriendlyname
-		// lcs, err := describe.GetAutoScalingLaunchConfigurations(&[]string{*resource.ResourceName})
-		// if lcs == nil || len(*lcs) == 0 || err != nil {
-		// 	return ""
-		// }
-		// return *(*lcs)[0].LaunchConfigurationARN
+		// NOTE: will not tag
 	case AutoScalingPolicyRType:
 		// arn:aws:autoscaling:region:account-id:scalingPolicy:policyid:autoScalingGroupName/groupfriendlyname:policyname/policyfriendlyname
-		// gid := parsedEvent.Get("responseElements.groupid")
-		// gfn := parsedEvent.Get("responseElements.groupfriendlyname")
-		// return fmt.Sprintf("%s:autoScalingGroup:%s:autoScalingGroupName/%s", ARNPrefix, gid, gfn)
+		// NOTE: will not tag
 	case AutoScalingScheduledActionRType:
 		// arn:aws:autoscaling:region:account-id:scheduledUpdateGroupAction:scheduleactionid:autoScalingGroupName/autoscalinggroupfriendlyname:scheduledActionName/scheduledactionfriendlyname
-		// said := parsedEvent.Get("responseElements.scheduleactionid")
-		// asgfn := parsedEvent.Get("responseElements.autoscalinggroupfriendlyname")
-		// san := parsedEvent.Get("responseElements.scheduledactionfriendlyname")
-		// asString := fmt.Sprintf("%s:scheduledUpdateGroupAction:%s", ARNPrefix, said)
-		// return fmt.Sprintf("%s:autoScalingGroupName/%s:scheduledActionName/%s", asString, asgfn, san)
+		// NOTE: will not tag
 	case ACMCertificateRType:
 		// arn:aws:acm:region:account-id:certificate/certificate-id
 		return fmt.Sprintf("%s:certificate/%s", ARNPrefix, *resource.ResourceName)
@@ -271,11 +291,7 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// arn:aws:ec2:region::image/image-id
 		return fmt.Sprintf("arn:aws:ec2:%s::image/%s", region, *resource.ResourceName)
 	case EC2BundleTaskRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2ConversionTaskRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2CustomerGatewayRType:
 		// arn:aws:ec2:region:account-id:customer-gateway/cgw-id
 		return fmt.Sprintf("%s:customer-gateway/%s", ARNPrefix, *resource.ResourceName)
@@ -283,21 +299,13 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// arn:aws:ec2:region:account-id:dhcp-options/dhcp-options-id
 		return fmt.Sprintf("%s:dhcp-options/%s", ARNPrefix, *resource.ResourceName)
 	case EC2EIPRType:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2EIPAssociationRType:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2ExportTaskRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2FlowLogRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2HostRType:
 		// arn:aws:ec2:region:account-id:dedicated-host/host-id
 		return fmt.Sprintf("%s:dedicated-host/%s", ARNPrefix, *resource.ResourceName)
 	case EC2ImportTaskRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2InstanceRType:
 		// arn:aws:ec2:region:account-id:instance/instance-id
 		return fmt.Sprintf("%s:instance/%s", ARNPrefix, *resource.ResourceName)
@@ -308,8 +316,6 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// arn:aws:ec2:region:account-id:key-pair/key-pair-name
 		return fmt.Sprintf("%s:key-pair/%s", ARNPrefix, *resource.ResourceName)
 	case EC2NatGatewayRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2NetworkACLRType:
 		// arn:aws:ec2:region:account-id:network-acl/nacl-id
 		return fmt.Sprintf("%s:network-acl/%s", ARNPrefix, *resource.ResourceName)
@@ -317,26 +323,16 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// arn:aws:ec2:region:account-id:network-interface/eni-id
 		return fmt.Sprintf("%s:network-interface/%s", ARNPrefix, *resource.ResourceName)
 	case EC2NetworkInterfaceAttachmentRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2PlacementGroupRType:
 		// arn:aws:ec2:region:account-id:placement-group/placement-group-name
 		return fmt.Sprintf("%s:placement-group/%s", ARNPrefix, *resource.ResourceName)
 	case EC2ReservedInstanceRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2ReservedInstancesListingRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2ReservedInstancesModificationRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2RouteTableRType:
 		// arn:aws:ec2:region:account-id:route-table/route-table-id
 		return fmt.Sprintf("%s:route-table/%s", ARNPrefix, *resource.ResourceName)
 	case EC2ScheduledInstanceRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2SecurityGroupRType:
 		// arn:aws:ec2:region:account-id:security-group/security-group-id
 		return fmt.Sprintf("%s:security-group/%s", ARNPrefix, *resource.ResourceName)
@@ -344,20 +340,12 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// arn:aws:ec2:region:account-id:snapshot/snapshot-id
 		return fmt.Sprintf("%s:snapshot/%s", ARNPrefix, *resource.ResourceName)
 	case EC2SpotFleetRequestRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2SpotInstanceRequestRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2SubnetRType:
 		// arn:aws:ec2:region:account-id:subnet/subnet-id
 		return fmt.Sprintf("%s:subnet/%s", ARNPrefix, *resource.ResourceName)
 	case EC2SubnetNetworkACLAssociationRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2SubnetRouteTableAssociationRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2VolumeRType:
 		// arn:aws:ec2:region:account-id:volume/volume-id
 		return fmt.Sprintf("%s:volume/%s", ARNPrefix, *resource.ResourceName)
@@ -365,8 +353,6 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// arn:aws:ec2:region:account-id:vpc/vpc-id
 		return fmt.Sprintf("%s:vpc/%s", ARNPrefix, *resource.ResourceName)
 	case EC2VPCEndpointRType:
-		// arn:aws:ec2:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case EC2VPCPeeringConnectionRType:
 		// arn:aws:ec2:region:account-id:vpc-peering-connection/vpc-peering-connection-id
 		return fmt.Sprintf("%s:vpc-peering-connection/%s", ARNPrefix, *resource.ResourceName)
@@ -380,24 +366,13 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// arn:aws:elasticloadbalancing:region:account-id:loadbalancer/name
 		return fmt.Sprintf("%s:loadbalancer/%s", ARNPrefix, *resource.ResourceName)
 	case IAMAccessKeyRType:
-		// arn:aws:iam::account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case IAMAccountAliasRType:
-		// arn:aws:iam::account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case IAMGroupRType:
 		// arn:aws:iam::account-id:group/group-name
 		return fmt.Sprintf("%s:group/%s", ARNPrefix, *resource.ResourceName)
 	case IAMInstanceProfileRType:
-		// NOTE: will not tag
 		// arn:aws:iam::account-id:instance-profile/instance-profile-name
-		// NOTE: *resource.ResourceName gives non-deterministic results: sometimes
-		// an ID, sometimes the full ARN
-		// rName := *resource.ResourceName
-		// if strings.HasPrefix(rName, "arn:aws:iam::") {
-		// 	return rName
-		// }
-		// return fmt.Sprintf("%s:instance-profile/%s", ARNPrefix, *resource.ResourceName)
+		// NOTE: will not tag
 	case IAMMfaDeviceRType:
 		// arn:aws:iam::account-id:mfa/virtual-device-name
 		return fmt.Sprintf("%s:mfa/%s", ARNPrefix, *resource.ResourceName)
@@ -405,13 +380,11 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// arn:aws:iam::account-id:oidc-provider/provider-name
 		return fmt.Sprintf("%s:oidc-provider/%s", ARNPrefix, *resource.ResourceName)
 	case IAMPolicyRType:
-		// NOTE: will not tag
 		// arn:aws:iam::account-id:policy/policy-name
-		// return fmt.Sprintf("%s:policy/%s", ARNPrefix, *resource.ResourceName)
-	case IAMRoleRType:
 		// NOTE: will not tag
+	case IAMRoleRType:
 		// arn:aws:iam::account-id:role/role-name
-		// return fmt.Sprintf("%s:role/%s", ARNPrefix, *resource.ResourceName)
+		// NOTE: will not tag
 	case IAMSamlProviderRType:
 		// arn:aws:iam::account-id:saml-provider/provider-name
 		return fmt.Sprintf("%s:saml-provider/%s", ARNPrefix, *resource.ResourceName)
@@ -419,16 +392,10 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// arn:aws:iam::account-id:server-certificate/certificate-name
 		return fmt.Sprintf("%s:server-certificate/%s", ARNPrefix, *resource.ResourceName)
 	case IAMSigningCertificateRType:
-		// arn:aws:iam::account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
-	case IAMSshPublicKeyRType:
-		// arn:aws:iam::account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
+	case IAMSSHPublicKeyRType:
 	case IAMUserRType:
 		// arn:aws:iam::account-id:user/user-name
 		// NOTE: will not tag
-		// return fmt.Sprintf("%s:user/%s", ARNPrefix, *resource.ResourceName)
-		// return parsedEvent.Get("userIdentity.arn").String()
 	case RedshiftClusterRType:
 		// arn:aws:redshift:region:account-id:cluster:clustername
 		return fmt.Sprintf("%s:cluster:%s", ARNPrefix, *resource.ResourceName)
@@ -440,27 +407,16 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		return fmt.Sprintf("%s:securitygroup:%s", ARNPrefix, *resource.ResourceName)
 	case RedshiftClusterSnapshotRType:
 		// arn:aws:redshift:region:account-id:snapshot:clustername/snapshotname
-		// cn := parsedEvent.Get("responseElements.clustername")
-		// ssn := parsedEvent.Get("responseElements.clustername.snapshotname")
-		// return fmt.Sprintf("%s:snapshot:%s/%s", ARNPrefix, cn, ssn)
 	case RedshiftClusterSubnetGroupRType:
 		// arn:aws:redshift:region:account-id:subnetgroup:subnetgroupname
 		return fmt.Sprintf("%s:subnetgroup:%s", ARNPrefix, *resource.ResourceName)
 	case RedshiftEventSubscriptionRType:
-		// arn:aws:redshift:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case RedshiftHsmClientCertificateRType:
-		// arn:aws:redshift:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case RedshiftHsmConfigurationRType:
-		// arn:aws:redshift:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case RDSDBClusterRType:
 		// arn:aws:rds:region:account-id:cluster:db-cluster-name
 		return fmt.Sprintf("%s:cluster:%s", ARNPrefix, *resource.ResourceName)
 	case RDSDBClusterOptionGroupRType:
-		// arn:aws:rds:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case RDSDBClusterParameterGroupRType:
 		// arn:aws:rds:region:account-id:cluster-pg:cluster-parameter-group-name
 		return fmt.Sprintf("%s:cluster-pg:%s", ARNPrefix, *resource.ResourceName)
@@ -489,12 +445,8 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// arn:aws:rds:region:account-id:es:subscription-name
 		return fmt.Sprintf("%s:es:%s", ARNPrefix, *resource.ResourceName)
 	case RDSReservedDBInstanceRType:
-		// arn:aws:rds:region:account-id:
-		// return fmt.Sprintf("%s:resource/%s", ARNPrefix, *resource.ResourceName)
 	case Route53ChangeRType:
 		// arn:aws:route53:::change/changeid
-		// cid := parsedEvent.Get("responseElements.changeid")
-		// return fmt.Sprintf("arn:aws:route53:::change/%s", cid)
 	case Route53HostedZoneRType:
 		// arn:aws:route53:::hostedzone/zoneid
 		hzSplit := strings.Split(*resource.ResourceName, "/hostedzone/")
@@ -555,8 +507,7 @@ func MapARNToRTypeAndRName(ARN string) (string, string) {
 			return "", ""
 		}
 		switch {
-		// case strings.HasPrefix(sfx, "image/"):
-		// 	return EC2AmiRType, arnToID("image/", sfx)
+		case strings.HasPrefix(sfx, "image/"):
 		case strings.HasPrefix(sfx, "customer-gateway/"):
 			return EC2CustomerGatewayRType, arnToID("customer-gateway/", sfx)
 		case strings.HasPrefix(sfx, "dhcp-options/"):

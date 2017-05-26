@@ -274,3 +274,24 @@ From file:
 ```sh
 grafiti -c ./config.toml delete -f example-delete-tags.json
 ```
+
+Additionally it is recommended that the `--ignore-errors` flag is used when deleting resources. Many top-level resources have
+dependencies that, if not first deleted, will cause API errors that interrupt deletion loops. `--ignore-errors` instead handles
+errors gracefully by continuing deletion loops and printing error messages to stdout in JSON format:
+
+```json
+{
+  "error": "error message text"
+}
+```
+
+### Deleting dependencies
+By default, `grafiti delete` will not trace relationships of resources and add them to the deletion graph.
+
+For example, if a tagged VPC has a user-created (non-default) subnet that is not tagged, running `grafiti delete`
+will not delete the subnet, and in all likelihood will not delete the VPC due to dependency issues imposed by AWS.
+
+Passing the `--all-deps` flag will trace these relationships and add all found dependencies to the deletion graph:
+```sh
+grafiti -c ./config.toml delete --all-deps -f example-delete-tags.json
+```

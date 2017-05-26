@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -185,11 +184,10 @@ func tag(reader io.Reader) error {
 
 		resARN := t.TaggingMetadata.ResourceARN
 
-		// AutoScalingGroups and Route53 HostedZones have their own tagging API's
-		if strings.HasPrefix(resARN, "arn:aws:autoscaling") {
-			tagAutoScalingGroup(resARN, t.Tags)
-		} else if strings.HasPrefix(resARN, "arn:aws:route53") {
-			tagRoute53HostedZone(resARN, t.Tags)
+		// AutoScaling and Route53 resources have their own tagging API's
+		rType, _ := arn.MapARNToRTypeAndRName(resARN)
+		if _, ok := arn.RGTAUnsupportedResourceTypes[rType]; ok {
+			tagUnsupportedResourceType(rType, resARN, t.Tags)
 		} else {
 			ARNBuckets.AddARNToBuckets(resARN, t.Tags)
 		}
@@ -230,7 +228,16 @@ func tag(reader io.Reader) error {
 	return nil
 }
 
-func tagAutoScalingGroup(ARN string, tags Tags) {
+func tagUnsupportedResourceType(rType string, ARN string, tags Tags) {
+	switch arn.NamespaceForResource(rType) {
+	case arn.AutoScalingNamespace:
+		tagAutoScalingResource(rType, ARN, tags)
+	case arn.Route53Namespace:
+		tagRoute53Resource(rType, ARN, tags)
+	}
+}
+
+func tagAutoScalingResource(rType string, ARN string, tags Tags) {
 	sess := session.Must(session.NewSession(
 		&aws.Config{
 			Region: aws.String(viper.GetString("grafiti.az")),
@@ -264,7 +271,7 @@ func tagAutoScalingGroup(ARN string, tags Tags) {
 
 	ctx := aws.BackgroundContext()
 	if _, err := svc.CreateOrUpdateTagsWithContext(ctx, params); err != nil {
-		fmt.Println(err.Error())
+		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 	} else {
 		if !tagsOnly {
 			pj, _ := json.Marshal(params)
@@ -275,7 +282,7 @@ func tagAutoScalingGroup(ARN string, tags Tags) {
 	return
 }
 
-func tagRoute53HostedZone(ARN string, tags Tags) {
+func tagRoute53Resource(rType string, ARN string, tags Tags) {
 	sess := session.Must(session.NewSession(
 		&aws.Config{
 			Region: aws.String(viper.GetString("grafiti.az")),
@@ -306,7 +313,7 @@ func tagRoute53HostedZone(ARN string, tags Tags) {
 
 	ctx := aws.BackgroundContext()
 	if _, err := svc.ChangeTagsForResourceWithContext(ctx, params); err != nil {
-		fmt.Println(err.Error())
+		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 	} else {
 		if !tagsOnly {
 			pj, _ := json.Marshal(params)
