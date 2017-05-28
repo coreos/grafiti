@@ -142,6 +142,47 @@ func deleteAutoScalingPoliciesByIDs(cfg *DeleteConfig, ids *[][]string) error {
 	return nil
 }
 
+func deleteEC2AMIsByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	svc := ec2.New(cfg.AWSSession)
+	fmtStr := "Deregistered EC2 AMI"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+	var params *ec2.DeregisterImageInput
+	for _, id := range *ids {
+		params = &ec2.DeregisterImageInput{
+			ImageId: aws.String(id),
+			DryRun:  aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeregisterImageWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Println(fmtStr, id)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
 func deleteEC2InstancesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	if ids == nil {
 		return nil
@@ -197,6 +238,88 @@ func deleteEC2InstancesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	}
 	// Instances take awhile to shut down
 	time.Sleep(time.Duration(2) * time.Minute)
+	return nil
+}
+
+func deleteEC2SnapshotsByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	svc := ec2.New(cfg.AWSSession)
+	fmtStr := "Deleted EC2 Snapshot"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+	var params *ec2.DeleteSnapshotInput
+	for _, id := range *ids {
+		params = &ec2.DeleteSnapshotInput{
+			SnapshotId: aws.String(id),
+			DryRun:     aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteSnapshotWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Println(fmtStr, id)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
+func deleteEC2VolumesByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	svc := ec2.New(cfg.AWSSession)
+	fmtStr := "Deleted EC2 Volume"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+	var params *ec2.DeleteVolumeInput
+	for _, id := range *ids {
+		params = &ec2.DeleteVolumeInput{
+			VolumeId: aws.String(id),
+			DryRun:   aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteVolumeWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Println(fmtStr, id)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
 	return nil
 }
 
@@ -323,6 +446,7 @@ func DeleteAWSResourcesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	case arn.AutoScalingLaunchConfigurationRType:
 		return deleteAutoScalingLaunchConfigurationsByIDs(cfg, ids)
 	case arn.EC2AmiRType:
+		return deleteEC2AMIsByIDs(cfg, ids)
 	case arn.EC2CustomerGatewayRType:
 	case arn.EC2EIPRType:
 	case arn.EC2EIPAssociationRType:
@@ -336,8 +460,10 @@ func DeleteAWSResourcesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	case arn.EC2RouteTableRType:
 	case arn.EC2SecurityGroupRType:
 	case arn.EC2SnapshotRType:
+		return deleteEC2SnapshotsByIDs(cfg, ids)
 	case arn.EC2SubnetRType:
 	case arn.EC2VolumeRType:
+		return deleteEC2VolumesByIDs(cfg, ids)
 	case arn.EC2VPCRType:
 	case arn.ElasticLoadBalancingLoadBalancerRType:
 	case arn.IAMInstanceProfileRType:
