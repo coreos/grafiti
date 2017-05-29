@@ -10,8 +10,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/elb"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/coreos/grafiti/arn"
 	"github.com/coreos/grafiti/describe"
 )
@@ -1240,6 +1242,44 @@ func deleteEC2VPCsByIDs(cfg *DeleteConfig, ids *[]string) error {
 	return nil
 }
 
+// NOTE: this only supports deleting classic (non-application) ELB's
+func deleteElasticLoadBalancersByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	svc := elb.New(cfg.AWSSession)
+	fmtStr := "Deleted ELB"
+	if cfg.DryRun {
+		for _, id := range *ids {
+			fmt.Println(drStr, fmtStr, id)
+		}
+		return nil
+	}
+	var params *elb.DeleteLoadBalancerInput
+	for _, id := range *ids {
+		params = &elb.DeleteLoadBalancerInput{
+			LoadBalancerName: aws.String(id),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteLoadBalancerWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			return err
+		}
+		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	// Wait for ELB's to delete
+	time.Sleep(time.Duration(30) * time.Second)
+	return nil
+}
+
 func removeIAMRolesFromInstanceProfilesByIPrs(cfg *DeleteConfig, iprs *[]*iam.InstanceProfile) error {
 	if iprs == nil {
 		return nil
@@ -1444,6 +1484,94 @@ func deleteIAMUsersByNames(cfg *DeleteConfig, ns *[]string) error {
 	return nil
 }
 
+func deleteS3Objects(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	fmtStr := "Deleted S3 Object"
+	svc := s3.New(cfg.AWSSession)
+
+	if cfg.DryRun {
+		for _, id := range *ids {
+			fmt.Printf("%s %s from S3 Bucket %s\n", drStr, fmtStr, id)
+		}
+		return nil
+	}
+
+	var params *s3.DeleteObjectsInput
+	for _, id := range *ids {
+		objs, oerr := describe.GetS3BucketObjectsByBucketIDs(id)
+		if oerr != nil || objs == nil {
+			continue
+		}
+
+		objIDs := make([]*s3.ObjectIdentifier, 0, len(*objs))
+		for _, o := range *objs {
+			objIDs = append(objIDs, &s3.ObjectIdentifier{Key: o.Key})
+		}
+		params = &s3.DeleteObjectsInput{
+			Bucket: aws.String(id),
+			Delete: &s3.Delete{Objects: objIDs},
+		}
+		ctx := aws.BackgroundContext()
+		resp, err := svc.DeleteObjectsWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			return err
+		}
+		for _, o := range resp.Deleted {
+			fmt.Printf("%s %s from S3 Bucket %s\n", fmtStr, *o.Key, id)
+		}
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
+// NOTE: must delete objects in bucket first
+func deleteS3BucketsByNames(cfg *DeleteConfig, ns *[]string) error {
+	if ns == nil {
+		return nil
+	}
+	// Delete all objects in buckets
+	if berr := deleteS3Objects(cfg, ns); berr != nil {
+		return berr
+	}
+
+	svc := s3.New(cfg.AWSSession)
+	fmtStr := "Deleted S3 Bucket"
+	if cfg.DryRun {
+		for _, id := range *ns {
+			fmt.Println(drStr, fmtStr, id)
+		}
+		return nil
+	}
+	var params *s3.DeleteBucketInput
+	for _, id := range *ns {
+		params = &s3.DeleteBucketInput{
+			Bucket: aws.String(id),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteBucketWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			return err
+		}
+		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
 func deleteRoute53ResourceRecordSets(cfg *DeleteConfig, hzID string, rrs *[]*route53.ResourceRecordSet) error {
 	if rrs == nil {
 		return nil
@@ -1599,6 +1727,7 @@ func DeleteAWSResourcesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	case arn.EC2VPCRType:
 		return deleteEC2VPCsByIDs(cfg, ids)
 	case arn.ElasticLoadBalancingLoadBalancerRType:
+		return deleteElasticLoadBalancersByIDs(cfg, ids)
 	case arn.IAMInstanceProfileRType:
 		return deleteIAMInstanceProfilesByIDs(cfg, ids)
 	case arn.IAMRoleRType:
@@ -1606,6 +1735,7 @@ func DeleteAWSResourcesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	case arn.IAMUserRType:
 		return deleteIAMUsersByNames(cfg, ids)
 	case arn.S3BucketRType:
+		return deleteS3Objects(cfg, ids)
 	case arn.Route53HostedZoneRType:
 		return deleteRoute53HostedZonesPrivate(cfg, ids)
 	}
