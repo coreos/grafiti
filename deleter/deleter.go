@@ -678,7 +678,6 @@ func deleteEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		}
 	}
 
-	// Format of ids should be
 	svc := ec2.New(cfg.AWSSession)
 	fmtStr := "Deleted EC2 NetworkInterface"
 	if cfg.DryRun {
@@ -713,6 +712,158 @@ func deleteEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
+func deleteEC2RouteTableRoutes(cfg *DeleteConfig, rtID *string, rs *[]*ec2.Route) error {
+	if rs == nil {
+		return nil
+	}
+	svc := ec2.New(cfg.AWSSession)
+	fmtStr := "Deleted RouteTable Route"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+	var params *ec2.DeleteRouteInput
+	for _, r := range *rs {
+		if r.GatewayId != nil && *r.GatewayId == "local" {
+			continue
+		}
+		params = &ec2.DeleteRouteInput{
+			DestinationCidrBlock: r.DestinationCidrBlock,
+			RouteTableId:         rtID,
+			DryRun:               aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteRouteWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Printf("%s: Dst CIDR Block %s\n", fmtStr, *r.DestinationCidrBlock)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Printf("%s: Dst CIDR Block %s\n", fmtStr, *r.DestinationCidrBlock)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
+func deleteEC2RouteTableAssociationsByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	svc := ec2.New(cfg.AWSSession)
+	fmtStr := "Deleted RouteTable Association"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+	var params *ec2.DisassociateRouteTableInput
+	for _, id := range *ids {
+		params = &ec2.DisassociateRouteTableInput{
+			AssociationId: aws.String(id),
+			DryRun:        aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DisassociateRouteTableWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Println(fmtStr, id)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
+// NOTE: can only delete a route table once all subnets have been disassociated,
+// and and all routes have been deleted. Cannot delete the main (default) route
+// table
+func deleteEC2RouteTablesByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	// Ensure all routes are deleted
+	rts, err := describe.GetEC2RouteTablesByIDs(ids)
+	if err != nil {
+		return err
+	}
+	if rts == nil {
+		return nil
+	}
+	sras := make([]*ec2.RouteTableAssociation, 0)
+	for _, rt := range *rts {
+		for _, a := range rt.Associations {
+			if *a.Main {
+				continue
+			}
+			sras = append(sras, a)
+		}
+		if rerr := deleteEC2RouteTableRoutes(cfg, rt.RouteTableId, &rt.Routes); rerr != nil {
+			return rerr
+		}
+	}
+
+	// Delete route table
+	svc := ec2.New(cfg.AWSSession)
+	fmtStr := "Deleted EC2 RouteTable"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+	var params *ec2.DeleteRouteTableInput
+	for _, rt := range *rts {
+
+		params = &ec2.DeleteRouteTableInput{
+			RouteTableId: rt.RouteTableId,
+			DryRun:       aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteRouteTableWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Println(fmtStr, *rt.RouteTableId)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Println(fmtStr, *rt.RouteTableId)
 		// Prevent throttling
 		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
@@ -914,6 +1065,48 @@ func deleteEC2SnapshotsByIDs(cfg *DeleteConfig, ids *[]string) error {
 	return nil
 }
 
+// NOTE: ensure all network interfaces and network acl's are disassociated
+func deleteEC2SubnetsByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	svc := ec2.New(cfg.AWSSession)
+	fmtStr := "Deleted EC2 Subnet"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+	var params *ec2.DeleteSubnetInput
+	for _, id := range *ids {
+		params = &ec2.DeleteSubnetInput{
+			SubnetId: aws.String(id),
+			DryRun:   aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteSubnetWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Println(fmtStr, id)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
 func deleteEC2VolumesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	if ids == nil {
 		return nil
@@ -933,6 +1126,97 @@ func deleteEC2VolumesByIDs(cfg *DeleteConfig, ids *[]string) error {
 
 		ctx := aws.BackgroundContext()
 		_, err := svc.DeleteVolumeWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Println(fmtStr, id)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
+func deleteEC2VPCCIDRBlocks(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	vpcs, verr := describe.GetEC2VPCsByIDs(ids)
+	if verr != nil {
+		return verr
+	}
+	if vpcs == nil {
+		return nil
+	}
+
+	svc := ec2.New(cfg.AWSSession)
+	if cfg.DryRun {
+		for _, id := range *ids {
+			fmt.Printf("%s Deleted EC2 VPC %s CIDRBlockAssociation\n", drStr, id)
+		}
+		return nil
+	}
+
+	var params *ec2.DisassociateVpcCidrBlockInput
+	for _, vpc := range *vpcs {
+		for _, b := range vpc.Ipv6CidrBlockAssociationSet {
+			params = &ec2.DisassociateVpcCidrBlockInput{
+				AssociationId: b.AssociationId,
+			}
+			ctx := aws.BackgroundContext()
+			_, err := svc.DisassociateVpcCidrBlockWithContext(ctx, params)
+			if err != nil {
+				if cfg.IgnoreErrors {
+					fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+					continue
+				}
+				return err
+			}
+			fmt.Printf("%s Deleted EC2 VPC %s CIDRBlockAssociation %s\n", drStr, *vpc.VpcId, *b.AssociationId)
+			// Prevent throttling
+			time.Sleep(time.Duration(500) * time.Millisecond)
+		}
+	}
+	return nil
+}
+
+func deleteEC2VPCsByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	// Disassociate vpc cidr blocks
+	if cerr := deleteEC2VPCCIDRBlocks(cfg, ids); cerr != nil {
+		return cerr
+	}
+
+	// Now delete VPC itself
+	svc := ec2.New(cfg.AWSSession)
+	fmtStr := "Deleted EC2 VPC"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+	var params *ec2.DeleteVpcInput
+	for _, id := range *ids {
+		params = &ec2.DeleteVpcInput{
+			VpcId:  aws.String(id),
+			DryRun: aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteVpcWithContext(ctx, params)
 		if err != nil {
 			if cfg.IgnoreErrors {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
@@ -1096,15 +1380,19 @@ func DeleteAWSResourcesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	case arn.EC2NetworkInterfaceRType:
 		return deleteEC2NetworkInterfacesByIDs(cfg, ids)
 	case arn.EC2RouteTableAssociationRType:
+		return deleteEC2RouteTableAssociationsByIDs(cfg, ids)
 	case arn.EC2RouteTableRType:
+		return deleteEC2RouteTablesByIDs(cfg, ids)
 	case arn.EC2SecurityGroupRType:
 		return deleteEC2SecurityGroupsByIDs(cfg, ids)
 	case arn.EC2SnapshotRType:
 		return deleteEC2SnapshotsByIDs(cfg, ids)
 	case arn.EC2SubnetRType:
+		return deleteEC2SubnetsByIDs(cfg, ids)
 	case arn.EC2VolumeRType:
 		return deleteEC2VolumesByIDs(cfg, ids)
 	case arn.EC2VPCRType:
+		return deleteEC2VPCsByIDs(cfg, ids)
 	case arn.ElasticLoadBalancingLoadBalancerRType:
 	case arn.IAMInstanceProfileRType:
 	case arn.IAMRoleRType:
