@@ -719,6 +719,8 @@ func deleteEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	return nil
 }
 
+const defaultGroupName = "default"
+
 func deleteEC2SecurityGroupIngressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityGroup) error {
 	svc := ec2.New(cfg.AWSSession)
 	if sgs == nil {
