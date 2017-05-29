@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/coreos/grafiti/arn"
 	"github.com/coreos/grafiti/describe"
@@ -1239,6 +1240,210 @@ func deleteEC2VPCsByIDs(cfg *DeleteConfig, ids *[]string) error {
 	return nil
 }
 
+func removeIAMRolesFromInstanceProfilesByIPrs(cfg *DeleteConfig, iprs *[]*iam.InstanceProfile) error {
+	if iprs == nil {
+		return nil
+	}
+
+	svc := iam.New(cfg.AWSSession)
+	if cfg.DryRun {
+		for _, ipr := range *iprs {
+			fmt.Println(drStr, "Removed Role from IAM InstanceProfile", *ipr.InstanceProfileName)
+		}
+		return nil
+	}
+	var params *iam.RemoveRoleFromInstanceProfileInput
+	for _, ipr := range *iprs {
+		for _, rl := range ipr.Roles {
+			params = &iam.RemoveRoleFromInstanceProfileInput{
+				InstanceProfileName: ipr.InstanceProfileName,
+				RoleName:            rl.RoleName,
+			}
+
+			ctx := aws.BackgroundContext()
+			_, err := svc.RemoveRoleFromInstanceProfileWithContext(ctx, params)
+			if err != nil {
+				if cfg.IgnoreErrors {
+					fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+					continue
+				}
+				return err
+			}
+			fmt.Printf("Removed Role %s from IAM InstanceProfile %s\n", *ipr.InstanceProfileName, *rl.RoleName)
+			// Prevent throttling
+			time.Sleep(time.Duration(500) * time.Millisecond)
+		}
+	}
+	return nil
+}
+
+// NOTE: must delete roles from instance profile before deleting roles. Must
+// be done in this step because of only profiles contain role info, not visa versa.
+func deleteIAMInstanceProfilesByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	iprs, ierr := describe.GetIAMInstanceProfilesByIDs(ids)
+	if ierr != nil {
+		return ierr
+	}
+	if iprs == nil {
+		return nil
+	}
+
+	// Delete roles from instance profiles
+	_ = removeIAMRolesFromInstanceProfilesByIPrs(cfg, iprs)
+
+	svc := iam.New(cfg.AWSSession)
+	fmtStr := "Deleted IAM InstanceProfile"
+	if cfg.DryRun {
+		for _, id := range *ids {
+			fmt.Println(drStr, fmtStr, id)
+		}
+		return nil
+	}
+	var params *iam.DeleteInstanceProfileInput
+	for _, ipr := range *iprs {
+		params = &iam.DeleteInstanceProfileInput{
+			InstanceProfileName: aws.String(*ipr.InstanceProfileName),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteInstanceProfileWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			return err
+		}
+		fmt.Println(fmtStr, *ipr.InstanceProfileName)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
+func deleteIAMRolePoliciesByRoles(cfg *DeleteConfig, rpsMap *map[string][]string) error {
+	if rpsMap == nil {
+		return nil
+	}
+	svc := iam.New(cfg.AWSSession)
+	fmtStr := "Deleted IAM RolePolicy"
+	if cfg.DryRun {
+		for rn, rpns := range *rpsMap {
+			for _, rp := range rpns {
+				fmt.Printf("%s %s %s for IAM Role %s\n", drStr, fmtStr, rp, rn)
+			}
+		}
+		return nil
+	}
+	var params *iam.DeleteRolePolicyInput
+	for rn, rpns := range *rpsMap {
+		for _, rp := range rpns {
+			params = &iam.DeleteRolePolicyInput{
+				RoleName:   aws.String(rn),
+				PolicyName: aws.String(rp),
+			}
+
+			ctx := aws.BackgroundContext()
+			_, err := svc.DeleteRolePolicyWithContext(ctx, params)
+			if err != nil {
+				if cfg.IgnoreErrors {
+					fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+					continue
+				}
+				return err
+			}
+			fmt.Println(fmtStr, rp)
+			// Prevent throttling
+			time.Sleep(time.Duration(500) * time.Millisecond)
+		}
+	}
+	return nil
+}
+
+func deleteIAMRolesByNames(cfg *DeleteConfig, ns *[]string) error {
+	if ns == nil {
+		return nil
+	}
+
+	// Delete role policies
+	rps, lerr := describe.GetIAMRolePoliciesByRoleNames(ns)
+	if lerr != nil {
+		return lerr
+	}
+	if perr := deleteIAMRolePoliciesByRoles(cfg, rps); perr != nil {
+		return perr
+	}
+
+	// Delete roles
+	svc := iam.New(cfg.AWSSession)
+	fmtStr := "Deleted IAM Role"
+	if cfg.DryRun {
+		for _, id := range *ns {
+			fmt.Println(drStr, fmtStr, id)
+		}
+		return nil
+	}
+	var params *iam.DeleteRoleInput
+	for _, n := range *ns {
+		params = &iam.DeleteRoleInput{
+			RoleName: aws.String(n),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteRoleWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			return err
+		}
+		fmt.Println(fmtStr, n)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
+func deleteIAMUsersByNames(cfg *DeleteConfig, ns *[]string) error {
+	if ns == nil {
+		return nil
+	}
+
+	svc := iam.New(cfg.AWSSession)
+	fmtStr := "Deleted IAM User"
+	if cfg.DryRun {
+		for _, n := range *ns {
+			fmt.Println(drStr, fmtStr, n)
+		}
+		return nil
+	}
+	var params *iam.DeleteUserInput
+	for _, n := range *ns {
+		params = &iam.DeleteUserInput{
+			UserName: aws.String(n),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteUserWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			return err
+		}
+		fmt.Println(fmtStr, n)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
 func deleteRoute53ResourceRecordSets(cfg *DeleteConfig, hzID string, rrs *[]*route53.ResourceRecordSet) error {
 	if rrs == nil {
 		return nil
@@ -1395,8 +1600,11 @@ func DeleteAWSResourcesByIDs(cfg *DeleteConfig, ids *[]string) error {
 		return deleteEC2VPCsByIDs(cfg, ids)
 	case arn.ElasticLoadBalancingLoadBalancerRType:
 	case arn.IAMInstanceProfileRType:
+		return deleteIAMInstanceProfilesByIDs(cfg, ids)
 	case arn.IAMRoleRType:
+		return deleteIAMRolesByNames(cfg, ids)
 	case arn.IAMUserRType:
+		return deleteIAMUsersByNames(cfg, ids)
 	case arn.S3BucketRType:
 	case arn.Route53HostedZoneRType:
 		return deleteRoute53HostedZonesPrivate(cfg, ids)
