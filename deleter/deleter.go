@@ -183,6 +183,47 @@ func deleteEC2AMIsByIDs(cfg *DeleteConfig, ids *[]string) error {
 	return nil
 }
 
+func deleteEC2CustomerGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	svc := ec2.New(cfg.AWSSession)
+	fmtStr := "Deleted EC2 CustomerGateway"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+	var params *ec2.DeleteCustomerGatewayInput
+	for _, id := range *ids {
+		params = &ec2.DeleteCustomerGatewayInput{
+			CustomerGatewayId: aws.String(id),
+			DryRun:            aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteCustomerGatewayWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Println(fmtStr, id)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
 func deleteEC2EIPAssocationsByIDs(cfg *DeleteConfig, ids *[]string) error {
 	if ids == nil {
 		return nil
@@ -457,6 +498,106 @@ func deleteEC2NatGatewaysByIDs(cfg *DeleteConfig, ids *[]string) error {
 	return nil
 }
 
+func deleteEC2NetworkACLEntries(cfg *DeleteConfig, acls *[]*ec2.NetworkAcl) error {
+	if acls == nil {
+		return nil
+	}
+	svc := ec2.New(cfg.AWSSession)
+	fmtStr := "Deleted EC2 NetworkAcl Association"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	var params *ec2.DeleteNetworkAclEntryInput
+	for _, acl := range *acls {
+		if *acl.IsDefault {
+			continue
+		}
+
+		for _, a := range acl.Entries {
+			params = &ec2.DeleteNetworkAclEntryInput{
+				NetworkAclId: acl.NetworkAclId,
+				RuleNumber:   a.RuleNumber,
+				Egress:       a.Egress,
+				DryRun:       aws.Bool(cfg.DryRun),
+			}
+			ctx := aws.BackgroundContext()
+			_, err := svc.DeleteNetworkAclEntryWithContext(ctx, params)
+			if err != nil {
+				if cfg.IgnoreErrors {
+					fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+					continue
+				}
+				aerr, ok := err.(awserr.Error)
+				if ok {
+					aerrCode := aerr.Code()
+					if aerrCode == drCode {
+						fmt.Printf("%s %s Entry %d\n", fmtStr, *acl.NetworkAclId, *a.RuleNumber)
+						continue
+					}
+				}
+				return err
+			}
+			fmt.Printf("%s %s Entry %d\n", fmtStr, *acl.NetworkAclId, *a.RuleNumber)
+			// Prevent throttling
+			time.Sleep(time.Duration(500) * time.Millisecond)
+		}
+	}
+	return nil
+}
+
+func deleteEC2NetworkACLsByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	acls, aerr := describe.GetEC2NetworkACLsByIDs(ids)
+	if aerr != nil {
+		return aerr
+	}
+
+	// First delete network acl entries
+	if eerr := deleteEC2NetworkACLEntries(cfg, acls); eerr != nil {
+		return eerr
+	}
+
+	svc := ec2.New(cfg.AWSSession)
+	fmtStr := "Deleted EC2 NetworkAcl"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	var params *ec2.DeleteNetworkAclInput
+	for _, acl := range *acls {
+		params = &ec2.DeleteNetworkAclInput{
+			NetworkAclId: acl.NetworkAclId,
+			DryRun:       aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteNetworkAclWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Println(fmtStr, *acl.NetworkAclId)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Println(fmtStr, *acl.NetworkAclId)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
 // Network interfaces require detachment before deletion
 func detachEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	if ids == nil {
@@ -572,6 +713,158 @@ func deleteEC2NetworkInterfacesByIDs(cfg *DeleteConfig, ids *[]string) error {
 			return err
 		}
 		fmt.Println(fmtStr, id)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
+func deleteEC2SecurityGroupIngressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityGroup) error {
+	svc := ec2.New(cfg.AWSSession)
+	if sgs == nil {
+		return nil
+	}
+
+	fmtStr := "Deleted EC2 SecurityGroup Ingress Rule"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	var params *ec2.RevokeSecurityGroupIngressInput
+	for _, sg := range *sgs {
+		if *sg.GroupName == defaultGroupName {
+			continue
+		}
+		params = &ec2.RevokeSecurityGroupIngressInput{
+			GroupId:       sg.GroupId,
+			IpPermissions: sg.IpPermissions,
+			DryRun:        aws.Bool(cfg.DryRun),
+		}
+		ctx := aws.BackgroundContext()
+		_, err := svc.RevokeSecurityGroupIngressWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
+func deleteEC2SecurityGroupEgressRules(cfg *DeleteConfig, sgs *[]*ec2.SecurityGroup) error {
+	svc := ec2.New(cfg.AWSSession)
+	if sgs == nil {
+		return nil
+	}
+
+	fmtStr := "Deleted EC2 SecurityGroup Egress Rule"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	var params *ec2.RevokeSecurityGroupEgressInput
+	for _, sg := range *sgs {
+		if *sg.GroupName == defaultGroupName {
+			continue
+		}
+		params = &ec2.RevokeSecurityGroupEgressInput{
+			GroupId:       sg.GroupId,
+			IpPermissions: sg.IpPermissionsEgress,
+			DryRun:        aws.Bool(cfg.DryRun),
+		}
+		ctx := aws.BackgroundContext()
+		_, err := svc.RevokeSecurityGroupEgressWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
+		// Prevent throttling
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+	return nil
+}
+
+// NOTE: all security group references must be removed before deleting before
+// deleting a security group
+func deleteEC2SecurityGroupsByIDs(cfg *DeleteConfig, ids *[]string) error {
+	if ids == nil {
+		return nil
+	}
+
+	sgs, rerr := describe.GetEC2SecurityGroupsByIDs(ids)
+	if rerr != nil {
+		return rerr
+	}
+	if sgs == nil {
+		return nil
+	}
+
+	// Delete ingress/egress rules (security group references)
+	if ierr := deleteEC2SecurityGroupIngressRules(cfg, sgs); ierr != nil {
+		return ierr
+	}
+	if eerr := deleteEC2SecurityGroupEgressRules(cfg, sgs); eerr != nil {
+		return eerr
+	}
+
+	svc := ec2.New(cfg.AWSSession)
+	fmtStr := "Deleted EC2 SecurityGroup"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+	var params *ec2.DeleteSecurityGroupInput
+	for _, sg := range *sgs {
+		if *sg.GroupName == defaultGroupName {
+			continue
+		}
+		params = &ec2.DeleteSecurityGroupInput{
+			GroupId: sg.GroupId,
+			DryRun:  aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := svc.DeleteSecurityGroupWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+				continue
+			}
+			aerr, ok := err.(awserr.Error)
+			if ok {
+				aerrCode := aerr.Code()
+				if aerrCode == drCode {
+					fmt.Println(fmtStr, *sg.GroupId)
+					continue
+				}
+			}
+			return err
+		}
+		fmt.Println(fmtStr, *sg.GroupId)
 		// Prevent throttling
 		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
@@ -785,6 +1078,7 @@ func DeleteAWSResourcesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	case arn.EC2AmiRType:
 		return deleteEC2AMIsByIDs(cfg, ids)
 	case arn.EC2CustomerGatewayRType:
+		return deleteEC2CustomerGatewaysByIDs(cfg, ids)
 	case arn.EC2EIPRType:
 		return deleteEC2EIPAddresses(cfg, ids)
 	case arn.EC2EIPAssociationRType:
@@ -796,11 +1090,13 @@ func DeleteAWSResourcesByIDs(cfg *DeleteConfig, ids *[]string) error {
 	case arn.EC2NatGatewayRType:
 		return deleteEC2NatGatewaysByIDs(cfg, ids)
 	case arn.EC2NetworkACLRType:
+		return deleteEC2NetworkACLsByIDs(cfg, ids)
 	case arn.EC2NetworkInterfaceRType:
 		return deleteEC2NetworkInterfacesByIDs(cfg, ids)
 	case arn.EC2RouteTableAssociationRType:
 	case arn.EC2RouteTableRType:
 	case arn.EC2SecurityGroupRType:
+		return deleteEC2SecurityGroupsByIDs(cfg, ids)
 	case arn.EC2SnapshotRType:
 		return deleteEC2SnapshotsByIDs(cfg, ids)
 	case arn.EC2SubnetRType:
