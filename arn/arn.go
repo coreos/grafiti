@@ -25,8 +25,8 @@ const (
 	CloudTrailTrailRType = "AWS::CloudTrail::Trail"
 	// CodePipelinePipelineRType is an AWS ResourceType enum value
 	CodePipelinePipelineRType = "AWS::CodePipeline::Pipeline"
-	// EC2AmiRType is an AWS ResourceType enum value
-	EC2AmiRType = "AWS::EC2::Ami"
+	// EC2AMIRType is an AWS ResourceType enum value
+	EC2AMIRType = "AWS::EC2::Ami"
 	// EC2BundleTaskRType is an AWS ResourceType enum value
 	EC2BundleTaskRType = "AWS::EC2::BundleTask"
 	// EC2ConversionTaskRType is an AWS ResourceType enum value
@@ -178,8 +178,6 @@ const (
 )
 
 const (
-	// EC2Namespace is an AWS Service Namespace enum value
-	EC2Namespace = "ec2"
 	// AutoScalingNamespace is an AWS Service Namespace enum value
 	AutoScalingNamespace = "autoscaling"
 	// ACMNamespace is an AWS Service Namespace enum value
@@ -188,6 +186,8 @@ const (
 	CloudTrailNamespace = "cloudtrail"
 	// CodePipelineNamespace is an AWS Service Namespace enum value
 	CodePipelineNamespace = "codepipeline"
+	// EC2Namespace is an AWS Service Namespace enum value
+	EC2Namespace = "ec2"
 	// ElasticLoadBalancingNamespace is an AWS Service Namespace enum value
 	ElasticLoadBalancingNamespace = "elasticloadbalancing"
 	// IAMNamespace is an AWS Service Namespace enum value
@@ -264,11 +264,10 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 	case AutoScalingGroupRType:
 		// arn:aws:autoscaling:region:account-id:autoScalingGroup:groupid:autoScalingGroupName/groupfriendlyname
 		asgs, err := describe.GetAutoScalingGroupsByNames(&[]string{*resource.ResourceName})
-		if asgs == nil || len(*asgs) == 0 || err != nil {
-			return ""
+		if err != nil || asgs == nil || len(*asgs) == 0 {
+			break
 		}
 		return *(*asgs)[0].AutoScalingGroupARN
-		// break
 	case AutoScalingLaunchConfigurationRType:
 		// arn:aws:autoscaling:region:account-id:launchConfiguration:launchconfigid:launchConfigurationName/launchconfigfriendlyname
 		// NOTE: type does not support tagging
@@ -283,11 +282,11 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		return fmt.Sprintf("%s:certificate/%s", ARNPrefix, *resource.ResourceName)
 	case CloudTrailTrailRType:
 		// arn:aws:cloudtrail:region:account-id:trail/trailname
-		return parsedEvent.Get("responseElements.trailARN").String()
+		return parsedEvent.Get("responseElements.trailARN").Str
 	case CodePipelinePipelineRType:
 		// arn:aws:codepipeline:region:account-id:resource-specifier
 		return fmt.Sprintf("%s:%s", ARNPrefix, *resource.ResourceName)
-	case EC2AmiRType:
+	case EC2AMIRType:
 		// arn:aws:ec2:region::image/image-id
 		return fmt.Sprintf("arn:aws:ec2:%s::image/%s", region, *resource.ResourceName)
 	case EC2BundleTaskRType:
@@ -451,7 +450,7 @@ func MapResourceTypeToARN(resource *cloudtrail.Resource, parsedEvent gjson.Resul
 		// arn:aws:route53:::hostedzone/zoneid
 		hzSplit := strings.Split(*resource.ResourceName, "/hostedzone/")
 		if len(hzSplit) != 2 {
-			return ""
+			break
 		}
 		return fmt.Sprintf("arn:aws:route53:::hostedzone/%s", hzSplit[1])
 	case S3BucketRType:
@@ -471,7 +470,7 @@ func arnToID(pattern, ARN string) string {
 
 // MapARNToRTypeAndRName maps ARN to ResourceType and an identifying ResourceName
 func MapARNToRTypeAndRName(ARN string) (string, string) {
-	sfx := ""
+	var sfx string
 	switch {
 	case strings.HasPrefix(ARN, "arn:aws:autoscaling:"):
 		erASG := re.MustCompile("arn:aws:autoscaling:[^:]+:[^:]+:(.+)")
@@ -479,7 +478,7 @@ func MapARNToRTypeAndRName(ARN string) (string, string) {
 		if len(m) == 2 {
 			sfx = m[1]
 		} else {
-			return "", ""
+			break
 		}
 		switch {
 		case strings.HasPrefix(sfx, "autoScalingGroup:"):
@@ -504,7 +503,7 @@ func MapARNToRTypeAndRName(ARN string) (string, string) {
 		if len(m) == 2 {
 			sfx = m[1]
 		} else {
-			return "", ""
+			break
 		}
 		switch {
 		case strings.HasPrefix(sfx, "image/"):
@@ -555,7 +554,7 @@ func MapARNToRTypeAndRName(ARN string) (string, string) {
 		if len(m) == 2 {
 			sfx = m[1]
 		} else {
-			return "", ""
+			break
 		}
 		switch {
 		case strings.HasPrefix(sfx, "group/"):
@@ -583,7 +582,7 @@ func MapARNToRTypeAndRName(ARN string) (string, string) {
 		if len(m) == 2 {
 			sfx = m[1]
 		} else {
-			return "", ""
+			break
 		}
 		switch {
 		case strings.HasPrefix(sfx, "change/"):
