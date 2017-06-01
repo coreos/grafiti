@@ -55,7 +55,11 @@ func TestFillDependencyGraph(t *testing.T) {
 	for _, c := range cases {
 		FillDependencyGraph(&c.Input)
 
+<<<<<<< HEAD
 		if !reflect.DeepEqual(c.Input, c.Expected) {
+=======
+		if reflect.DeepEqual(c.Input, c.Expected) {
+>>>>>>> 2d3f39c... graph/: added tests
 			t.Errorf("FillDependencyGraph failed\nwanted\n%s\ngot\n%s\n", c.Expected, c.Input)
 		}
 	}
