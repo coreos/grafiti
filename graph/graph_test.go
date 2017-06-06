@@ -9,45 +9,45 @@ import (
 
 func TestFillDependencyGraph(t *testing.T) {
 	cases := []struct {
-		Input    map[string][]string
-		Expected map[string][]string
+		Input    map[arn.ResourceType]arn.ResourceNames
+		Expected map[arn.ResourceType]arn.ResourceNames
 	}{
 		{
-			Input: map[string][]string{
-				arn.EC2VPCRType:                         []string{},
-				arn.AutoScalingGroupRType:               []string{},
-				arn.Route53HostedZoneRType:              []string{},
-				arn.S3BucketRType:                       []string{},
-				arn.EC2NatGatewayRType:                  []string{},
-				arn.EC2InternetGatewayRType:             []string{},
-				arn.EC2InstanceRType:                    []string{},
-				arn.EC2SubnetRType:                      []string{},
-				arn.EC2NetworkInterfaceRType:            []string{},
-				arn.EC2SecurityGroupRType:               []string{},
-				arn.EC2RouteTableRType:                  []string{},
-				arn.AutoScalingLaunchConfigurationRType: []string{},
-				arn.EC2RouteTableAssociationRType:       []string{},
-				arn.EC2EIPRType:                         []string{},
-				arn.EC2EIPAssociationRType:              []string{},
-				arn.EC2NetworkACLRType:                  []string{},
+			Input: map[arn.ResourceType]arn.ResourceNames{
+				arn.EC2VPCRType:                         arn.ResourceNames{},
+				arn.AutoScalingGroupRType:               arn.ResourceNames{},
+				arn.Route53HostedZoneRType:              arn.ResourceNames{},
+				arn.S3BucketRType:                       arn.ResourceNames{},
+				arn.EC2NatGatewayRType:                  arn.ResourceNames{},
+				arn.EC2InternetGatewayRType:             arn.ResourceNames{},
+				arn.EC2InstanceRType:                    arn.ResourceNames{},
+				arn.EC2SubnetRType:                      arn.ResourceNames{},
+				arn.EC2NetworkInterfaceRType:            arn.ResourceNames{},
+				arn.EC2SecurityGroupRType:               arn.ResourceNames{},
+				arn.EC2RouteTableRType:                  arn.ResourceNames{},
+				arn.AutoScalingLaunchConfigurationRType: arn.ResourceNames{},
+				arn.EC2RouteTableAssociationRType:       arn.ResourceNames{},
+				arn.EC2EIPRType:                         arn.ResourceNames{},
+				arn.EC2EIPAssociationRType:              arn.ResourceNames{},
+				arn.EC2NetworkACLRType:                  arn.ResourceNames{},
 			},
-			Expected: map[string][]string{
-				arn.EC2VPCRType:                         []string{},
-				arn.AutoScalingGroupRType:               []string{},
-				arn.Route53HostedZoneRType:              []string{},
-				arn.S3BucketRType:                       []string{},
-				arn.EC2NatGatewayRType:                  []string{},
-				arn.EC2InternetGatewayRType:             []string{},
-				arn.EC2InstanceRType:                    []string{},
-				arn.EC2SubnetRType:                      []string{},
-				arn.EC2NetworkInterfaceRType:            []string{},
-				arn.EC2SecurityGroupRType:               []string{},
-				arn.EC2RouteTableRType:                  []string{},
-				arn.AutoScalingLaunchConfigurationRType: []string{},
-				arn.EC2RouteTableAssociationRType:       []string{},
-				arn.EC2EIPRType:                         []string{},
-				arn.EC2EIPAssociationRType:              []string{},
-				arn.EC2NetworkACLRType:                  []string{},
+			Expected: map[arn.ResourceType]arn.ResourceNames{
+				arn.EC2VPCRType:                         arn.ResourceNames{},
+				arn.AutoScalingGroupRType:               arn.ResourceNames{},
+				arn.Route53HostedZoneRType:              arn.ResourceNames{},
+				arn.S3BucketRType:                       arn.ResourceNames{},
+				arn.EC2NatGatewayRType:                  arn.ResourceNames{},
+				arn.EC2InternetGatewayRType:             arn.ResourceNames{},
+				arn.EC2InstanceRType:                    arn.ResourceNames{},
+				arn.EC2SubnetRType:                      arn.ResourceNames{},
+				arn.EC2NetworkInterfaceRType:            arn.ResourceNames{},
+				arn.EC2SecurityGroupRType:               arn.ResourceNames{},
+				arn.EC2RouteTableRType:                  arn.ResourceNames{},
+				arn.AutoScalingLaunchConfigurationRType: arn.ResourceNames{},
+				arn.EC2RouteTableAssociationRType:       arn.ResourceNames{},
+				arn.EC2EIPRType:                         arn.ResourceNames{},
+				arn.EC2EIPAssociationRType:              arn.ResourceNames{},
+				arn.EC2NetworkACLRType:                  arn.ResourceNames{},
 			},
 		},
 	}
@@ -55,11 +55,7 @@ func TestFillDependencyGraph(t *testing.T) {
 	for _, c := range cases {
 		FillDependencyGraph(&c.Input)
 
-<<<<<<< HEAD
 		if !reflect.DeepEqual(c.Input, c.Expected) {
-=======
-		if reflect.DeepEqual(c.Input, c.Expected) {
->>>>>>> 2d3f39c... graph/: added tests
 			t.Errorf("FillDependencyGraph failed\nwanted\n%s\ngot\n%s\n", c.Expected, c.Input)
 		}
 	}

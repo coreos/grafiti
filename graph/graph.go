@@ -3,14 +3,14 @@ package graph
 import "github.com/coreos/grafiti/arn"
 
 // Hard-coded rounds of retrieval
-var r0 = []string{
+var r0 = arn.ResourceTypes{
 	arn.EC2VPCRType,
 	arn.AutoScalingGroupRType,
 	arn.Route53HostedZoneRType,
 	arn.S3BucketRType,
 }
 
-var r1 = []string{
+var r1 = arn.ResourceTypes{
 	arn.EC2NatGatewayRType,
 	arn.EC2InternetGatewayRType,
 	arn.EC2InstanceRType,
@@ -21,18 +21,18 @@ var r1 = []string{
 	arn.AutoScalingLaunchConfigurationRType,
 }
 
-var r2 = []string{
+var r2 = arn.ResourceTypes{
 	arn.EC2RouteTableAssociationRType,
 	arn.EC2EIPRType,
 	arn.EC2EIPAssociationRType,
 	arn.EC2NetworkACLRType,
 }
 
-var rounds = [][]string{r0, r1, r2}
+var rounds = []arn.ResourceTypes{r0, r1, r2}
 
 // FillDependencyGraph creates a depGraph starting from an inital set of
 // resources found by tags
-func FillDependencyGraph(initDepMap *map[string][]string) {
+func FillDependencyGraph(initDepMap *map[arn.ResourceType]arn.ResourceNames) {
 	if initDepMap == nil {
 		return
 	}
@@ -49,15 +49,15 @@ func FillDependencyGraph(initDepMap *map[string][]string) {
 }
 
 // traverseDependencyGraph traverses necesssary linkages of each resource
-func traverseDependencyGraph(rType string, depMap *map[string][]string) {
+func traverseDependencyGraph(rt arn.ResourceType, depMap *map[arn.ResourceType]arn.ResourceNames) {
 	if depMap == nil {
 		return
 	}
-	ids := (*depMap)[rType]
+	ids := (*depMap)[rt]
 	if ids == nil {
 		return
 	}
-	switch rType {
+	switch rt {
 	case arn.EC2VPCRType:
 		// Get Subnets
 		// Get Instances
