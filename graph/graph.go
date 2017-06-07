@@ -1,6 +1,9 @@
 package graph
 
-import "github.com/coreos/grafiti/arn"
+import (
+	"github.com/coreos/grafiti/arn"
+	"github.com/coreos/grafiti/deleter"
+)
 
 // Hard-coded rounds of retrieval
 var r0 = arn.ResourceTypes{
@@ -32,14 +35,14 @@ var rounds = []arn.ResourceTypes{r0, r1, r2}
 
 // FillDependencyGraph creates a depGraph starting from an inital set of
 // resources found by tags
-func FillDependencyGraph(initDepMap *map[arn.ResourceType]arn.ResourceNames) {
+func FillDependencyGraph(initDepMap map[arn.ResourceType]deleter.ResourceDeleter) {
 	if initDepMap == nil {
 		return
 	}
 
 	for _, round := range rounds {
 		for _, r := range round {
-			if _, ok := (*initDepMap)[r]; ok {
+			if _, ok := initDepMap[r]; ok {
 				traverseDependencyGraph(r, initDepMap)
 			}
 		}
@@ -49,14 +52,11 @@ func FillDependencyGraph(initDepMap *map[arn.ResourceType]arn.ResourceNames) {
 }
 
 // traverseDependencyGraph traverses necesssary linkages of each resource
-func traverseDependencyGraph(rt arn.ResourceType, depMap *map[arn.ResourceType]arn.ResourceNames) {
-	if depMap == nil {
+func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]deleter.ResourceDeleter) {
+	if _, ok := depMap[rt]; !ok {
 		return
 	}
-	ids := (*depMap)[rt]
-	if ids == nil {
-		return
-	}
+
 	switch rt {
 	case arn.EC2VPCRType:
 		// Get Subnets
@@ -81,7 +81,17 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap *map[arn.ResourceType]a
 		// RouteTable Routes will be deleted when deleting a RouteTable
 		// Get Subnet-RouteTable Association
 	case arn.AutoScalingGroupRType:
-		// Get AS LaunchConfigurations
+		// Get autoscaling groups
+		asgs, aerr := depMap[rt].(*deleter.AutoScalingGroupDeleter).RequestAutoScalingGroups()
+		if aerr != nil || len(asgs) == 0 {
+			break
+		}
+
+		// Get launch configurations
+		lct := arn.ResourceType(arn.AutoScalingLaunchConfigurationRType)
+		for _, asg := range asgs {
+			depMap[lct].AddResourceNames(arn.ResourceName(*asg.LaunchConfigurationName))
+		}
 		// Get ELB's
 		// Get IAM instance profiles
 		// Get IAM roles
