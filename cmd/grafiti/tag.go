@@ -24,6 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	"github.com/coreos/grafiti/arn"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -32,11 +33,11 @@ var tagFile string
 
 // TaggingMetadata is the data required to find and tag a resource
 type TaggingMetadata struct {
-	ResourceName string
-	ResourceType string
-	ResourceARN  string
-	CreatorARN   string
-	CreatorName  string
+	ResourceName arn.ResourceName
+	ResourceType arn.ResourceType
+	ResourceARN  arn.ResourceARN
+	CreatorARN   arn.ResourceARN
+	CreatorName  arn.ResourceName
 }
 
 type Tags map[string]string
@@ -150,7 +151,7 @@ func tag(reader io.Reader) error {
 		if t == nil {
 			continue
 		}
-		ARNBuckets.AddARNToBuckets(t.TaggingMetadata.ResourceARN, t.Tags)
+		ARNBuckets.AddARNToBuckets(t.TaggingMetadata.ResourceARN.String(), t.Tags)
 
 		for tag, bucket := range ARNBuckets {
 			if len(bucket) == 20 || isEOF {
