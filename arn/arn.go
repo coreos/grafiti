@@ -29,11 +29,12 @@ func (a ResourceARN) AWSString() *string {
 type ResourceARNs []ResourceARN
 
 // AWSStringSlice converts a slice of ResourceARNs to a slice of string pointers
-func (as ResourceARNs) AWSStringSlice() (arns []*string) {
+func (as ResourceARNs) AWSStringSlice() []*string {
+	res := make([]*string, 0, len(as))
 	for _, a := range as {
-		arns = append(arns, a.AWSString())
+		res = append(res, a.AWSString())
 	}
-	return
+	return res
 }
 
 // ResourceType aliases a string type for AWS resource types
@@ -53,11 +54,12 @@ func (r ResourceType) AWSString() *string {
 type ResourceTypes []ResourceType
 
 // AWSStringSlice converts a slice of ResourceTypes to a slice of string pointers
-func (rs ResourceTypes) AWSStringSlice() (awsRs []*string) {
+func (rs ResourceTypes) AWSStringSlice() []*string {
+	res := make([]*string, 0, len(rs))
 	for _, r := range rs {
-		awsRs = append(awsRs, r.AWSString())
+		res = append(res, r.AWSString())
 	}
-	return
+	return res
 }
 
 // ResourceName aliases a string type for AWS resource names
@@ -77,11 +79,12 @@ func (r ResourceName) AWSString() *string {
 type ResourceNames []ResourceName
 
 // AWSStringSlice converts a slice of ResourceNames to a slice of string pointers
-func (rs ResourceNames) AWSStringSlice() (awsRs []*string) {
+func (rs ResourceNames) AWSStringSlice() []*string {
+	res := make([]*string, 0, len(rs))
 	for _, r := range rs {
-		awsRs = append(awsRs, r.AWSString())
+		res = append(res, r.AWSString())
 	}
-	return
+	return res
 }
 
 const (
