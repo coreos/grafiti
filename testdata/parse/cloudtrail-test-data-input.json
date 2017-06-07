@@ -1,0 +1,69 @@
+{
+  "Records": [{
+      "CloudTrailEvent": "{\"eventVersion\":\"1.02\",\"userIdentity\":{\"type\":\"IAMUser\",\"principalId\":\"ABCDEFGHIJKLMNOPQRSTU\",\"arn\":\"arn:aws:iam::123456789101:user/test-user\",\"accountId\":\"123456789101\",\"accessKeyId\":\"ABCDEFGHIJKLMNOPQRST\",\"userName\":\"test-user\"},\"eventTime\":\"2017-05-30T21:00:01Z\",\"eventSource\":\"iam.amazonaws.com\",\"eventName\":\"AddRoleToInstanceProfile\",\"awsRegion\":\"us-east-1\",\"sourceIPAddress\":\"12.34.56.78\",\"userAgent\":\"aws-sdk-go/1.8.25 (go1.8.1; darwin; amd64) APN/1.0 HashiCorp/1.0 Terraform/0.9.6-dev\",\"requestParameters\":{\"instanceProfileName\":\"xcloud-aws-us-west-master-profile\",\"roleName\":\"xcloud-aws-us-west-master-role\"},\"responseElements\":null,\"requestID\":\"f23cd906-457a-11e7-8d00-9371e9ba1c8b\",\"eventID\":\"4382100a-c86d-4e27-9e2a-ed52c45b2a3f\",\"eventType\":\"AwsApiCall\",\"recipientAccountId\":\"123456789101\"}",
+      "EventId": "4382100a-c86d-4e27-9e2a-ed52c45b2a3f",
+      "EventName": "AddRoleToInstanceProfile",
+      "EventSource": null,
+      "EventTime": "2017-05-30T21:00:01Z",
+      "Username": "test-user",
+      "Resources": [{
+          "ResourceName": "xcloud-aws-us-west-master-role",
+          "ResourceType": "AWS::IAM::Role"
+        },
+        {
+          "ResourceName": "xcloud-aws-us-west-master-profile",
+          "ResourceType": "AWS::IAM::InstanceProfile"
+        }
+      ]
+    },
+    {
+      "CloudTrailEvent": "{\"eventVersion\":\"1.05\",\"userIdentity\":{\"type\":\"Root\",\"principalId\":\"ABCDEFGHIJKLMNOPQRSTU\",\"arn\":\"arn:aws:iam::123456789101:user/test-user\",\"accountId\":\"123456789101\",\"userName\":\"test-user\",\"invokedBy\":\"autoscaling.amazonaws.com\"},\"eventTime\":\"2017-05-30T20:23:51Z\",\"eventSource\":\"ec2.amazonaws.com\",\"eventName\":\"RunInstances\",\"awsRegion\":\"us-west-2\",\"sourceIPAddress\":\"autoscaling.amazonaws.com\",\"userAgent\":\"autoscaling.amazonaws.com\",\"requestParameters\":{\"instancesSet\":{\"items\":[{\"imageId\":\"ami-e5af3185\",\"minCount\":1,\"maxCount\":1,\"keyName\":\"tester\"}]},\"userData\":\"\\u003csensitiveDataRemoved\\u003e\",\"instanceType\":\"m4.large\",\"blockDeviceMapping\":{\"items\":[{\"deviceName\":\"/dev/xvda\",\"ebs\":{\"volumeSize\":30,\"deleteOnTermination\":true,\"volumeType\":\"gp2\"}}]},\"availabilityZone\":\"us-west-2b\",\"monitoring\":{\"enabled\":true},\"disableApiTermination\":false,\"clientToken\":\"31c493d8-debc-4c4e-b44a-defe48441d26_subnet-11725a76_1\",\"networkInterfaceSet\":{\"items\":[{\"deviceIndex\":0,\"subnetId\":\"subnet-11725a76\",\"associatePublicIpAddress\":true,\"groupSet\":{\"items\":[{\"groupId\":\"sg-a1e7c0da\"}]}}]},\"iamInstanceProfile\":{\"arn\":\"arn:aws:iam::123456789101:instance-profile/aws-master-423-master-profile\"}},\"responseElements\":{\"requestId\":\"dfa00672-7528-4acd-be26-8204b277e844\",\"reservationId\":\"r-0f4ddc1ae470dec45\",\"ownerId\":\"123456789101\",\"groupSet\":{},\"instancesSet\":{\"items\":[{\"instanceId\":\"i-0e846a0fc386398df\",\"imageId\":\"ami-e5af3185\",\"instanceState\":{\"code\":0,\"name\":\"pending\"},\"privateDnsName\":\"ip-10-0-16-146.us-west-2.compute.internal\",\"keyName\":\"tester\",\"amiLaunchIndex\":0,\"productCodes\":{},\"instanceType\":\"m4.large\",\"launchTime\":1496175830000,\"placement\":{\"availabilityZone\":\"us-west-2b\",\"tenancy\":\"default\"},\"monitoring\":{\"state\":\"pending\"},\"subnetId\":\"subnet-11725a76\",\"vpcId\":\"vpc-34dcc053\",\"privateIpAddress\":\"12.34.56.78\",\"stateReason\":{\"code\":\"pending\",\"message\":\"pending\"},\"architecture\":\"x86_64\",\"rootDeviceType\":\"ebs\",\"rootDeviceName\":\"/dev/xvda\",\"blockDeviceMapping\":{},\"virtualizationType\":\"hvm\",\"hypervisor\":\"xen\",\"clientToken\":\"31c493d8-debc-4c4e-b44a-defe48441d26_subnet-11725a76_1\",\"groupSet\":{\"items\":[{\"groupId\":\"sg-a1e7c0da\",\"groupName\":\"terraform-000c7cdeded6cac152dc85db5c\"}]},\"sourceDestCheck\":true,\"networkInterfaceSet\":{\"items\":[{\"networkInterfaceId\":\"eni-ece025c6\",\"subnetId\":\"subnet-11725a76\",\"vpcId\":\"vpc-34dcc053\",\"ownerId\":\"123456789101\",\"status\":\"in-use\",\"macAddress\":\"02:d3:d5:d8:42:9c\",\"privateIpAddress\":\"12.34.56.78\",\"privateDnsName\":\"ip-10-0-16-146.us-west-2.compute.internal\",\"sourceDestCheck\":true,\"groupSet\":{\"items\":[{\"groupId\":\"sg-a1e7c0da\",\"groupName\":\"terraform-000c7cdeded6cac152dc85db5c\"}]},\"attachment\":{\"attachmentId\":\"eni-attach-5f1264b6\",\"deviceIndex\":0,\"status\":\"attaching\",\"attachTime\":1496175830000,\"deleteOnTermination\":true},\"privateIpAddressesSet\":{\"item\":[{\"privateIpAddress\":\"12.34.56.78\",\"privateDnsName\":\"ip-10-0-16-146.us-west-2.compute.internal\",\"primary\":true}]},\"ipv6AddressesSet\":{},\"tagSet\":{}}]},\"iamInstanceProfile\":{\"arn\":\"arn:aws:iam::123456789101:instance-profile/aws-master-423-master-profile\",\"id\":\"AIPAIQ7I2ENNRHKY65SGG\"},\"ebsOptimized\":false}]},\"requesterId\":\"123456789101\"},\"requestID\":\"dfa00672-7528-4acd-be26-8204b277e844\",\"eventID\":\"7bd65b88-3d80-4f49-a90c-4315fb547ec8\",\"eventType\":\"AwsApiCall\",\"recipientAccountId\":\"123456789101\"}",
+      "EventId": "7bd65b88-3d80-4f49-a90c-4315fb547ec8",
+      "EventName": "RunInstances",
+      "EventSource": null,
+      "EventTime": "2017-05-30T20:23:51Z",
+      "Username": "test-user",
+      "Resources": [{
+          "ResourceName": "ami-e5af3185",
+          "ResourceType": "AWS::EC2::Ami"
+        },
+        {
+          "ResourceName": "eni-ece025c6",
+          "ResourceType": "AWS::EC2::NetworkInterface"
+        },
+        {
+          "ResourceName": "i-0e846a0fc386398df",
+          "ResourceType": "AWS::EC2::Instance"
+        },
+        {
+          "ResourceName": "terraform-000c7cdeded6cac152dc85db5c",
+          "ResourceType": "AWS::EC2::SecurityGroup"
+        },
+        {
+          "ResourceName": "arn:aws:iam::123456789101:instance-profile/aws-master-423-master-profile",
+          "ResourceType": "AWS::IAM::InstanceProfile"
+        },
+        {
+          "ResourceName": "subnet-11725a76",
+          "ResourceType": "AWS::EC2::Subnet"
+        },
+        {
+          "ResourceName": "vpc-34dcc053",
+          "ResourceType": "AWS::EC2::VPC"
+        },
+        {
+          "ResourceName": "tester",
+          "ResourceType": "AWS::EC2::KeyPair"
+        },
+        {
+          "ResourceName": "sg-a1e7c0da",
+          "ResourceType": "AWS::EC2::SecurityGroup"
+        },
+        {
+          "ResourceName": "AIPAIQ7I2ENNRHKY65SGG",
+          "ResourceType": "AWS::IAM::InstanceProfile"
+        }
+      ]
+    }
+  ]
+}
