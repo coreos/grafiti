@@ -1,6 +1,8 @@
 package deleter
 
 import (
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/coreos/grafiti/arn"
@@ -19,14 +21,10 @@ func setUpAWSSession() *session.Session {
 
 // DeleteConfig holds configuration info for resource deletion
 type DeleteConfig struct {
-	IgnoreErrors bool
 	DryRun       bool
-	ResourceType string
-	AWSSession   *session.Session
+	IgnoreErrors bool
+	BackoffTime  time.Duration
 }
-
-// DelFunc takes a *DeleteConfig and a string, and returns an error
-type DelFunc func(*DeleteConfig, string) error
 
 // A ResourceDeleter is any type that can delete itself from AWS and describe
 // itself using an AWS request

@@ -6,11 +6,13 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
+	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/coreos/grafiti/arn"
 )
 
 // AutoScalingGroupDeleter represents an AWS autoscaling group
 type AutoScalingGroupDeleter struct {
+	Client        autoscalingiface.AutoScalingAPI
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -38,7 +40,10 @@ func (rd *AutoScalingGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nil
 	}
 
-	svc := autoscaling.New(cfg.AWSSession)
+	if rd.Client == nil {
+		rd.Client = autoscaling.New(setUpAWSSession())
+	}
+
 	var params *autoscaling.DeleteAutoScalingGroupInput
 	for _, n := range rd.ResourceNames {
 		params = &autoscaling.DeleteAutoScalingGroupInput{
@@ -47,7 +52,7 @@ func (rd *AutoScalingGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 		}
 
 		ctx := aws.BackgroundContext()
-		_, err := svc.DeleteAutoScalingGroupWithContext(ctx, params)
+		_, err := rd.Client.DeleteAutoScalingGroupWithContext(ctx, params)
 		if err != nil {
 			if cfg.IgnoreErrors {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
@@ -55,10 +60,12 @@ func (rd *AutoScalingGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 			}
 			return err
 		}
+
 		fmt.Println(fmtStr, n)
 		// Prevent throttling
-		time.Sleep(time.Duration(500) * time.Millisecond)
+		time.Sleep(cfg.BackoffTime)
 	}
+
 	time.Sleep(time.Duration(30) * time.Second)
 	return nil
 }
@@ -70,14 +77,17 @@ func (rd *AutoScalingGroupDeleter) RequestAutoScalingGroups() ([]*autoscaling.Gr
 		return nil, nil
 	}
 
-	svc := autoscaling.New(setUpAWSSession())
+	if rd.Client == nil {
+		rd.Client = autoscaling.New(setUpAWSSession())
+	}
+
 	params := &autoscaling.DescribeAutoScalingGroupsInput{
 		AutoScalingGroupNames: rd.ResourceNames.AWSStringSlice(),
 	}
 	asgs := make([]*autoscaling.Group, 0)
 
 	for {
-		req, resp := svc.DescribeAutoScalingGroupsRequest(params)
+		req, resp := rd.Client.DescribeAutoScalingGroupsRequest(params)
 		if err := req.Send(); err != nil {
 			return nil, err
 		}
@@ -98,6 +108,7 @@ func (rd *AutoScalingGroupDeleter) RequestAutoScalingGroups() ([]*autoscaling.Gr
 
 // AutoScalingLaunchConfigurationDeleter represents an AWS launch configuration
 type AutoScalingLaunchConfigurationDeleter struct {
+	Client        autoscalingiface.AutoScalingAPI
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -125,7 +136,10 @@ func (rd *AutoScalingLaunchConfigurationDeleter) DeleteResources(cfg *DeleteConf
 		return nil
 	}
 
-	svc := autoscaling.New(cfg.AWSSession)
+	if rd.Client == nil {
+		rd.Client = autoscaling.New(setUpAWSSession())
+	}
+
 	var params *autoscaling.DeleteLaunchConfigurationInput
 	for _, n := range rd.ResourceNames {
 		params = &autoscaling.DeleteLaunchConfigurationInput{
@@ -133,7 +147,7 @@ func (rd *AutoScalingLaunchConfigurationDeleter) DeleteResources(cfg *DeleteConf
 		}
 
 		ctx := aws.BackgroundContext()
-		_, err := svc.DeleteLaunchConfigurationWithContext(ctx, params)
+		_, err := rd.Client.DeleteLaunchConfigurationWithContext(ctx, params)
 		if err != nil {
 			if cfg.IgnoreErrors {
 				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
@@ -141,10 +155,12 @@ func (rd *AutoScalingLaunchConfigurationDeleter) DeleteResources(cfg *DeleteConf
 			}
 			return err
 		}
+
 		fmt.Println(fmtStr, n)
 		// Prevent throttling
-		time.Sleep(time.Duration(500) * time.Millisecond)
+		time.Sleep(cfg.BackoffTime)
 	}
+
 	return nil
 }
 
@@ -155,14 +171,17 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestAutoScalingLaunchConfigu
 		return nil, nil
 	}
 
-	svc := autoscaling.New(setUpAWSSession())
+	if rd.Client == nil {
+		rd.Client = autoscaling.New(setUpAWSSession())
+	}
+
 	params := &autoscaling.DescribeLaunchConfigurationsInput{
 		LaunchConfigurationNames: rd.ResourceNames.AWSStringSlice(),
 	}
 	lcs := make([]*autoscaling.LaunchConfiguration, 0)
 
 	for {
-		req, resp := svc.DescribeLaunchConfigurationsRequest(params)
+		req, resp := rd.Client.DescribeLaunchConfigurationsRequest(params)
 		if err := req.Send(); err != nil {
 			return nil, err
 		}
