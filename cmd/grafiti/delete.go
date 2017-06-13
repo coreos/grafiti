@@ -104,6 +104,8 @@ func deleteFromFile(fname string) error {
 	if err != nil {
 		return err
 	}
+	defer file.Close()
+
 	reader := bufio.NewReader(file)
 	return deleteFromTags(reader)
 }
@@ -417,18 +419,34 @@ func deleteARNs(ARNs arn.ResourceARNs) error {
 	// graph must be constructed and executed. See README for deletion order.
 	sorted := organizeByDelOrder(resMap)
 
-	// Delete all ARN's in a slice mapped by ResourceType. Iterate in reverse to
-	// delete all non-dependent resources first
+	// Create log filename
+	t := time.Now()
+	logFilePath := fmt.Sprintf("./delete-log-data-%d-%d-%d.log", t.Year(), t.Month(), t.Day())
+
 	cfg := &deleter.DeleteConfig{
 		IgnoreErrors: ignoreErrors,
 		DryRun:       dryRun,
 		BackoffTime:  time.Duration(viper.GetInt("grafiti.backoffTime")) * time.Millisecond,
+		Logger:       deleter.InitRequestLogger(logFilePath),
 	}
+
+	// Delete all ARN's in a slice mapped by ResourceType. Iterate in reverse to
+	// delete all non-dependent resources first
 	for i := len(sorted) - 1; i >= 0; i-- {
 		if err := sorted[i].Deleters.DeleteResources(cfg); err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 		}
 	}
+
+	// Print all failed deletion logs in report format at end of deletion cycle
+	f, ferr := os.Open(logFilePath)
+	if ferr != nil {
+		fmt.Printf("{\"error\": \"%s\"}\n", ferr.Error())
+		return nil
+	}
+	defer f.Close()
+	printLogFileReport(bufio.NewReader(f))
+
 	return nil
 }
 
@@ -470,4 +488,64 @@ func decodeTagFileInput(decoder *json.Decoder) (*TagFileInput, bool, error) {
 		return nil, false, err
 	}
 	return &decoded, false, nil
+}
+
+// Beginning and end of log reports
+const logHead = `================================================================================
+								Log Report: Failed Resource Deletion Events
+================================================================================`
+
+const logTail = `================================================================================`
+
+// Prints a report of all resources that failed to delete
+func printLogFileReport(reader io.Reader) {
+	dec := json.NewDecoder(reader)
+
+	fmt.Println(logHead)
+
+	for {
+		e, isEOF, err := decodeLogEntry(dec)
+		if err != nil {
+			fmt.Println("Error decoding log entry:", err.Error())
+			break
+		}
+		if isEOF {
+			break
+		}
+		if e == nil {
+			continue
+		}
+
+		fmt.Println(formatLogEntry(e))
+	}
+
+	fmt.Println(logTail)
+	return
+}
+
+func decodeLogEntry(decoder *json.Decoder) (*deleter.LogEntry, bool, error) {
+	var decoded deleter.LogEntry
+	if err := decoder.Decode(&decoded); err != nil {
+		if err == io.EOF {
+			return &decoded, true, nil
+		}
+		return nil, false, err
+	}
+	return &decoded, false, nil
+}
+
+func formatLogEntry(e *deleter.LogEntry) (m string) {
+	m = fmt.Sprintf("ResourceType: %s, ResourceName: %s", e.ResourceType, e.ResourceName)
+
+	switch {
+	case e.ParentResourceName != "":
+		m = fmt.Sprintf("%s, ParentResourceType: %s, ParentResourceName: %s", m, e.ParentResourceType, e.ParentResourceName)
+		fallthrough
+	case e.AWSErrorCode != "" && e.AWSErrorMsg != "":
+		m = fmt.Sprintf("%s\n\tAWSErrorCode: %s, AWSErrorMessage: %s", m, e.AWSErrorCode, e.AWSErrorMsg)
+	case e.ErrMsg != "":
+		m = fmt.Sprintf("%s\n\tError: %s", m, e.ErrMsg)
+	}
+
+	return
 }
