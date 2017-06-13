@@ -1,6 +1,7 @@
 [grafiti]
 resourceType = "AWS::EC2::Instance"
 hours = -8
+backoffTime = 1000 # 1 second in milliseconds
 az = "us-east-1"
 includeEvent = false
 tagPatterns = [

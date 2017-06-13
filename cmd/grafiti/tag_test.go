@@ -22,7 +22,7 @@ import (
 )
 
 // Set stdout to pipe and capture printed output of a Print event
-func captureRGTAStdOut(f func(rgtaiface.ResourceGroupsTaggingAPIAPI, []string, Tag) error, i rgtaiface.ResourceGroupsTaggingAPIAPI, as []string, t Tag) string {
+func captureRGTAStdOut(f func(rgtaiface.ResourceGroupsTaggingAPIAPI, arn.ResourceARNs, Tag) error, i rgtaiface.ResourceGroupsTaggingAPIAPI, as arn.ResourceARNs, t Tag) string {
 	oldStdOut := os.Stdout
 	r, w, perr := os.Pipe()
 	if perr != nil {
@@ -60,13 +60,13 @@ func TestTagARNBucket(t *testing.T) {
 
 	caseTable := []struct {
 		Resp     rgta.TagResourcesOutput
-		TestARNs []string
+		TestARNs arn.ResourceARNs
 		TestTag  Tag
 		Expected string
 	}{
 		{
 			Resp: rgta.TagResourcesOutput{},
-			TestARNs: []string{
+			TestARNs: arn.ResourceARNs{
 				"arn:aws:ec2:us-east-1:123456789101:security-group/sg-a59ca0db",
 				"arn:aws:ec2:us-east-1:123456789101:network-interface/eni-3fec2ff7",
 				"arn:aws:elasticloadbalancing:us-east-1:123456789101:loadbalancer/aws-pr-780-90123456-api-internal",
@@ -85,7 +85,7 @@ func TestTagARNBucket(t *testing.T) {
 				`"Tags":{"TaggedAt":"2017-05-31"}}`, "\n"),
 		}, {
 			Resp:     rgta.TagResourcesOutput{},
-			TestARNs: []string{},
+			TestARNs: arn.ResourceARNs{},
 			TestTag:  Tag{"TaggedAt", "2017-05-31"},
 			Expected: `{"ResourceARNList":[],"Tags":{"TaggedAt":"2017-05-31"}}` + "\n",
 		},
@@ -104,7 +104,7 @@ func TestTagARNBucket(t *testing.T) {
 }
 
 // Set stdout to pipe and capture printed output of a Print event
-func captureRGTAUnsupportedStdOut(f func(interface{}, string, string, Tags), i interface{}, rt, rn string, t Tags) string {
+func captureRGTAUnsupportedStdOut(f func(interface{}, arn.ResourceType, arn.ResourceName, Tags), i interface{}, rt arn.ResourceType, rn arn.ResourceName, t Tags) string {
 	oldStdOut := os.Stdout
 	r, w, perr := os.Pipe()
 	if perr != nil {
@@ -142,7 +142,7 @@ func TestTagAutoScalingResource(t *testing.T) {
 
 	caseTable := []struct {
 		Resp      autoscaling.CreateOrUpdateTagsOutput
-		InputName string
+		InputName arn.ResourceName
 		InputTags Tags
 		Expected  string
 	}{
@@ -161,8 +161,8 @@ func TestTagAutoScalingResource(t *testing.T) {
 		},
 	}
 
-	f := func(v interface{}, rt, arn string, t Tags) {
-		tagAutoScalingResource(v.(autoscalingiface.AutoScalingAPI), rt, arn, t)
+	f := func(v interface{}, rt arn.ResourceType, rn arn.ResourceName, t Tags) {
+		tagAutoScalingResource(v.(autoscalingiface.AutoScalingAPI), rt, rn, t)
 	}
 
 	for _, c := range caseTable {
@@ -191,7 +191,7 @@ func TestTagRoute53Resource(t *testing.T) {
 
 	caseTable := []struct {
 		Resp      route53.ChangeTagsForResourceOutput
-		InputName string
+		InputName arn.ResourceName
 		InputTags Tags
 		Expected  string
 	}{
@@ -210,8 +210,8 @@ func TestTagRoute53Resource(t *testing.T) {
 		},
 	}
 
-	f := func(v interface{}, rt, arn string, t Tags) {
-		tagRoute53Resource(v.(route53iface.Route53API), rt, arn, t)
+	f := func(v interface{}, rt arn.ResourceType, rn arn.ResourceName, t Tags) {
+		tagRoute53Resource(v.(route53iface.Route53API), rt, rn, t)
 	}
 
 	for _, c := range caseTable {

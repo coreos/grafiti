@@ -288,15 +288,8 @@ var CTUnsupportedResourceTypes = map[ResourceType]struct{}{
 // RGTAUnsupportedResourceTypes holds values the Resource Group Tagging
 // API does not support
 var RGTAUnsupportedResourceTypes = map[ResourceType]struct{}{
-	Route53HostedZoneRType:              struct{}{},
-	AutoScalingGroupRType:               struct{}{},
-	AutoScalingLaunchConfigurationRType: struct{}{},
-	AutoScalingPolicyRType:              struct{}{},
-	AutoScalingScheduledActionRType:     struct{}{},
-	IAMInstanceProfileRType:             struct{}{},
-	IAMUserRType:                        struct{}{},
-	IAMRoleRType:                        struct{}{},
-	IAMPolicyRType:                      struct{}{},
+	Route53HostedZoneRType: struct{}{},
+	AutoScalingGroupRType:  struct{}{},
 }
 
 // NamespaceForResource maps ResourceType to an ARN namespace
