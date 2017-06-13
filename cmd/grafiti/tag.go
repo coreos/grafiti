@@ -20,10 +20,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	"github.com/aws/aws-sdk-go/service/autoscaling"
+	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
+	rgta "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	rgtaiface "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi/resourcegroupstaggingapiiface"
+	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/aws/aws-sdk-go/service/route53/route53iface"
 	"github.com/coreos/grafiti/arn"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -40,44 +46,54 @@ type TaggingMetadata struct {
 	CreatorName  arn.ResourceName
 }
 
+// Tags are an alias for mapping Tag.Key -> Tag.Value
 type Tags map[string]string
 
+// Tag holds user-defined tag values from a TOML file
 type Tag struct {
 	Key   string
 	Value string
 }
 
+// TagInput holds all Data describing a resource
 type TagInput struct {
 	TaggingMetadata TaggingMetadata
 	Tags            Tags
 }
 
-type ARNSet map[string]struct{}
+// ARNSet maps an ARN to a general struct
+type ARNSet map[arn.ResourceARN]struct{}
 
+// NewARNSet creates a new ARNSet
 func NewARNSet() ARNSet {
-	return make(map[string]struct{})
+	return make(map[arn.ResourceARN]struct{})
 }
 
-func (a *ARNSet) AddARN(ARN string) {
+// AddARN adds an empty struct to an ARNSet
+func (a *ARNSet) AddARN(ARN arn.ResourceARN) {
 	(*a)[ARN] = struct{}{}
 }
 
-func (a *ARNSet) ToList() []string {
-	var arnList = make([]string, 0, len(*a))
-	for k, _ := range *a {
+// ToList generates a list of ARNSet's from a map
+func (a *ARNSet) ToList() arn.ResourceARNs {
+	var arnList = make(arn.ResourceARNs, 0, len(*a))
+	for k := range *a {
 		arnList = append(arnList, k)
 	}
 	return arnList
 }
 
-//ARNSetBucket maps a tag to a set of ARN strings
+// ARNSetBucket maps a tag to a set of ARN strings
 type ARNSetBucket map[Tag]ARNSet
 
+// NewARNSetBucket creates a new map of Tag -> ARNSet
 func NewARNSetBucket() ARNSetBucket {
 	return make(map[Tag]ARNSet)
 }
 
-func (b *ARNSetBucket) AddARNToBuckets(ARN string, tags map[string]string) {
+// AddARNToBuckets adds tags to an ARNSet, or creates a new set if one does not
+// exist
+func (b *ARNSetBucket) AddARNToBuckets(ARN arn.ResourceARN, tags map[string]string) {
 	if ARN == "" {
 		return
 	}
@@ -92,13 +108,14 @@ func (b *ARNSetBucket) AddARNToBuckets(ARN string, tags map[string]string) {
 	}
 }
 
+// ClearBucket creates a new ARNSet for a specific Tag
 func (b *ARNSetBucket) ClearBucket(bucket Tag) {
 	(*b)[bucket] = NewARNSet()
 }
 
 func init() {
 	RootCmd.AddCommand(tagCmd)
-	tagCmd.PersistentFlags().StringVarP(&tagFile, "tagFile", "t", "", "CloudTrail Log input")
+	tagCmd.PersistentFlags().StringVarP(&tagFile, "tag-file", "f", "", "File containing JSON objects of taggable resource ARN's and tag key/value pairs. Format is the output format of grafiti parse.")
 }
 
 var tagCmd = &cobra.Command{
@@ -118,8 +135,8 @@ func runTagCommand(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func tagFromFile(tagFile string) error {
-	file, err := os.Open(tagFile)
+func tagFromFile(fname string) error {
+	file, err := os.Open(fname)
 	if err != nil {
 		return err
 	}
@@ -132,16 +149,15 @@ func tagFromStdIn() error {
 }
 
 func tag(reader io.Reader) error {
-	region := viper.GetString("grafiti.az")
-	sess := session.Must(session.NewSession(
+	svc := rgta.New(session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(region),
+			Region: aws.String(viper.GetString("grafiti.az")),
 		},
-	))
-	svc := resourcegroupstaggingapi.New(sess)
+	)))
 	dec := json.NewDecoder(reader)
 
 	ARNBuckets := NewARNSetBucket()
+	otherResBuckets := make(map[arn.ResourceType]arn.ResourceNames)
 
 	for {
 		t, isEOF, err := decodeInput(dec)
@@ -151,7 +167,16 @@ func tag(reader io.Reader) error {
 		if t == nil {
 			continue
 		}
-		ARNBuckets.AddARNToBuckets(t.TaggingMetadata.ResourceARN.String(), t.Tags)
+
+		// AutoScaling and Route53 resources have their own tagging API's
+		tm := t.TaggingMetadata
+		if _, ok := arn.RGTAUnsupportedResourceTypes[tm.ResourceType]; ok {
+			if _, rok := otherResBuckets[tm.ResourceType]; !rok {
+				otherResBuckets[tm.ResourceType] = append(otherResBuckets[tm.ResourceType], tm.ResourceName)
+			}
+		} else {
+			ARNBuckets.AddARNToBuckets(tm.ResourceARN, t.Tags)
+		}
 
 		for tag, bucket := range ARNBuckets {
 			if len(bucket) == 20 || isEOF {
@@ -162,6 +187,11 @@ func tag(reader io.Reader) error {
 			}
 		}
 
+		if len(otherResBuckets[tm.ResourceType]) == 20 || isEOF {
+			tagUnsupportedResourceType(tm.ResourceType, otherResBuckets[tm.ResourceType], t.Tags)
+			delete(otherResBuckets, tm.ResourceType)
+		}
+
 		if isEOF {
 			break
 		}
@@ -170,19 +200,113 @@ func tag(reader io.Reader) error {
 	return nil
 }
 
-func tagARNBucket(svc *resourcegroupstaggingapi.ResourceGroupsTaggingAPI, bucket []string, tag Tag) error {
-	params := &resourcegroupstaggingapi.TagResourcesInput{
-		ResourceARNList: aws.StringSlice(bucket),
+func tagUnsupportedResourceType(rt arn.ResourceType, rns arn.ResourceNames, tags Tags) {
+	if len(rns) == 0 {
+		return
+	}
+
+	sess := session.Must(session.NewSession(
+		&aws.Config{
+			Region: aws.String(viper.GetString("grafiti.az")),
+		},
+	))
+
+	switch arn.NamespaceForResource(rt) {
+	case arn.AutoScalingNamespace:
+		svc := autoscaling.New(sess)
+		for _, n := range rns {
+			tagAutoScalingResource(svc, rt, n, tags)
+		}
+	case arn.Route53Namespace:
+		svc := route53.New(sess)
+		for _, n := range rns {
+			tagRoute53Resource(svc, rt, n, tags)
+		}
+	}
+	return
+}
+
+func tagAutoScalingResource(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, rn arn.ResourceName, tags Tags) {
+	// Only AutoScaling Groups support tagging
+	if rt != arn.AutoScalingGroupRType || rn == "" {
+		return
+	}
+
+	asTags := make([]*autoscaling.Tag, 0, len(tags))
+	for tk, tv := range tags {
+		asTags = append(asTags, &autoscaling.Tag{
+			Key:               aws.String(tk),
+			Value:             aws.String(tv),
+			ResourceType:      aws.String("auto-scaling-group"),
+			ResourceId:        rn.AWSString(),
+			PropagateAtLaunch: aws.Bool(true),
+		})
+	}
+
+	params := &autoscaling.CreateOrUpdateTagsInput{
+		Tags: asTags,
+	}
+
+	ctx := aws.BackgroundContext()
+	if _, err := svc.CreateOrUpdateTagsWithContext(ctx, params); err != nil {
+		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+	} else {
+		pj, _ := json.Marshal(params)
+		fmt.Println(string(pj))
+	}
+
+	return
+}
+
+func tagRoute53Resource(svc route53iface.Route53API, rt arn.ResourceType, rn arn.ResourceName, tags Tags) {
+	// Only hostedzones (and healthchecks, but they are not supported yet) allow
+	// tagging
+	if rt != arn.Route53HostedZoneRType || rn == "" {
+		return
+	}
+
+	hzTags := make([]*route53.Tag, 0, len(tags))
+	for tk, tv := range tags {
+		hzTags = append(hzTags, &route53.Tag{
+			Key:   aws.String(tk),
+			Value: aws.String(tv),
+		})
+	}
+
+	params := &route53.ChangeTagsForResourceInput{
+		AddTags:      hzTags,
+		ResourceId:   rn.AWSString(),
+		ResourceType: aws.String("hostedzone"),
+	}
+
+	ctx := aws.BackgroundContext()
+	if _, err := svc.ChangeTagsForResourceWithContext(ctx, params); err != nil {
+		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+	} else {
+		pj, _ := json.Marshal(params)
+		fmt.Println(string(pj))
+	}
+
+	return
+}
+
+func tagARNBucket(svc rgtaiface.ResourceGroupsTaggingAPIAPI, bucket arn.ResourceARNs, tag Tag) error {
+	params := &rgta.TagResourcesInput{
+		ResourceARNList: bucket.AWSStringSlice(),
 		Tags:            map[string]*string{tag.Key: aws.String(tag.Value)},
 	}
-	paramsJson, _ := json.Marshal(params)
-	fmt.Println(string(paramsJson))
+
+	paramsJSON, _ := json.Marshal(params)
+	fmt.Println(string(paramsJSON))
+
 	if dryRun {
 		return nil
 	}
+	// Rate limit error is returned if no pause between requests
+	time.Sleep(time.Duration(2) * time.Second)
 	if _, err := svc.TagResources(params); err != nil {
 		if ignoreErrors {
-			fmt.Printf(`{"error": "%s"}\n`, err.Error())
+			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 			return nil
 		}
 		return err
@@ -198,7 +322,7 @@ func decodeInput(decoder *json.Decoder) (*TagInput, bool, error) {
 			return &decoded, true, nil
 		}
 		if ignoreErrors {
-			fmt.Printf(`{"error": "%s"}\n`, err.Error())
+			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 			return nil, false, nil
 		}
 		return nil, false, err
