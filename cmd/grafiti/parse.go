@@ -90,6 +90,17 @@ type NotTaggedFilter struct {
 }
 
 func parseFromCloudTrail(svc cloudtrailiface.CloudTrailAPI) error {
+	var start, end *time.Time
+	// Check if timestamps or hours exist
+	if viper.IsSet("grafiti.startTimeStamp") && viper.IsSet("grafiti.endTimeStamp") {
+		start, end = calcTimeWindowFromTimeStamp(viper.GetString("grafiti.startTimeStamp"), viper.GetString("grafiti.endTimeStamp"))
+	} else if viper.IsSet("grafiti.startHour") && viper.IsSet("grafiti.endHour") {
+		start, end = calcTimeWindowFromHourRange(viper.GetInt("grafiti.startHour"), viper.GetInt("grafiti.endHour"))
+	}
+	if start == nil || end == nil {
+		return nil
+	}
+
 	// Create LookupEvents for all grafiti.resourceTypes. If none are specified,
 	// look up all events for all resourceTypes
 	rts := viper.GetStringSlice("grafiti.resourceTypes")
@@ -106,7 +117,7 @@ func parseFromCloudTrail(svc cloudtrailiface.CloudTrailAPI) error {
 	}
 
 	for _, attr := range attrs {
-		if err := parseLookupAttribute(svc, attr); err != nil {
+		if err := parseLookupAttribute(svc, attr, start, end); err != nil {
 			return err
 		}
 	}
@@ -114,11 +125,48 @@ func parseFromCloudTrail(svc cloudtrailiface.CloudTrailAPI) error {
 	return nil
 }
 
-func parseLookupAttribute(svc cloudtrailiface.CloudTrailAPI, attr *cloudtrail.LookupAttribute) error {
+// Calculates a time window between a starting RFC3339 timestamp string and
+// ending RFC3339 timestamp string.
+func calcTimeWindowFromTimeStamp(start, end string) (*time.Time, *time.Time) {
+	startTime, err := time.Parse(time.RFC3339, start)
+	if err != nil {
+		fmt.Println("startTimeStamp parse error:", err.Error())
+		return nil, nil
+	}
+
+	endTime, err := time.Parse(time.RFC3339, end)
+	if err != nil {
+		fmt.Println("endTimeStamp parse error:", err.Error())
+		return nil, nil
+	}
+
+	if startTime.After(endTime) || startTime.Equal(endTime) {
+		fmt.Printf(`{"error": "startTimeStamp (%s) is at or after endTimeStamp (%s)"}%s`, startTime, endTime, "\n")
+		return nil, nil
+	}
+
+	return aws.Time(startTime), aws.Time(endTime)
+}
+
+// Calculates a time window between a starting hour and ending hour.
+func calcTimeWindowFromHourRange(start, end int) (*time.Time, *time.Time) {
+	if start >= end {
+		fmt.Printf(`{"error": "startHour (%d) is at or after endHour (%d)"}%s`, start, end, "\n")
+		return nil, nil
+	}
+
+	now := time.Now()
+	startTime := now.Add(time.Duration(start) * time.Hour)
+	endTime := now.Add(time.Duration(end) * time.Hour)
+
+	return aws.Time(startTime), aws.Time(endTime)
+}
+
+func parseLookupAttribute(svc cloudtrailiface.CloudTrailAPI, attr *cloudtrail.LookupAttribute, start, end *time.Time) error {
 	params := &cloudtrail.LookupEventsInput{
-		EndTime:          aws.Time(time.Now()),
+		EndTime:          end,
 		MaxResults:       aws.Int64(50),
-		StartTime:        aws.Time(time.Now().Add(time.Duration(viper.GetInt("grafiti.hours")) * time.Hour)),
+		StartTime:        start,
 		LookupAttributes: []*cloudtrail.LookupAttribute{attr},
 	}
 
