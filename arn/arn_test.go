@@ -311,26 +311,6 @@ func TestMapARNToRTypeAndRName(t *testing.T) {
 			AutoScalingLaunchConfigurationRType,
 			"launchconfigfriendlyname",
 		},
-		{
-			"arn:aws:iam::12345678910:instance-profile/instance-profile-name",
-			IAMInstanceProfileRType,
-			"instance-profile-name",
-		},
-		{
-			"arn:aws:iam::12345678910:policy/policy-name",
-			IAMPolicyRType,
-			"policy-name",
-		},
-		{
-			"arn:aws:iam::12345678910:role/role-name",
-			IAMRoleRType,
-			"role-name",
-		},
-		{
-			"arn:aws:route53:::hostedzone/zoneid",
-			Route53HostedZoneRType,
-			"zoneid",
-		},
 	}
 
 	for _, c := range cases {

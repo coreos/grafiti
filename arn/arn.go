@@ -301,29 +301,29 @@ var RGTAUnsupportedResourceTypes = map[ResourceType]struct{}{
 
 // NamespaceForResource maps ResourceType to an ARN namespace
 func NamespaceForResource(t ResourceType) string {
-	rType := t.String()
+	rt := t.String()
 	switch {
-	case strings.HasPrefix(rType, "AWS::EC2::"):
+	case strings.HasPrefix(rt, "AWS::EC2::"):
 		return EC2Namespace
-	case strings.HasPrefix(rType, "AWS::AutoScaling::"):
+	case strings.HasPrefix(rt, "AWS::AutoScaling::"):
 		return AutoScalingNamespace
-	case strings.HasPrefix(rType, "AWS::ACM::"):
+	case strings.HasPrefix(rt, "AWS::ACM::"):
 		return ACMNamespace
-	case strings.HasPrefix(rType, "AWS::CloudTrail::"):
+	case strings.HasPrefix(rt, "AWS::CloudTrail::"):
 		return CloudTrailNamespace
-	case strings.HasPrefix(rType, "AWS::CodePipeline::"):
+	case strings.HasPrefix(rt, "AWS::CodePipeline::"):
 		return CodePipelineNamespace
-	case strings.HasPrefix(rType, "AWS::ElasticLoadBalancing::"):
+	case strings.HasPrefix(rt, "AWS::ElasticLoadBalancing::"):
 		return ElasticLoadBalancingNamespace
-	case strings.HasPrefix(rType, "AWS::IAM::"):
+	case strings.HasPrefix(rt, "AWS::IAM::"):
 		return IAMNamespace
-	case strings.HasPrefix(rType, "AWS::Redshift::"):
+	case strings.HasPrefix(rt, "AWS::Redshift::"):
 		return RedshiftNamespace
-	case strings.HasPrefix(rType, "AWS::RDS::"):
+	case strings.HasPrefix(rt, "AWS::RDS::"):
 		return RDSNamespace
-	case strings.HasPrefix(rType, "AWS::Route53::"):
+	case strings.HasPrefix(rt, "AWS::Route53::"):
 		return Route53Namespace
-	case strings.HasPrefix(rType, "AWS::S3::"):
+	case strings.HasPrefix(rt, "AWS::S3::"):
 		return S3Namespace
 	}
 	return ""
@@ -353,19 +353,19 @@ func getAutoScalingGroup(rn ResourceName) (*autoscaling.Group, error) {
 }
 
 // MapResourceTypeToARN maps ResourceType to ARN
-func MapResourceTypeToARN(rType ResourceType, rName ResourceName, parsedEvents ...gjson.Result) ResourceARN {
+func MapResourceTypeToARN(rt ResourceType, rn ResourceName, parsedEvents ...gjson.Result) ResourceARN {
 	var (
 		parsedEvent       gjson.Result
 		region, accountID string
 	)
-	ARNPrefix := fmt.Sprintf("arn:aws:%s", NamespaceForResource(rType))
+	ARNPrefix := fmt.Sprintf("arn:aws:%s", NamespaceForResource(rt))
 	if len(parsedEvents) > 0 {
 		parsedEvent = parsedEvents[0]
 		region = parsedEvent.Get("awsRegion").Str
 		accountID = parsedEvent.Get("userIdentity.accountId").Str
 		// ARN prefixes lack a region for IAM resources, and lack both region and
 		// account number for S3 and Route53 resources.
-		switch NamespaceForResource(rType) {
+		switch NamespaceForResource(rt) {
 		case IAMNamespace:
 			ARNPrefix = fmt.Sprintf("%s::%s", ARNPrefix, accountID)
 		case Route53Namespace, S3Namespace:
@@ -376,10 +376,10 @@ func MapResourceTypeToARN(rType ResourceType, rName ResourceName, parsedEvents .
 
 	var arn string
 
-	switch rType {
+	switch rt {
 	case AutoScalingGroupRType:
 		// arn:aws:autoscaling:region:account-id:autoScalingGroup:groupid:autoScalingGroupName/groupfriendlyname
-		asg, err := getAutoScalingGroup(rName)
+		asg, err := getAutoScalingGroup(rn)
 		if err != nil || asg == nil {
 			return ""
 		}
@@ -395,105 +395,105 @@ func MapResourceTypeToARN(rType ResourceType, rName ResourceName, parsedEvents .
 		// NOTE: type does not support tagging
 	case ACMCertificateRType:
 		// arn:aws:acm:region:account-id:certificate/certificate-id
-		arn = fmt.Sprintf("%s:certificate/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:certificate/%s", ARNPrefix, rn)
 	case CloudTrailTrailRType:
 		// arn:aws:cloudtrail:region:account-id:trail/trailname
 		arn = parsedEvent.Get("responseElements.trailARN").Str
 	case CodePipelinePipelineRType:
 		// arn:aws:codepipeline:region:account-id:resource-specifier
-		arn = fmt.Sprintf("%s:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:%s", ARNPrefix, rn)
 	case EC2AMIRType:
 		// arn:aws:ec2:region::image/image-id
-		arn = fmt.Sprintf("arn:aws:ec2:%s::image/%s", region, rName)
+		arn = fmt.Sprintf("arn:aws:ec2:%s::image/%s", region, rn)
 	case EC2BundleTaskRType:
 	case EC2ConversionTaskRType:
 	case EC2CustomerGatewayRType:
 		// arn:aws:ec2:region:account-id:customer-gateway/cgw-id
-		arn = fmt.Sprintf("%s:customer-gateway/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:customer-gateway/%s", ARNPrefix, rn)
 	case EC2DHCPOptionsRType:
 		// arn:aws:ec2:region:account-id:dhcp-options/dhcp-options-id
-		arn = fmt.Sprintf("%s:dhcp-options/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:dhcp-options/%s", ARNPrefix, rn)
 	case EC2EIPRType:
 	case EC2EIPAssociationRType:
 	case EC2ExportTaskRType:
 	case EC2FlowLogRType:
 	case EC2HostRType:
 		// arn:aws:ec2:region:account-id:dedicated-host/host-id
-		arn = fmt.Sprintf("%s:dedicated-host/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:dedicated-host/%s", ARNPrefix, rn)
 	case EC2ImportTaskRType:
 	case EC2InstanceRType:
 		// arn:aws:ec2:region:account-id:instance/instance-id
-		arn = fmt.Sprintf("%s:instance/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:instance/%s", ARNPrefix, rn)
 	case EC2InternetGatewayRType:
 		// arn:aws:ec2:region:account-id:internet-gateway/igw-id
-		arn = fmt.Sprintf("%s:internet-gateway/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:internet-gateway/%s", ARNPrefix, rn)
 	case EC2KeyPairRType:
 		// arn:aws:ec2:region:account-id:key-pair/key-pair-name
-		arn = fmt.Sprintf("%s:key-pair/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:key-pair/%s", ARNPrefix, rn)
 	case EC2NatGatewayRType:
 	case EC2NetworkACLRType:
 		// arn:aws:ec2:region:account-id:network-acl/nacl-id
-		arn = fmt.Sprintf("%s:network-acl/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:network-acl/%s", ARNPrefix, rn)
 	case EC2NetworkInterfaceRType:
 		// arn:aws:ec2:region:account-id:network-interface/eni-id
-		arn = fmt.Sprintf("%s:network-interface/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:network-interface/%s", ARNPrefix, rn)
 	case EC2NetworkInterfaceAttachmentRType:
 	case EC2PlacementGroupRType:
 		// arn:aws:ec2:region:account-id:placement-group/placement-group-name
-		arn = fmt.Sprintf("%s:placement-group/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:placement-group/%s", ARNPrefix, rn)
 	case EC2ReservedInstanceRType:
 	case EC2ReservedInstancesListingRType:
 	case EC2ReservedInstancesModificationRType:
 	case EC2RouteTableRType:
 		// arn:aws:ec2:region:account-id:route-table/route-table-id
-		arn = fmt.Sprintf("%s:route-table/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:route-table/%s", ARNPrefix, rn)
 	case EC2ScheduledInstanceRType:
 	case EC2SecurityGroupRType:
 		// arn:aws:ec2:region:account-id:security-group/security-group-id
-		arn = fmt.Sprintf("%s:security-group/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:security-group/%s", ARNPrefix, rn)
 	case EC2SnapshotRType:
 		// arn:aws:ec2:region:account-id:snapshot/snapshot-id
-		arn = fmt.Sprintf("%s:snapshot/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:snapshot/%s", ARNPrefix, rn)
 	case EC2SpotFleetRequestRType:
 	case EC2SpotInstanceRequestRType:
 	case EC2SubnetRType:
 		// arn:aws:ec2:region:account-id:subnet/subnet-id
-		arn = fmt.Sprintf("%s:subnet/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:subnet/%s", ARNPrefix, rn)
 	case EC2SubnetNetworkACLAssociationRType:
 	case EC2SubnetRouteTableAssociationRType:
 	case EC2VolumeRType:
 		// arn:aws:ec2:region:account-id:volume/volume-id
-		arn = fmt.Sprintf("%s:volume/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:volume/%s", ARNPrefix, rn)
 	case EC2VPCRType:
 		// arn:aws:ec2:region:account-id:vpc/vpc-id
-		arn = fmt.Sprintf("%s:vpc/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:vpc/%s", ARNPrefix, rn)
 	case EC2VPCEndpointRType:
 	case EC2VPCPeeringConnectionRType:
 		// arn:aws:ec2:region:account-id:vpc-peering-connection/vpc-peering-connection-id
-		arn = fmt.Sprintf("%s:vpc-peering-connection/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:vpc-peering-connection/%s", ARNPrefix, rn)
 	case EC2VPNConnectionRType:
 		// arn:aws:ec2:region:account-id:vpn-connection/vpn-id
-		arn = fmt.Sprintf("%s:vpn-connection/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:vpn-connection/%s", ARNPrefix, rn)
 	case EC2VPNGatewayRType:
 		// arn:aws:ec2:region:account-id:vpn-gateway/vgw-id
-		arn = fmt.Sprintf("%s:vpn-gateway/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:vpn-gateway/%s", ARNPrefix, rn)
 	case ElasticLoadBalancingLoadBalancerRType:
 		// arn:aws:elasticloadbalancing:region:account-id:loadbalancer/name
-		arn = fmt.Sprintf("%s:loadbalancer/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:loadbalancer/%s", ARNPrefix, rn)
 	case IAMAccessKeyRType:
 	case IAMAccountAliasRType:
 	case IAMGroupRType:
 		// arn:aws:iam::account-id:group/group-name
-		arn = fmt.Sprintf("%s:group/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:group/%s", ARNPrefix, rn)
 	case IAMInstanceProfileRType:
 		// arn:aws:iam::account-id:instance-profile/instance-profile-name
 		// NOTE: type does not support tagging
 	case IAMMfaDeviceRType:
 		// arn:aws:iam::account-id:mfa/virtual-device-name
-		arn = fmt.Sprintf("%s:mfa/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:mfa/%s", ARNPrefix, rn)
 	case IAMOpenIDConnectProviderRType:
 		// arn:aws:iam::account-id:oidc-provider/provider-name
-		arn = fmt.Sprintf("%s:oidc-provider/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:oidc-provider/%s", ARNPrefix, rn)
 	case IAMPolicyRType:
 		// arn:aws:iam::account-id:policy/policy-name
 		// NOTE: type does not support tagging
@@ -502,10 +502,10 @@ func MapResourceTypeToARN(rType ResourceType, rName ResourceName, parsedEvents .
 		// NOTE: type does not support tagging
 	case IAMSamlProviderRType:
 		// arn:aws:iam::account-id:saml-provider/provider-name
-		arn = fmt.Sprintf("%s:saml-provider/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:saml-provider/%s", ARNPrefix, rn)
 	case IAMServerCertificateRType:
 		// arn:aws:iam::account-id:server-certificate/certificate-name
-		arn = fmt.Sprintf("%s:server-certificate/%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:server-certificate/%s", ARNPrefix, rn)
 	case IAMSigningCertificateRType:
 	case IAMSSHPublicKeyRType:
 	case IAMUserRType:
@@ -513,65 +513,65 @@ func MapResourceTypeToARN(rType ResourceType, rName ResourceName, parsedEvents .
 		// NOTE: type does not support tagging
 	case RedshiftClusterRType:
 		// arn:aws:redshift:region:account-id:cluster:clustername
-		arn = fmt.Sprintf("%s:cluster:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:cluster:%s", ARNPrefix, rn)
 	case RedshiftClusterParameterGroupRType:
 		// arn:aws:redshift:region:account-id:parametergroup:parametergroupname
-		arn = fmt.Sprintf("%s:parametergroup:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:parametergroup:%s", ARNPrefix, rn)
 	case RedshiftClusterSecurityGroupRType:
 		// arn:aws:redshift:region:account-id:securitygroup:securitygroupname
-		arn = fmt.Sprintf("%s:securitygroup:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:securitygroup:%s", ARNPrefix, rn)
 	case RedshiftClusterSnapshotRType:
 		// arn:aws:redshift:region:account-id:snapshot:clustername/snapshotname
 	case RedshiftClusterSubnetGroupRType:
 		// arn:aws:redshift:region:account-id:subnetgroup:subnetgroupname
-		arn = fmt.Sprintf("%s:subnetgroup:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:subnetgroup:%s", ARNPrefix, rn)
 	case RedshiftEventSubscriptionRType:
 	case RedshiftHsmClientCertificateRType:
 	case RedshiftHsmConfigurationRType:
 	case RDSDBClusterRType:
 		// arn:aws:rds:region:account-id:cluster:db-cluster-name
-		arn = fmt.Sprintf("%s:cluster:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:cluster:%s", ARNPrefix, rn)
 	case RDSDBClusterOptionGroupRType:
 	case RDSDBClusterParameterGroupRType:
 		// arn:aws:rds:region:account-id:cluster-pg:cluster-parameter-group-name
-		arn = fmt.Sprintf("%s:cluster-pg:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:cluster-pg:%s", ARNPrefix, rn)
 	case RDSDBClusterSnapshotRType:
 		// arn:aws:rds:region:account-id:cluster-snapshot:cluster-snapshot-name
-		arn = fmt.Sprintf("%s:cluster-snapshot:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:cluster-snapshot:%s", ARNPrefix, rn)
 	case RDSDBInstanceRType:
 		// arn:aws:rds:region:account-id:db:db-instance-name
-		arn = fmt.Sprintf("%s:db:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:db:%s", ARNPrefix, rn)
 	case RDSDBOptionGroupRType:
 		// arn:aws:rds:region:account-id:og:option-group-name
-		arn = fmt.Sprintf("%s:og:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:og:%s", ARNPrefix, rn)
 	case RDSDBParameterGroupRType:
 		// arn:aws:rds:region:account-id:pg:parameter-group-name
-		arn = fmt.Sprintf("%s:pg:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:pg:%s", ARNPrefix, rn)
 	case RDSDBSecurityGroupRType:
 		// arn:aws:rds:region:account-id:secgrp:security-group-name
-		arn = fmt.Sprintf("%s:secgrp:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:secgrp:%s", ARNPrefix, rn)
 	case RDSDBSnapshotRType:
 		// arn:aws:rds:region:account-id:snapshot:snapshot-name
-		arn = fmt.Sprintf("%s:snapshot:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:snapshot:%s", ARNPrefix, rn)
 	case RDSDBSubnetGroupRType:
 		// arn:aws:rds:region:account-id:subgrp:subnet-group-name
-		arn = fmt.Sprintf("%s:subgrp:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:subgrp:%s", ARNPrefix, rn)
 	case RDSEventSubscriptionRType:
 		// arn:aws:rds:region:account-id:es:subscription-name
-		arn = fmt.Sprintf("%s:es:%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:es:%s", ARNPrefix, rn)
 	case RDSReservedDBInstanceRType:
 	case Route53ChangeRType:
 		// arn:aws:route53:::change/changeid
 	case Route53HostedZoneRType:
 		// arn:aws:route53:::hostedzone/zoneid
-		hzSplit := strings.Split(rName.String(), "/hostedzone/")
+		hzSplit := strings.Split(rn.String(), "/hostedzone/")
 		if len(hzSplit) != 2 {
 			break
 		}
 		arn = fmt.Sprintf("%s:::hostedzone/%s", ARNPrefix, hzSplit[1])
 	case S3BucketRType:
 		// arn:aws:s3:::bucket-name
-		arn = fmt.Sprintf("%s:::%s", ARNPrefix, rName)
+		arn = fmt.Sprintf("%s:::%s", ARNPrefix, rn)
 	}
 	return ResourceARN(arn)
 }
@@ -606,122 +606,8 @@ func MapARNToRTypeAndRName(arnStr ResourceARN) (ResourceType, ResourceName) {
 			return AutoScalingGroupRType, arnToID("autoScalingGroupName/", sfx)
 		case strings.HasPrefix(sfx, "launchConfiguration:"):
 			return AutoScalingLaunchConfigurationRType, arnToID("launchConfigurationName/", sfx)
-		case strings.HasPrefix(sfx, "scalingPolicy:"):
-			return AutoScalingPolicyRType, arnToID("policyname/", sfx)
-		case strings.HasPrefix(sfx, "scheduledUpdateGroupAction:"):
-			return AutoScalingScheduledActionRType, arnToID("scheduledActionName/", sfx)
 		}
 
-	case strings.HasPrefix(arn, "arn:aws:acm"):
-		return ACMCertificateRType, arnToID("certificate/", arn)
-
-	case strings.HasPrefix(arn, "arn:aws:cloudtrail"):
-		return CloudTrailTrailRType, arnToID("trail/", arn)
-
-	case strings.HasPrefix(arn, "arn:aws:ec2:"):
-		erEC2, err := re.Compile("arn:aws:ec2:[^:]+:(?:[^:]+:)?(.+)")
-		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-			break
-		}
-		m := erEC2.FindStringSubmatch(arn)
-		if len(m) == 2 {
-			sfx = m[1]
-		} else {
-			break
-		}
-		switch {
-		case strings.HasPrefix(sfx, "image/"):
-		case strings.HasPrefix(sfx, "customer-gateway/"):
-			return EC2CustomerGatewayRType, arnToID("customer-gateway/", sfx)
-		case strings.HasPrefix(sfx, "dhcp-options/"):
-			return EC2DHCPOptionsRType, arnToID("dhcp-options/", sfx)
-		case strings.HasPrefix(sfx, "dedicated-host/"):
-			return EC2HostRType, arnToID("dedicated-host/", sfx)
-		case strings.HasPrefix(sfx, "instance/"):
-			return EC2InstanceRType, arnToID("instance/", sfx)
-		case strings.HasPrefix(sfx, "internet-gateway/"):
-			return EC2InternetGatewayRType, arnToID("internet-gateway/", sfx)
-		case strings.HasPrefix(sfx, "key-pair/"):
-			return EC2KeyPairRType, arnToID("key-pair/", sfx)
-		case strings.HasPrefix(sfx, "network-acl/"):
-			return EC2NetworkACLRType, arnToID("network-acl/", sfx)
-		case strings.HasPrefix(sfx, "network-interface/"):
-			return EC2NetworkInterfaceRType, arnToID("network-interface/", sfx)
-		case strings.HasPrefix(sfx, "placement-group/"):
-			return EC2PlacementGroupRType, arnToID("placement-group/", sfx)
-		case strings.HasPrefix(sfx, "route-table/"):
-			return EC2RouteTableRType, arnToID("route-table/", sfx)
-		case strings.HasPrefix(sfx, "security-group/"):
-			return EC2SecurityGroupRType, arnToID("security-group/", sfx)
-		case strings.HasPrefix(sfx, "snapshot/"):
-			return EC2SnapshotRType, arnToID("snapshot/", sfx)
-		case strings.HasPrefix(sfx, "subnet/"):
-			return EC2SubnetRType, arnToID("subnet/", sfx)
-		case strings.HasPrefix(sfx, "volume/"):
-			return EC2VolumeRType, arnToID("volume/", sfx)
-		case strings.HasPrefix(sfx, "vpc/"):
-			return EC2VPCRType, arnToID("vpc/", sfx)
-		case strings.HasPrefix(sfx, "vpc-peering-connection/"):
-			return EC2VPCPeeringConnectionRType, arnToID("vpc-peering-connection/", sfx)
-		case strings.HasPrefix(sfx, "vpn-connection/"):
-			return EC2VPNConnectionRType, arnToID("vpn-connection/", sfx)
-		case strings.HasPrefix(sfx, "vpn-gateway/"):
-			return EC2VPNGatewayRType, arnToID("vpn-gateway/", sfx)
-		}
-
-	case strings.HasPrefix(arn, "arn:aws:elasticloadbalancing"):
-		return ElasticLoadBalancingLoadBalancerRType, arnToID("loadbalancer/", arn)
-
-	case strings.HasPrefix(arn, "arn:aws:iam::"):
-		erIAM, err := re.Compile("arn:aws:iam::[^:]+:(.+)")
-		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-			break
-		}
-		m := erIAM.FindStringSubmatch(arn)
-		if len(m) == 2 {
-			sfx = m[1]
-		} else {
-			break
-		}
-		switch {
-		case strings.HasPrefix(sfx, "group/"):
-			return IAMGroupRType, arnToID("group/", sfx)
-		case strings.HasPrefix(sfx, "instance-profile/"):
-			return IAMInstanceProfileRType, arnToID("instance-profile/", sfx)
-		case strings.HasPrefix(sfx, "mfa/"):
-			return IAMMfaDeviceRType, arnToID("mfa/", sfx)
-		case strings.HasPrefix(sfx, "oidc-provider/"):
-			return IAMOpenIDConnectProviderRType, arnToID("oidc-provider/", sfx)
-		case strings.HasPrefix(sfx, "policy/"):
-			return IAMPolicyRType, arnToID("policy/", sfx)
-		case strings.HasPrefix(sfx, "role/"):
-			return IAMRoleRType, arnToID("role/", sfx)
-		case strings.HasPrefix(sfx, "saml-provider/"):
-			return IAMSamlProviderRType, arnToID("saml-provider//", sfx)
-		case strings.HasPrefix(sfx, "server-certificate/"):
-			return IAMServerCertificateRType, arnToID("server-certificate/", sfx)
-		case strings.HasPrefix(sfx, "user/"):
-			return IAMUserRType, arnToID("user/", sfx)
-		}
-
-	case strings.HasPrefix(arn, "arn:aws:route53:::"):
-		m := strings.Split(arn, "arn:aws:route53:::")
-		if len(m) == 2 {
-			sfx = m[1]
-		} else {
-			break
-		}
-		switch {
-		case strings.HasPrefix(sfx, "change/"):
-			return Route53ChangeRType, arnToID("change/", sfx)
-		case strings.HasPrefix(sfx, "hostedzone/"):
-			return Route53HostedZoneRType, arnToID("hostedzone/", sfx)
-		}
-
-	case strings.HasPrefix(arn, "arn:aws:s3:::"):
-		return S3BucketRType, arnToID(":::", arn)
 	}
 	return "", ""
 }
