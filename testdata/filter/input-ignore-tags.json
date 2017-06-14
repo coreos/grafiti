@@ -1,0 +1,12 @@
+{
+	"TagFilters": [
+		{
+			"Key": "ExpiresAt",
+			"Values": ["2017-06-11"]
+		},
+		{
+			"Key": "CreatedBy",
+			"Values": ["arn:aws:iam::123456789101:user/test-user-1"]
+		}
+	]
+}
