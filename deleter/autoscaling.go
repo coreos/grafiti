@@ -87,8 +87,9 @@ func (rd *AutoScalingGroupDeleter) RequestAutoScalingGroups() ([]*autoscaling.Gr
 	asgs := make([]*autoscaling.Group, 0)
 
 	for {
-		req, resp := rd.Client.DescribeAutoScalingGroupsRequest(params)
-		if err := req.Send(); err != nil {
+		ctx := aws.BackgroundContext()
+		resp, err := rd.Client.DescribeAutoScalingGroupsWithContext(ctx, params)
+		if err != nil {
 			return nil, err
 		}
 
@@ -181,8 +182,9 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestAutoScalingLaunchConfigu
 	lcs := make([]*autoscaling.LaunchConfiguration, 0)
 
 	for {
-		req, resp := rd.Client.DescribeLaunchConfigurationsRequest(params)
-		if err := req.Send(); err != nil {
+		ctx := aws.BackgroundContext()
+		resp, err := rd.Client.DescribeLaunchConfigurationsWithContext(ctx, params)
+		if err != nil {
 			return nil, err
 		}
 
