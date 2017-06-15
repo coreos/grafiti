@@ -53,7 +53,7 @@ func runParseCommand(cmd *cobra.Command, args []string) error {
 	}
 	sess := session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(viper.GetString("grafiti.az")),
+			Region: aws.String(viper.GetString("grafiti.region")),
 		},
 	))
 	if err := parseFromCloudTrail(cloudtrail.New(sess)); err != nil {

@@ -80,7 +80,7 @@ Grafiti takes a config file which configures it's basic function.
 [grafiti]
 resourceTypes = ["AWS::EC2::Instance"]
 hours = -8
-az = "us-east-1"
+region = "us-east-1"
 includeEvent = false
 tagPatterns = [
   "{CreatedBy: .userIdentity.arn}",
@@ -92,7 +92,7 @@ filterPatterns = [
 
  * `resourceTypes` - Specifies a list of resources to query for. These can be any values the CloudTrail API accepts.
  * `hours` - Specifies how far back to query CloudTrail, in hours.
- * `az` - The availability zone to query
+ * `region` - The region to query
  * `includeEvent` - Setting `true` will include the raw CloudEvent in the tagging output (this is useful for finding
 attributes to filter on).
  * `tagPatterns` - should use `jq` syntax to generate `{tagKey: tagValue}` objects from output from `grafiti parse`. The
@@ -152,7 +152,7 @@ $ cat config.toml
 [grafiti]
 resourceTypes = ["AWS::EC2::Instance"]
 hours = -8
-az = "us-east-1"
+region = "us-east-1"
 includeEvent = false
 tagPatterns = [
   "{CreatedBy: .userIdentity.arn}",
@@ -242,7 +242,7 @@ config.toml
 [grafiti]
 resourceTypes = ["AWS::EC2::Instance"]
 hours = -8
-az = "us-east-1"
+region = "us-east-1"
 includeEvent = false
 tagPatterns = [
   "{CreatedBy: .userIdentity.arn}",

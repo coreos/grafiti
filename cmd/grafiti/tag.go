@@ -151,7 +151,7 @@ func tagFromStdIn() error {
 func tag(reader io.Reader) error {
 	svc := rgta.New(session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(viper.GetString("grafiti.az")),
+			Region: aws.String(viper.GetString("grafiti.region")),
 		},
 	)))
 	dec := json.NewDecoder(reader)
@@ -207,7 +207,7 @@ func tagUnsupportedResourceType(rt arn.ResourceType, rns arn.ResourceNames, tags
 
 	sess := session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(viper.GetString("grafiti.az")),
+			Region: aws.String(viper.GetString("grafiti.region")),
 		},
 	))
 
