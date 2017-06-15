@@ -121,7 +121,7 @@ func initIgnoreTagMap(svc rgtaiface.ResourceGroupsTaggingAPIAPI, r io.Reader) (m
 	// Tag file decoder
 	dec := json.NewDecoder(r)
 	// Collection of ARN's of resources to ignore
-	arns := make([]arn.ResourceARN, 0)
+	arns := make(arn.ResourceARNs, 0)
 	// Map of resources ARN's to ignore
 	itMap := map[arn.ResourceARN]struct{}{}
 
@@ -137,7 +137,7 @@ func initIgnoreTagMap(svc rgtaiface.ResourceGroupsTaggingAPIAPI, r io.Reader) (m
 			continue
 		}
 
-		getARNsForResource(svc, t.TagFilters, arns)
+		getARNsForResource(svc, t.TagFilters, &arns)
 	}
 
 	for _, arn := range arns {

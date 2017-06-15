@@ -70,8 +70,8 @@ var DeleteOrder = arn.ResourceTypes{
 	arn.S3BucketRType,          // Delete S3 Objects
 }
 
-// DeleteInput holds a list of all tags to be deleted
-type DeleteInput struct {
+// TagFileInput holds a list of all tags to be deleted
+type TagFileInput struct {
 	TagFilters []*rgta.TagFilter
 }
 
@@ -124,7 +124,7 @@ func deleteFromTags(reader io.Reader) error {
 	)))
 
 	for {
-		t, isEOF, err := decodeDeleteInput(dec)
+		t, isEOF, err := decodeTagFileInput(dec)
 		if err != nil {
 			return err
 		}
@@ -135,11 +135,11 @@ func deleteFromTags(reader io.Reader) error {
 			continue
 		}
 
-		getARNsForResource(svc, t.TagFilters, allARNs)
+		getARNsForResource(svc, t.TagFilters, &allARNs)
 
 		for rtk := range arn.RGTAUnsupportedResourceTypes {
 			// Request all RGTA-unsupported resources with the same tags
-			getARNsForUnsupportedResource(rtk, t.TagFilters, allARNs)
+			getARNsForUnsupportedResource(rtk, t.TagFilters, &allARNs)
 		}
 	}
 
@@ -156,7 +156,10 @@ func deleteFromTags(reader io.Reader) error {
 	return nil
 }
 
-func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.TagFilter, arnList arn.ResourceARNs) {
+func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.TagFilter, arnList *arn.ResourceARNs) {
+	if arnList == nil {
+		return
+	}
 	// Get ARNs of matching tags
 	params := &rgta.GetResourcesInput{
 		TagFilters:  tags,
@@ -179,8 +182,9 @@ func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.
 
 	for {
 		// Request a batch of matching resources
-		req, resp := svc.GetResourcesRequest(params)
-		if err := req.Send(); err != nil {
+		ctx := aws.BackgroundContext()
+		resp, err := svc.GetResourcesWithContext(ctx, params)
+		if err != nil {
 			return
 		}
 
@@ -191,7 +195,7 @@ func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.
 
 		for _, r := range resp.ResourceTagMappingList {
 			if r.ResourceARN != nil && *r.ResourceARN != "" {
-				arnList = append(arnList, arn.ResourceARN(*r.ResourceARN))
+				*arnList = append(*arnList, arn.ResourceARN(*r.ResourceARN))
 			}
 		}
 
@@ -203,7 +207,7 @@ func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.
 	}
 }
 
-func getARNsForUnsupportedResource(rt arn.ResourceType, tags []*rgta.TagFilter, arnList arn.ResourceARNs) {
+func getARNsForUnsupportedResource(rt arn.ResourceType, tags []*rgta.TagFilter, arnList *arn.ResourceARNs) {
 	sess := session.Must(session.NewSession(
 		&aws.Config{
 			Region: aws.String(viper.GetString("grafiti.az")),
@@ -218,8 +222,8 @@ func getARNsForUnsupportedResource(rt arn.ResourceType, tags []*rgta.TagFilter, 
 	}
 }
 
-func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, rgtaTags []*rgta.TagFilter, arnList arn.ResourceARNs) {
-	if len(rgtaTags) == 0 {
+func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, rgtaTags []*rgta.TagFilter, arnList *arn.ResourceARNs) {
+	if len(rgtaTags) == 0 || arnList == nil {
 		return
 	}
 
@@ -276,14 +280,14 @@ func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.R
 	}
 
 	for _, asg := range asgs {
-		arnList = append(arnList, arn.ResourceARN(*asg.AutoScalingGroupARN))
+		*arnList = append(*arnList, arn.ResourceARN(*asg.AutoScalingGroupARN))
 	}
 
 	return
 }
 
-func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType, rgtaTags []*rgta.TagFilter, arnList arn.ResourceARNs) {
-	if len(rgtaTags) == 0 {
+func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType, rgtaTags []*rgta.TagFilter, arnList *arn.ResourceARNs) {
+	if len(rgtaTags) == 0 || arnList == nil {
 		return
 	}
 
@@ -360,7 +364,7 @@ func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType,
 
 	for _, id := range filteredIDs {
 		hzARN := fmt.Sprintf("arn:aws:route53:::hostedzone/%s", id)
-		arnList = append(arnList, arn.ResourceARN(hzARN))
+		*arnList = append(*arnList, arn.ResourceARN(hzARN))
 	}
 
 	return
@@ -453,8 +457,8 @@ func organizeByDelOrder(resMap map[arn.ResourceType]deleter.ResourceDeleter) []d
 	return sorted
 }
 
-func decodeDeleteInput(decoder *json.Decoder) (*DeleteInput, bool, error) {
-	var decoded DeleteInput
+func decodeTagFileInput(decoder *json.Decoder) (*TagFileInput, bool, error) {
+	var decoded TagFileInput
 	if err := decoder.Decode(&decoded); err != nil {
 		if err == io.EOF {
 			return &decoded, true, nil
