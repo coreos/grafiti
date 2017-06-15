@@ -82,19 +82,51 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		// Get Subnet-RouteTable Association
 	case arn.AutoScalingGroupRType:
 		// Get autoscaling groups
-		asgs, aerr := depMap[rt].(*deleter.AutoScalingGroupDeleter).RequestAutoScalingGroups()
-		if aerr != nil || len(asgs) == 0 {
+		asgDel := depMap[rt].(*deleter.AutoScalingGroupDeleter)
+		asgs, err := asgDel.RequestAutoScalingGroups()
+		if err != nil || len(asgs) == 0 {
 			break
 		}
 
 		// Get launch configurations
-		lct := arn.ResourceType(arn.AutoScalingLaunchConfigurationRType)
+		if _, ok := depMap[arn.AutoScalingLaunchConfigurationRType]; !ok {
+			depMap[arn.AutoScalingLaunchConfigurationRType] = &deleter.AutoScalingLaunchConfigurationDeleter{}
+		}
 		for _, asg := range asgs {
-			depMap[lct].AddResourceNames(arn.ResourceName(*asg.LaunchConfigurationName))
+			depMap[arn.AutoScalingLaunchConfigurationRType].AddResourceNames(arn.ResourceName(*asg.LaunchConfigurationName))
 		}
 		// Get ELB's
+	case arn.AutoScalingLaunchConfigurationRType:
 		// Get IAM instance profiles
+		lcDel := depMap[rt].(*deleter.AutoScalingLaunchConfigurationDeleter)
+		lcs, err := lcDel.RequestAutoScalingLaunchConfigurations()
+		if err != nil || len(lcs) == 0 {
+			break
+		}
+
+		iprDel := &deleter.IAMInstanceProfileDeleter{}
+		if _, ok := depMap[arn.IAMInstanceProfileRType]; !ok {
+			depMap[arn.IAMInstanceProfileRType] = iprDel
+		}
+		for _, lc := range lcs {
+			depMap[arn.IAMInstanceProfileRType].AddResourceNames(arn.ResourceName(*lc.IamInstanceProfile))
+		}
+
 		// Get IAM roles
+		iprs, err := iprDel.RequestIAMInstanceProfilesFromLaunchConfigurations(lcs)
+		if err != nil || len(iprs) == 0 {
+			break
+		}
+
+		if _, ok := depMap[arn.IAMRoleRType]; !ok {
+			depMap[arn.IAMRoleRType] = &deleter.IAMRoleDeleter{}
+		}
+		for _, ipr := range iprs {
+			for _, rl := range ipr.Roles {
+				depMap[arn.IAMRoleRType].AddResourceNames(arn.ResourceName(*rl.RoleName))
+			}
+		}
+	case arn.IAMRoleRType:
 		// IAM RolePolicies will be deleted when deleting Roles
 	case arn.Route53HostedZoneRType:
 		// Route53 RecordSets will be deleted when deleting HostedZones

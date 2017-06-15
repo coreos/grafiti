@@ -439,13 +439,15 @@ func deleteARNs(ARNs arn.ResourceARNs) error {
 	}
 
 	// Print all failed deletion logs in report format at end of deletion cycle
-	f, ferr := os.Open(logFilePath)
-	if ferr != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", ferr.Error())
-		return nil
+	if !dryRun {
+		f, ferr := os.Open(logFilePath)
+		if ferr != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", ferr.Error())
+			return nil
+		}
+		defer f.Close()
+		printLogFileReport(bufio.NewReader(f))
 	}
-	defer f.Close()
-	printLogFileReport(bufio.NewReader(f))
 
 	return nil
 }
@@ -491,11 +493,9 @@ func decodeTagFileInput(decoder *json.Decoder) (*TagFileInput, bool, error) {
 }
 
 // Beginning and end of log reports
-const logHead = `================================================================================
-								Log Report: Failed Resource Deletion Events
-================================================================================`
+const logTail = `=================================================`
 
-const logTail = `================================================================================`
+const logHead = logTail + "\n== Log Report: Failed Resource Deletion Events ==\n" + logTail
 
 // Prints a report of all resources that failed to delete
 func printLogFileReport(reader io.Reader) {
