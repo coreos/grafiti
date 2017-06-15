@@ -1,6 +1,9 @@
 [grafiti]
 resourceType = "AWS::EC2::Instance"
-hours = -8
+endHour = 0
+startHour = -8
+# endTimeStamp = "20170614T010101Z" # ISO-8601 format in UTC
+# startTimeStamp = "20170613T010101Z"
 backoffTime = 1000 # 1 second in milliseconds
 az = "us-east-1"
 includeEvent = false

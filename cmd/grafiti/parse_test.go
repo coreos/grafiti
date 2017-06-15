@@ -9,7 +9,9 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"sort"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go/service/cloudtrail"
 	"github.com/spf13/viper"
@@ -44,6 +46,68 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(m.Run())
+}
+
+func TestCalcTimeWindowFromHourRange(t *testing.T) {
+	cases := []struct {
+		InputStart   int
+		InputEnd     int
+		ExpectedDiff time.Duration
+	}{
+		{-8, 0, time.Duration(8) * time.Hour},
+		{-25, -17, time.Duration(8) * time.Hour},
+		{0, -8, time.Duration(0)},
+		{0, 0, time.Duration(0)},
+	}
+
+	for i, c := range cases {
+		st, et := calcTimeWindowFromHourRange(c.InputStart, c.InputEnd)
+
+		if c.InputStart >= c.InputEnd {
+			if st != nil || et != nil {
+				t.Errorf("calcTimeWindow case %d failed\nwanted et=nil, st=nil\ngot st=%s, et=%s\n", i+1, st, et)
+			}
+			continue
+		}
+
+		diff := (*et).Sub(*st)
+		if c.ExpectedDiff != diff {
+			t.Errorf("calcTimeWindow case %d failed\nwanted diff=%s\ngot diff=%s\n", i+1, c.ExpectedDiff, diff)
+		}
+	}
+}
+
+func TestCalcTimeWindowFromTimeStamp(t *testing.T) {
+	cases := []struct {
+		InputStart   string
+		InputEnd     string
+		ExpectedDiff time.Duration
+	}{
+		{"2017-06-14T01:01:01Z", "2017-06-14T09:01:01Z", time.Duration(8) * time.Hour},
+		{"2017-06-13T23:01:01Z", "2017-06-14T07:01:01Z", time.Duration(8) * time.Hour},
+		{"2017-06-14T09:01:01Z", "2017-06-14T01:01:01Z", time.Duration(0)},
+		{"2017-06-14T01:01:01Z", "2017-06-14T01:01:01Z", time.Duration(0)},
+	}
+
+	for i, c := range cases {
+		st, et := calcTimeWindowFromTimeStamp(c.InputStart, c.InputEnd)
+
+		// Sorting two timestamp strings will put the earlier stamp first
+		sorted := []string{c.InputStart, c.InputEnd}
+		sort.Strings(sorted)
+
+		if sorted[0] == c.InputEnd {
+			if st != nil || et != nil {
+				t.Errorf("calcTimeWindow case %d failed\nwanted et=nil, st=nil\ngot st=%s, et=%s\n", i+1, st, et)
+			}
+			continue
+		}
+
+		diff := (*et).Sub(*st)
+		if c.ExpectedDiff != diff {
+			t.Errorf("calcTimeWindow case %d failed\nwanted diff=%s\ngot diff=%s\n", i+1, c.ExpectedDiff, diff)
+		}
+	}
 }
 
 // Set stdout to pipe and capture printed output of a Print event
