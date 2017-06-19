@@ -59,6 +59,9 @@ func (rd *Route53HostedZoneDeleter) DeleteResources(cfg *DeleteConfig) error {
 			Id: n.AWSString(),
 		}
 
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
 		ctx := aws.BackgroundContext()
 		_, err := rd.Client.DeleteHostedZoneWithContext(ctx, params)
 		if err != nil {
@@ -70,8 +73,6 @@ func (rd *Route53HostedZoneDeleter) DeleteResources(cfg *DeleteConfig) error {
 		}
 
 		fmt.Println(fmtStr, n)
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 	}
 	return nil
 }
@@ -202,7 +203,10 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 		rd.Client = route53.New(setUpAWSSession())
 	}
 
-	var changes []*route53.Change
+	var (
+		changes []*route53.Change
+		params  *route53.ChangeResourceRecordSetsInput
+	)
 	for hz, rrss := range rrsMap {
 		changes = make([]*route53.Change, 0, len(rrss))
 		for _, rrs := range rrss {
@@ -212,10 +216,13 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 			})
 		}
 
-		params := &route53.ChangeResourceRecordSetsInput{
+		params = &route53.ChangeResourceRecordSetsInput{
 			ChangeBatch:  &route53.ChangeBatch{Changes: changes},
 			HostedZoneId: hz.AWSString(),
 		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.Client.ChangeResourceRecordSetsWithContext(ctx, params)
@@ -235,8 +242,6 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 		for _, rrs := range rrss {
 			fmt.Printf("%s %s (HZ %s)\n", fmtStr, *rrs.Name, hz)
 		}
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 	}
 
 	return nil

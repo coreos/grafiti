@@ -51,6 +51,9 @@ func (rd *AutoScalingGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 			ForceDelete:          aws.Bool(true),
 		}
 
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
 		ctx := aws.BackgroundContext()
 		_, err := rd.Client.DeleteAutoScalingGroupWithContext(ctx, params)
 		if err != nil {
@@ -62,8 +65,6 @@ func (rd *AutoScalingGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 		}
 
 		fmt.Println(fmtStr, n)
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 	}
 
 	time.Sleep(time.Duration(30) * time.Second)
@@ -147,6 +148,9 @@ func (rd *AutoScalingLaunchConfigurationDeleter) DeleteResources(cfg *DeleteConf
 			LaunchConfigurationName: n.AWSString(),
 		}
 
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
 		ctx := aws.BackgroundContext()
 		_, err := rd.Client.DeleteLaunchConfigurationWithContext(ctx, params)
 		if err != nil {
@@ -158,8 +162,6 @@ func (rd *AutoScalingLaunchConfigurationDeleter) DeleteResources(cfg *DeleteConf
 		}
 
 		fmt.Println(fmtStr, n)
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 	}
 
 	return nil
