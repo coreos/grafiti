@@ -397,7 +397,7 @@ func bucketARNs(ARNs arn.ResourceARNs) map[arn.ResourceType]deleter.ResourceDele
 	// Unless the user specifies the --all-deps flag, do not find/delete
 	// dependencies of resources
 	if delAllDeps {
-		graph.FillDependencyGraph(resMap)
+		resMap = graph.FillDependencyGraph(resMap)
 	}
 
 	return resMap

@@ -35,26 +35,26 @@ var rounds = []arn.ResourceTypes{r0, r1, r2}
 
 // FillDependencyGraph creates a depGraph starting from an inital set of
 // resources found by tags
-func FillDependencyGraph(initDepMap map[arn.ResourceType]deleter.ResourceDeleter) {
+func FillDependencyGraph(initDepMap map[arn.ResourceType]deleter.ResourceDeleter) map[arn.ResourceType]deleter.ResourceDeleter {
 	if initDepMap == nil {
-		return
+		return nil
 	}
 
 	for _, round := range rounds {
 		for _, r := range round {
 			if _, ok := initDepMap[r]; ok {
-				traverseDependencyGraph(r, initDepMap)
+				initDepMap = traverseDependencyGraph(r, initDepMap)
 			}
 		}
 	}
 
-	return
+	return initDepMap
 }
 
 // traverseDependencyGraph traverses necesssary linkages of each resource
-func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]deleter.ResourceDeleter) {
+func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]deleter.ResourceDeleter) map[arn.ResourceType]deleter.ResourceDeleter {
 	if _, ok := depMap[rt]; !ok {
-		return
+		return depMap
 	}
 
 	switch rt {
@@ -75,7 +75,30 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		// Get EBS Volumes
 	case arn.EC2NetworkInterfaceRType:
 		// Get EIP Addresses
+		adrDel := depMap[rt].(*deleter.EC2NetworkInterfaceDeleter)
+		adrs, err := adrDel.RequestEC2EIPAddressessFromNetworkInterfaces()
+		if err != nil || len(adrs) == 0 {
+			break
+		}
+
+		// Get EIP Allocations
+		eipDel := &deleter.EC2ElasticIPAllocationDeleter{}
+		if _, ok := depMap[arn.EC2EIPRType]; !ok {
+			depMap[arn.EC2EIPRType] = eipDel
+		}
 		// Get EIP Associations
+		eipaDel := &deleter.EC2ElasticIPAssocationDeleter{}
+		if _, ok := depMap[arn.EC2EIPAssociationRType]; !ok {
+			depMap[arn.EC2EIPAssociationRType] = eipaDel
+		}
+		for _, adr := range adrs {
+			if adr.AllocationId != nil {
+				eipDel.AddResourceNames(arn.ResourceName(*adr.AllocationId))
+			}
+			if adr.AssociationId != nil {
+				eipaDel.AddResourceNames(arn.ResourceName(*adr.AssociationId))
+			}
+		}
 	case arn.ElasticLoadBalancingLoadBalancerRType:
 	case arn.EC2RouteTableRType:
 		// RouteTable Routes will be deleted when deleting a RouteTable
@@ -89,11 +112,12 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		}
 
 		// Get launch configurations
+		lcDel := &deleter.AutoScalingLaunchConfigurationDeleter{}
 		if _, ok := depMap[arn.AutoScalingLaunchConfigurationRType]; !ok {
-			depMap[arn.AutoScalingLaunchConfigurationRType] = &deleter.AutoScalingLaunchConfigurationDeleter{}
+			depMap[arn.AutoScalingLaunchConfigurationRType] = lcDel
 		}
 		for _, asg := range asgs {
-			depMap[arn.AutoScalingLaunchConfigurationRType].AddResourceNames(arn.ResourceName(*asg.LaunchConfigurationName))
+			lcDel.AddResourceNames(arn.ResourceName(*asg.LaunchConfigurationName))
 		}
 		// Get ELB's
 	case arn.AutoScalingLaunchConfigurationRType:
@@ -133,5 +157,6 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 	case arn.S3BucketRType:
 		// S3 Objects will be deleted when deleting a Bucket
 	}
-	return
+
+	return depMap
 }
