@@ -721,3 +721,221 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 	time.Sleep(time.Duration(1) * time.Minute)
 	return nil
 }
+
+// EC2RouteTableRouteDeleter represents a collection of AWS EC2 route table routes
+type EC2RouteTableRouteDeleter struct {
+	Client       ec2iface.EC2API
+	ResourceType arn.ResourceType
+	RouteTable   *ec2.RouteTable
+}
+
+func (rd *EC2RouteTableRouteDeleter) String() string {
+	routes := make([]string, 0, len(rd.RouteTable.Routes))
+	for _, r := range rd.RouteTable.Routes {
+		routes = append(routes, *r.DestinationCidrBlock)
+	}
+	return fmt.Sprintf(`{"Type": "%s", "RouteTable": "%s", "Routes": %v}`, rd.ResourceType, *rd.RouteTable.RouteTableId, routes)
+}
+
+// DeleteResources deletes EC2 route table routes from AWS
+func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if rd.RouteTable == nil {
+		return nil
+	}
+
+	fmtStr := "Deleted RouteTable Route"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	var params *ec2.DeleteRouteInput
+	for _, r := range rd.RouteTable.Routes {
+		if r.GatewayId != nil && *r.GatewayId == "local" {
+			continue
+		}
+		params = &ec2.DeleteRouteInput{
+			DestinationCidrBlock: r.DestinationCidrBlock,
+			RouteTableId:         rd.RouteTable.RouteTableId,
+			DryRun:               aws.Bool(cfg.DryRun),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.Client.DeleteRouteWithContext(ctx, params)
+		if err != nil {
+			cfg.logDeleteError(arn.EC2RouteTableRouteRType, arn.ResourceName(*r.DestinationCidrBlock), err, logrus.Fields{
+				"parent_resource_type": arn.EC2RouteTableRType,
+				"parent_resource_name": *rd.RouteTable.RouteTableId,
+			})
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Printf("%s: Dst CIDR Block %s\n", fmtStr, *r.DestinationCidrBlock)
+	}
+
+	return nil
+}
+
+// EC2RouteTableAssociationDeleter represents a collection of AWS EC2 route table associations
+type EC2RouteTableAssociationDeleter struct {
+	Client        ec2iface.EC2API
+	ResourceType  arn.ResourceType
+	ResourceNames arn.ResourceNames
+}
+
+func (rd *EC2RouteTableAssociationDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// AddResourceNames adds EC2 route table association names to ResourceNames
+func (rd *EC2RouteTableAssociationDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.ResourceNames = append(rd.ResourceNames, ns...)
+}
+
+// DeleteResources deletes EC2 route table associations from AWS
+func (rd *EC2RouteTableAssociationDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.ResourceNames) == 0 {
+		return nil
+	}
+
+	fmtStr := "Deleted RouteTable Association"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	var params *ec2.DisassociateRouteTableInput
+	for _, n := range rd.ResourceNames {
+		params = &ec2.DisassociateRouteTableInput{
+			AssociationId: n.AWSString(),
+			DryRun:        aws.Bool(cfg.DryRun),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.Client.DisassociateRouteTableWithContext(ctx, params)
+		if err != nil {
+			cfg.logDeleteError(arn.EC2RouteTableAssociationRType, n, err)
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Println(fmtStr, n)
+	}
+
+	return nil
+}
+
+// EC2RouteTableDeleter represents a collection of AWS EC2 route tables
+type EC2RouteTableDeleter struct {
+	Client        ec2iface.EC2API
+	ResourceType  arn.ResourceType
+	ResourceNames arn.ResourceNames
+}
+
+func (rd *EC2RouteTableDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// AddResourceNames adds EC2 route table names to ResourceNames
+func (rd *EC2RouteTableDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.ResourceNames = append(rd.ResourceNames, ns...)
+}
+
+// DeleteResources deletes EC2 route tables from AWS
+// NOTE: can only delete a route table once all subnets have been disassociated,
+// and and all routes have been deleted. Cannot delete the main (default) route
+// table
+func (rd *EC2RouteTableDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.ResourceNames) == 0 {
+		return nil
+	}
+
+	// Ensure all routes are deleted
+	rts, rerr := rd.RequestEC2RouteTables()
+	if rerr != nil && !cfg.IgnoreErrors {
+		return rerr
+	}
+
+	var rtrDel *EC2RouteTableRouteDeleter
+	for _, rt := range rts {
+		rtrDel = &EC2RouteTableRouteDeleter{RouteTable: rt}
+		if err := rtrDel.DeleteResources(cfg); err != nil && !cfg.IgnoreErrors {
+			return err
+		}
+	}
+
+	// Delete route table
+	fmtStr := "Deleted EC2 RouteTable"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	var params *ec2.DeleteRouteTableInput
+	for _, n := range rd.ResourceNames {
+		params = &ec2.DeleteRouteTableInput{
+			RouteTableId: n.AWSString(),
+			DryRun:       aws.Bool(cfg.DryRun),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.Client.DeleteRouteTableWithContext(ctx, params)
+		if err != nil {
+			cfg.logDeleteError(arn.EC2RouteTableRType, n, err)
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Println(fmtStr, n)
+	}
+
+	return nil
+}
+
+// RequestEC2RouteTables requests EC2 route tables by route table name from the AWS API
+func (rd *EC2RouteTableDeleter) RequestEC2RouteTables() ([]*ec2.RouteTable, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	params := &ec2.DescribeRouteTablesInput{
+		RouteTableIds: rd.ResourceNames.AWSStringSlice(),
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.Client.DescribeRouteTablesWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.RouteTables, nil
+}
