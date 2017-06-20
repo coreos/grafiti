@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/route53/route53iface"
@@ -61,8 +62,8 @@ func (rd *Route53HostedZoneDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.Client.DeleteHostedZoneWithContext(ctx, params)
 		if err != nil {
+			cfg.logDeleteError(arn.Route53HostedZoneRType, n, err)
 			if cfg.IgnoreErrors {
-				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
 			}
 			return err
@@ -219,9 +220,14 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 		ctx := aws.BackgroundContext()
 		_, err := rd.Client.ChangeResourceRecordSetsWithContext(ctx, params)
 		if err != nil {
+			for _, rrs := range rrss {
+				cfg.logDeleteError(arn.Route53ResourceRecordSetRType, arn.ResourceName(*rrs.Name), err, logrus.Fields{
+					"parent_resource_type": arn.Route53HostedZoneRType,
+					"parent_resource_name": hz.String(),
+				})
+			}
 			if cfg.IgnoreErrors {
-				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-				return nil
+				continue
 			}
 			return err
 		}

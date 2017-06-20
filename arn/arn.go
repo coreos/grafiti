@@ -250,6 +250,8 @@ const (
 	Route53ChangeRType = "AWS::Route53::Change"
 	// Route53HostedZoneRType is an AWS ResourceType enum value
 	Route53HostedZoneRType = "AWS::Route53::HostedZone"
+	// Route53ResourceRecordSetRType is an AWS ResourceType enum value
+	Route53ResourceRecordSetRType = "AWS::Route53::ResourceRecordSet"
 	// S3BucketRType is an AWS ResourceType enum value
 	S3BucketRType = "AWS::S3::Bucket"
 )

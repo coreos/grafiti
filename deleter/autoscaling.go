@@ -54,8 +54,8 @@ func (rd *AutoScalingGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.Client.DeleteAutoScalingGroupWithContext(ctx, params)
 		if err != nil {
+			cfg.logDeleteError(arn.AutoScalingGroupRType, n, err)
 			if cfg.IgnoreErrors {
-				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
 			}
 			return err
@@ -150,8 +150,8 @@ func (rd *AutoScalingLaunchConfigurationDeleter) DeleteResources(cfg *DeleteConf
 		ctx := aws.BackgroundContext()
 		_, err := rd.Client.DeleteLaunchConfigurationWithContext(ctx, params)
 		if err != nil {
+			cfg.logDeleteError(arn.AutoScalingLaunchConfigurationRType, n, err)
 			if cfg.IgnoreErrors {
-				fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 				continue
 			}
 			return err
