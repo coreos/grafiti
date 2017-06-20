@@ -264,6 +264,8 @@ const (
 	Route53ResourceRecordSetRType = "AWS::Route53::ResourceRecordSet"
 	// S3BucketRType is an AWS ResourceType enum value
 	S3BucketRType = "AWS::S3::Bucket"
+	// S3ObjectRType is an AWS ResourceType enum value
+	S3ObjectRType = "AWS::S3::Object"
 )
 
 const (
