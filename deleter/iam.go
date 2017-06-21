@@ -44,7 +44,7 @@ func (rd *IAMInstanceProfileDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	// Delete roles from instance profiles
 	if len(iprs) != 0 {
-		if err := rd.removeIAMRolesFromInstanceProfilesByIPrs(cfg, iprs); err != nil {
+		if err := rd.deleteIAMRolesFromInstanceProfiles(cfg, iprs); err != nil {
 			return err
 		}
 	}
@@ -67,6 +67,9 @@ func (rd *IAMInstanceProfileDeleter) DeleteResources(cfg *DeleteConfig) error {
 			InstanceProfileName: n.AWSString(),
 		}
 
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
 		ctx := aws.BackgroundContext()
 		_, err := rd.Client.DeleteInstanceProfileWithContext(ctx, params)
 		if err != nil {
@@ -76,14 +79,13 @@ func (rd *IAMInstanceProfileDeleter) DeleteResources(cfg *DeleteConfig) error {
 			}
 			return err
 		}
+
 		fmt.Println(fmtStr, n)
-		// Prevent throttling
-		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 	return nil
 }
 
-func (rd *IAMInstanceProfileDeleter) removeIAMRolesFromInstanceProfilesByIPrs(cfg *DeleteConfig, iprs []*iam.InstanceProfile) error {
+func (rd *IAMInstanceProfileDeleter) deleteIAMRolesFromInstanceProfiles(cfg *DeleteConfig, iprs []*iam.InstanceProfile) error {
 	if len(iprs) == 0 {
 		return nil
 	}
@@ -99,10 +101,7 @@ func (rd *IAMInstanceProfileDeleter) removeIAMRolesFromInstanceProfilesByIPrs(cf
 		rd.Client = iam.New(setUpAWSSession())
 	}
 
-	var (
-		params      *iam.RemoveRoleFromInstanceProfileInput
-		extraFields logrus.Fields
-	)
+	var params *iam.RemoveRoleFromInstanceProfileInput
 	for _, ipr := range iprs {
 		for _, rl := range ipr.Roles {
 			params = &iam.RemoveRoleFromInstanceProfileInput{
@@ -110,24 +109,26 @@ func (rd *IAMInstanceProfileDeleter) removeIAMRolesFromInstanceProfilesByIPrs(cf
 				RoleName:            rl.RoleName,
 			}
 
+			// Prevent throttling
+			time.Sleep(cfg.BackoffTime)
+
 			ctx := aws.BackgroundContext()
 			_, err := rd.Client.RemoveRoleFromInstanceProfileWithContext(ctx, params)
 			if err != nil {
-				extraFields = logrus.Fields{
+				cfg.logDeleteError(arn.IAMRoleRType, arn.ResourceName(*rl.RoleName), err, logrus.Fields{
 					"parent_resource_type": arn.IAMInstanceProfileRType,
 					"parent_resource_name": *ipr.InstanceProfileName,
-				}
-				cfg.logDeleteError(arn.IAMRoleRType, arn.ResourceName(*rl.RoleName), err, extraFields)
+				})
 				if cfg.IgnoreErrors {
 					continue
 				}
 				return err
 			}
+
 			fmt.Printf("Removed Role %s from IAM InstanceProfile %s\n", *ipr.InstanceProfileName, *rl.RoleName)
-			// Prevent throttling
-			time.Sleep(time.Duration(500) * time.Millisecond)
 		}
 	}
+
 	return nil
 }
 
@@ -296,6 +297,9 @@ func (rd *IAMRoleDeleter) DeleteResources(cfg *DeleteConfig) error {
 			RoleName: n.AWSString(),
 		}
 
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
 		ctx := aws.BackgroundContext()
 		_, err := rd.Client.DeleteRoleWithContext(ctx, params)
 		if err != nil {
@@ -305,10 +309,10 @@ func (rd *IAMRoleDeleter) DeleteResources(cfg *DeleteConfig) error {
 			}
 			return err
 		}
+
 		fmt.Println(fmtStr, n)
-		// Prevent throttling
-		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
+
 	return nil
 }
 
@@ -390,16 +394,20 @@ func (rd *IAMRolePolicyDeleter) DeleteResources(cfg *DeleteConfig) error {
 		rd.Client = iam.New(setUpAWSSession())
 	}
 
-	params := &iam.DeleteRolePolicyInput{
-		RoleName: rd.RoleName.AWSString(),
-	}
-	for _, n := range rd.PolicyNames {
-		params.PolicyName = n.AWSString()
+	var params *iam.DeleteRolePolicyInput
+	for _, pn := range rd.PolicyNames {
+		params = &iam.DeleteRolePolicyInput{
+			RoleName:   rd.RoleName.AWSString(),
+			PolicyName: pn.AWSString(),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.Client.DeleteRolePolicyWithContext(ctx, params)
 		if err != nil {
-			cfg.logDeleteError(arn.IAMPolicyRType, n, err, logrus.Fields{
+			cfg.logDeleteError(arn.IAMPolicyRType, pn, err, logrus.Fields{
 				"parent_resource_type": arn.IAMRoleRType,
 				"parent_resource_name": rd.RoleName,
 			})
@@ -408,10 +416,10 @@ func (rd *IAMRolePolicyDeleter) DeleteResources(cfg *DeleteConfig) error {
 			}
 			return err
 		}
-		fmt.Println(fmtStr, n)
-		// Prevent throttling
-		time.Sleep(time.Duration(500) * time.Millisecond)
+
+		fmt.Println(fmtStr, pn)
 	}
+
 	return nil
 }
 
