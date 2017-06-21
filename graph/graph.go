@@ -102,7 +102,23 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 	case arn.ElasticLoadBalancingLoadBalancerRType:
 	case arn.EC2RouteTableRType:
 		// RouteTable Routes will be deleted when deleting a RouteTable
+		rtDel := depMap[rt].(*deleter.EC2RouteTableDeleter)
+		rts, rerr := rtDel.RequestEC2RouteTables()
+		if rerr != nil || len(rts) == 0 {
+			break
+		}
+
 		// Get Subnet-RouteTable Association
+		if _, ok := depMap[arn.EC2RouteTableAssociationRType]; !ok {
+			depMap[arn.EC2RouteTableAssociationRType] = &deleter.EC2RouteTableAssociationDeleter{}
+		}
+		for _, rt := range rts {
+			for _, rta := range rt.Associations {
+				if rta.Main != nil && !*rta.Main {
+					depMap[arn.EC2RouteTableAssociationRType].AddResourceNames(arn.ResourceName(*rta.RouteTableAssociationId))
+				}
+			}
+		}
 	case arn.AutoScalingGroupRType:
 		// Get autoscaling groups
 		asgDel := depMap[rt].(*deleter.AutoScalingGroupDeleter)

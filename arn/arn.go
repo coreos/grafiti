@@ -152,6 +152,8 @@ const (
 	EC2RouteTableRType = "AWS::EC2::RouteTable"
 	// EC2RouteTableAssociationRType is a grafiti-specificn AWS ResourceType enum value
 	EC2RouteTableAssociationRType = "AWS::EC2::RouteTableAssociation"
+	// EC2RouteTableRouteRType is a grafiti-specificn AWS ResourceType enum value
+	EC2RouteTableRouteRType = "AWS::EC2::RouteTableRoute"
 	// EC2ScheduledInstanceRType is an AWS ResourceType enum value
 	EC2ScheduledInstanceRType = "AWS::EC2::ScheduledInstance"
 	// EC2SecurityGroupRType is an AWS ResourceType enum value
