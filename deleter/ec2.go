@@ -1230,3 +1230,362 @@ func (rd *EC2SubnetDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	return nil
 }
+
+// EC2VPCCIDRBlockAssociationDeleter represents a collection of AWS EC2 VPC CIDR block associations
+type EC2VPCCIDRBlockAssociationDeleter struct {
+	Client              ec2iface.EC2API
+	ResourceType        arn.ResourceType
+	VPCName             arn.ResourceName
+	VPCAssociationNames arn.ResourceNames
+}
+
+func (rd *EC2VPCCIDRBlockAssociationDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.VPCAssociationNames)
+}
+
+// AddResourceNames adds EC2 VPC CIDR block association names to VPCAssociationNames
+func (rd *EC2VPCCIDRBlockAssociationDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.VPCAssociationNames = append(rd.VPCAssociationNames, ns...)
+}
+
+// DeleteResources deletes EC2 VPC CIDR block associations from AWS
+func (rd *EC2VPCCIDRBlockAssociationDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.VPCAssociationNames) == 0 {
+		return nil
+	}
+
+	if cfg.DryRun {
+		for _, n := range rd.VPCAssociationNames {
+			fmt.Printf("%s Deleted EC2 VPC %s CIDRBlockAssociation\n", drStr, n)
+		}
+		return nil
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	var params *ec2.DisassociateVpcCidrBlockInput
+	for _, n := range rd.VPCAssociationNames {
+		params = &ec2.DisassociateVpcCidrBlockInput{
+			AssociationId: n.AWSString(),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.Client.DisassociateVpcCidrBlockWithContext(ctx, params)
+		if err != nil {
+			cfg.logDeleteError(arn.EC2VPCCIDRAssociationRType, n, err)
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Printf("%s Deleted EC2 VPC %s CIDRBlockAssociation %s\n", drStr, rd.VPCName, n)
+	}
+
+	return nil
+}
+
+// EC2VPCDeleter represents a collection of AWS EC2 VPC's
+type EC2VPCDeleter struct {
+	Client        ec2iface.EC2API
+	ResourceType  arn.ResourceType
+	ResourceNames arn.ResourceNames
+}
+
+func (rd *EC2VPCDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// AddResourceNames adds EC2 VPC names to ResourceNames
+func (rd *EC2VPCDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.ResourceNames = append(rd.ResourceNames, ns...)
+}
+
+// DeleteResources deletes EC2 VPC's from AWS
+func (rd *EC2VPCDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.ResourceNames) == 0 {
+		return nil
+	}
+
+	// Disassociate vpc cidr blocks
+	vpcs, verr := rd.RequestEC2VPCs()
+	if verr != nil && !cfg.IgnoreErrors {
+		return verr
+	}
+
+	for _, vpc := range vpcs {
+		vpcaDel := &EC2VPCCIDRBlockAssociationDeleter{VPCName: arn.ResourceName(*vpc.VpcId)}
+		for _, a := range vpc.Ipv6CidrBlockAssociationSet {
+			vpcaDel.AddResourceNames(arn.ResourceName(*a.AssociationId))
+		}
+		if err := vpcaDel.DeleteResources(cfg); err != nil && !cfg.IgnoreErrors {
+			return err
+		}
+	}
+
+	// Now delete VPC itself
+	fmtStr := "Deleted EC2 VPC"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	var params *ec2.DeleteVpcInput
+	for _, n := range rd.ResourceNames {
+		params = &ec2.DeleteVpcInput{
+			VpcId:  n.AWSString(),
+			DryRun: aws.Bool(cfg.DryRun),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.Client.DeleteVpcWithContext(ctx, params)
+		if err != nil {
+			cfg.logDeleteError(arn.EC2VPCRType, n, err)
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Println(fmtStr, n)
+	}
+
+	return nil
+}
+
+// RequestEC2VPCs requests EC2 vpc's by vpc names from the AWS API
+func (rd *EC2VPCDeleter) RequestEC2VPCs() ([]*ec2.Vpc, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeVpcsInput{
+		VpcIds: rd.ResourceNames.AWSStringSlice(),
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.Client.DescribeVpcsWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Vpcs, nil
+}
+
+// RequestEC2InstanceReservationsFromVPCs requests EC2 instance reservations from vpc names from the AWS API
+func (rd *EC2VPCDeleter) RequestEC2InstanceReservationsFromVPCs() ([]*ec2.Reservation, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("vpc-id"), Values: rd.ResourceNames.AWSStringSlice()},
+		},
+	}
+	irs := make([]*ec2.Reservation, 0)
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := rd.Client.DescribeInstancesWithContext(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, r := range resp.Reservations {
+			irs = append(irs, r)
+		}
+
+		if resp.NextToken == nil || *resp.NextToken == "" {
+			break
+		}
+
+		params.NextToken = resp.NextToken
+	}
+
+	return irs, nil
+}
+
+// RequestEC2InternetGatewaysFromVPCs requests EC2 internet gateways by vpc names from the AWS API
+func (rd *EC2VPCDeleter) RequestEC2InternetGatewaysFromVPCs() ([]*ec2.InternetGateway, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeInternetGatewaysInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("attachment.vpc-id"), Values: rd.ResourceNames.AWSStringSlice()},
+		},
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.Client.DescribeInternetGatewaysWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.InternetGateways, nil
+}
+
+// RequestEC2NatGatewaysFromVPCs requests EC2 nat gateways by vpc names from the AWS API
+func (rd *EC2VPCDeleter) RequestEC2NatGatewaysFromVPCs() ([]*ec2.NatGateway, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeNatGatewaysInput{
+		Filter: []*ec2.Filter{
+			{Name: aws.String("vpc-id"), Values: rd.ResourceNames.AWSStringSlice()},
+		},
+	}
+	ngws := make([]*ec2.NatGateway, 0)
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := rd.Client.DescribeNatGatewaysWithContext(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, ngw := range resp.NatGateways {
+			if ngw.State != nil && *ngw.State != "deleting" && *ngw.State != "deleted" {
+				ngws = append(ngws, ngw)
+			}
+		}
+
+		if resp.NextToken == nil || *resp.NextToken == "" {
+			break
+		}
+
+		params.NextToken = resp.NextToken
+	}
+
+	return ngws, nil
+}
+
+// RequestEC2NetworkInterfacesFromVPCs requests EC2 network interfaces by vpc names from the AWS API
+func (rd *EC2VPCDeleter) RequestEC2NetworkInterfacesFromVPCs() ([]*ec2.NetworkInterface, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeNetworkInterfacesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("vpc-id"), Values: rd.ResourceNames.AWSStringSlice()},
+		},
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.Client.DescribeNetworkInterfacesWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.NetworkInterfaces, nil
+}
+
+// RequestEC2RouteTablesFromVPCs requests EC2 subnet-routetable associations by vpc names from the AWS API
+func (rd *EC2VPCDeleter) RequestEC2RouteTablesFromVPCs() ([]*ec2.RouteTable, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeRouteTablesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("vpc-id"), Values: rd.ResourceNames.AWSStringSlice()},
+		},
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.Client.DescribeRouteTablesWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.RouteTables, nil
+}
+
+// RequestEC2SecurityGroupsFromVPCs requests EC2 security groups by vpc names from the AWS API
+func (rd *EC2VPCDeleter) RequestEC2SecurityGroupsFromVPCs() ([]*ec2.SecurityGroup, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeSecurityGroupsInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("vpc-id"), Values: rd.ResourceNames.AWSStringSlice()},
+		},
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.Client.DescribeSecurityGroupsWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.SecurityGroups, nil
+}
+
+// RequestEC2SubnetsFromVPCs requests EC2 subnets by vpc names from the AWS API
+func (rd *EC2VPCDeleter) RequestEC2SubnetsFromVPCs() ([]*ec2.Subnet, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeSubnetsInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String("vpc-id"), Values: rd.ResourceNames.AWSStringSlice()},
+		},
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.Client.DescribeSubnetsWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Subnets, nil
+}

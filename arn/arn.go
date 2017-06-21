@@ -178,6 +178,8 @@ const (
 	EC2VolumeRType = "AWS::EC2::Volume"
 	// EC2VPCRType is an AWS ResourceType enum value
 	EC2VPCRType = "AWS::EC2::VPC"
+	// EC2VPCCIDRAssociationRType is an AWS ResourceType enum value
+	EC2VPCCIDRAssociationRType = "AWS::EC2::VPCCIDRAssociation"
 	// EC2VPCEndpointRType is an AWS ResourceType enum value
 	EC2VPCEndpointRType = "AWS::EC2::VPCEndpoint"
 	// EC2VPCPeeringConnectionRType is an AWS ResourceType enum value
