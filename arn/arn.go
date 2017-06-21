@@ -128,6 +128,8 @@ const (
 	EC2InstanceRType = "AWS::EC2::Instance"
 	// EC2InternetGatewayRType is an AWS ResourceType enum value
 	EC2InternetGatewayRType = "AWS::EC2::InternetGateway"
+	// EC2InternetGatewayAttachmentRType is an AWS ResourceType enum value
+	EC2InternetGatewayAttachmentRType = "AWS::EC2::InternetGatewayAttachment"
 	// EC2KeyPairRType is an AWS ResourceType enum value
 	EC2KeyPairRType = "AWS::EC2::KeyPair"
 	// EC2NatGatewayRType is an AWS ResourceType enum value

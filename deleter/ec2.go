@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
@@ -494,4 +495,229 @@ func (rd *EC2InstanceDeleter) RequestEC2InstanceReservations() ([]*ec2.Reservati
 	}
 
 	return resp.Reservations, nil
+}
+
+// EC2InternetGatewayAttachmentDeleter represents a collection of AWS EC2 internet gateway attachments
+type EC2InternetGatewayAttachmentDeleter struct {
+	Client              ec2iface.EC2API
+	ResourceType        arn.ResourceType
+	InternetGatewayName arn.ResourceName
+	AttachmentNames     arn.ResourceNames
+}
+
+func (rd *EC2InternetGatewayAttachmentDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "InternetGatewayName": "%s", "AttachmentNames": %v}`, rd.ResourceType, rd.InternetGatewayName, rd.AttachmentNames)
+}
+
+// AddResourceNames adds EC2 internet gateway attachment names to AttachmentNames
+func (rd *EC2InternetGatewayAttachmentDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.AttachmentNames = append(rd.AttachmentNames, ns...)
+}
+
+// DeleteResources deletes EC2 internet gateway attachments from AWS
+func (rd *EC2InternetGatewayAttachmentDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.AttachmentNames) == 0 || rd.InternetGatewayName == "" {
+		return nil
+	}
+
+	fmtStr := "Detached EC2 InternetGateway"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	var params *ec2.DetachInternetGatewayInput
+	for _, an := range rd.AttachmentNames {
+		params = &ec2.DetachInternetGatewayInput{
+			InternetGatewayId: rd.InternetGatewayName.AWSString(),
+			DryRun:            aws.Bool(cfg.DryRun),
+			VpcId:             an.AWSString(),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.Client.DetachInternetGatewayWithContext(ctx, params)
+		if err != nil {
+			cfg.logDeleteError(arn.EC2InternetGatewayAttachmentRType, an, err, logrus.Fields{
+				"parent_resource_type": arn.EC2InternetGatewayRType,
+				"parent_resource_name": rd.InternetGatewayName,
+			})
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Printf("%s %s from VPC %s\n", fmtStr, rd.InternetGatewayName, an)
+	}
+
+	return nil
+}
+
+// EC2InternetGatewayDeleter represents a collection of AWS EC2 internet gateways
+type EC2InternetGatewayDeleter struct {
+	Client        ec2iface.EC2API
+	ResourceType  arn.ResourceType
+	ResourceNames arn.ResourceNames
+}
+
+func (rd *EC2InternetGatewayDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// AddResourceNames adds EC2 internet gateway names to ResourceNames
+func (rd *EC2InternetGatewayDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.ResourceNames = append(rd.ResourceNames, ns...)
+}
+
+// DeleteResources deletes EC2 internet gateways from AWS
+// NOTE: must detach all internet gateways from vpc's before deletion
+func (rd *EC2InternetGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.ResourceNames) == 0 {
+		return nil
+	}
+
+	igws, ierr := rd.RequestEC2InternetGateways()
+	if ierr != nil {
+		if !cfg.IgnoreErrors {
+			return ierr
+		}
+	}
+
+	// Detach internet gateways from all vpc's
+	for _, igw := range igws {
+		igwaDel := &EC2InternetGatewayAttachmentDeleter{
+			InternetGatewayName: arn.ResourceName(*igw.InternetGatewayId),
+		}
+		for _, an := range igw.Attachments {
+			igwaDel.AddResourceNames(arn.ResourceName(*an.VpcId))
+		}
+		if err := igwaDel.DeleteResources(cfg); err != nil {
+			if !cfg.IgnoreErrors {
+				return err
+			}
+		}
+	}
+
+	fmtStr := "Deleted EC2 InternetGateway"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	var params *ec2.DeleteInternetGatewayInput
+	for _, n := range rd.ResourceNames {
+		params = &ec2.DeleteInternetGatewayInput{
+			InternetGatewayId: n.AWSString(),
+			DryRun:            aws.Bool(cfg.DryRun),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.Client.DeleteInternetGatewayWithContext(ctx, params)
+		if err != nil {
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Println(fmtStr, n)
+	}
+
+	return nil
+}
+
+// RequestEC2InternetGateways requests EC2 internet gateways by name from the AWS API
+func (rd *EC2InternetGatewayDeleter) RequestEC2InternetGateways() ([]*ec2.InternetGateway, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeInternetGatewaysInput{
+		InternetGatewayIds: rd.ResourceNames.AWSStringSlice(),
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.Client.DescribeInternetGatewaysWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.InternetGateways, nil
+}
+
+// EC2NatGatewayDeleter represents a collection of AWS EC2 NAT gateways
+type EC2NatGatewayDeleter struct {
+	Client        ec2iface.EC2API
+	ResourceType  arn.ResourceType
+	ResourceNames arn.ResourceNames
+}
+
+func (rd *EC2NatGatewayDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// AddResourceNames adds EC2 NAT gateway names to ResourceNames
+func (rd *EC2NatGatewayDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.ResourceNames = append(rd.ResourceNames, ns...)
+}
+
+// DeleteResources deletes EC2 NAT gateways from AWS
+func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.ResourceNames) == 0 {
+		return nil
+	}
+
+	fmtStr := "Deleted EC2 NatGateway"
+	if cfg.DryRun {
+		for _, n := range rd.ResourceNames {
+			fmt.Println(drStr, fmtStr, n)
+		}
+		return nil
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	var params *ec2.DeleteNatGatewayInput
+	for _, n := range rd.ResourceNames {
+		params = &ec2.DeleteNatGatewayInput{
+			NatGatewayId: n.AWSString(),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.Client.DeleteNatGatewayWithContext(ctx, params)
+		if err != nil {
+			cfg.logDeleteError(arn.EC2NatGatewayRType, n, err)
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Println(fmtStr, n)
+	}
+
+	// Wait for NAT Gateways to delete
+	time.Sleep(time.Duration(1) * time.Minute)
+	return nil
 }
