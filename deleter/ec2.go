@@ -373,3 +373,125 @@ func (rd *EC2NetworkInterfaceAttachmentDeleter) DeleteResources(cfg *DeleteConfi
 
 	return nil
 }
+
+// EC2InstanceDeleter represents a collection of AWS EC2 instances
+type EC2InstanceDeleter struct {
+	Client        ec2iface.EC2API
+	ResourceType  arn.ResourceType
+	ResourceNames arn.ResourceNames
+}
+
+func (rd *EC2InstanceDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "ResourceNames": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// AddResourceNames adds EC2 instance names to ResourceNames
+func (rd *EC2InstanceDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.ResourceNames = append(rd.ResourceNames, ns...)
+}
+
+// DeleteResources deletes EC2 instances from AWS
+func (rd *EC2InstanceDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.ResourceNames) == 0 {
+		return nil
+	}
+
+	ress, rerr := rd.RequestEC2InstanceReservations()
+	if rerr != nil && !cfg.IgnoreErrors {
+		return rerr
+	}
+
+	iNames := make(arn.ResourceNames, 0)
+	for _, res := range ress {
+		for _, ins := range res.Instances {
+			code := *ins.State.Code
+			// If instance is shutting down (32) or terminated (48), skip
+			if code == 32 || code == 48 {
+				continue
+			}
+			iNames = append(iNames, arn.ResourceName(*ins.InstanceId))
+		}
+	}
+
+	if len(iNames) == 0 {
+		return nil
+	}
+
+	fmtStr := "Terminated EC2 Instance"
+
+	params := &ec2.TerminateInstancesInput{
+		InstanceIds: iNames.AWSStringSlice(),
+		DryRun:      aws.Bool(cfg.DryRun),
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.Client.TerminateInstancesWithContext(ctx, params)
+	if err != nil {
+		for _, n := range iNames {
+			cfg.logDeleteError(arn.EC2InstanceRType, n, err)
+		}
+		if cfg.IgnoreErrors {
+			return nil
+		}
+		return err
+	}
+
+	for _, id := range iNames {
+		fmt.Println(fmtStr, id)
+	}
+
+	// Instances take awhile to shut down, so block until they've terminated
+	if len(resp.TerminatingInstances) > 0 {
+		termInstances := make([]*string, 0, len(resp.TerminatingInstances))
+		for _, r := range resp.TerminatingInstances {
+			termInstances = append(termInstances, r.InstanceId)
+		}
+		rd.waitUntilTerminated(cfg, termInstances)
+	}
+
+	return nil
+}
+
+func (rd *EC2InstanceDeleter) waitUntilTerminated(cfg *DeleteConfig, tis []*string) {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	params := &ec2.DescribeInstancesInput{
+		InstanceIds: tis,
+	}
+
+	ctx := aws.BackgroundContext()
+	if err := rd.Client.WaitUntilInstanceTerminatedWithContext(ctx, params); err != nil {
+		for _, ti := range tis {
+			cfg.logDeleteError(arn.EC2InstanceRType, arn.ResourceName(*ti), err)
+		}
+	}
+}
+
+// RequestEC2InstanceReservations retrieves EC2 instances by instance names from the AWS API
+func (rd *EC2InstanceDeleter) RequestEC2InstanceReservations() ([]*ec2.Reservation, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeInstancesInput{
+		InstanceIds: rd.ResourceNames.AWSStringSlice(),
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.Client.DescribeInstancesWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Reservations, nil
+}
