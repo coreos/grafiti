@@ -1172,3 +1172,61 @@ func (rd *EC2SecurityGroupDeleter) RequestEC2SecurityGroups() ([]*ec2.SecurityGr
 
 	return sgs, nil
 }
+
+// EC2SubnetDeleter represents a collection of AWS EC2 subnets
+type EC2SubnetDeleter struct {
+	Client        ec2iface.EC2API
+	ResourceType  arn.ResourceType
+	ResourceNames arn.ResourceNames
+}
+
+func (rd *EC2SubnetDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// AddResourceNames adds EC2 subnet names to ResourceNames
+func (rd *EC2SubnetDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.ResourceNames = append(rd.ResourceNames, ns...)
+}
+
+// DeleteResources deletes EC2 subnets from AWS
+// NOTE: ensure all network interfaces and network acl's are disassociated
+func (rd *EC2SubnetDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.ResourceNames) == 0 {
+		return nil
+	}
+
+	fmtStr := "Deleted EC2 Subnet"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	var params *ec2.DeleteSubnetInput
+	for _, n := range rd.ResourceNames {
+		params = &ec2.DeleteSubnetInput{
+			SubnetId: n.AWSString(),
+			DryRun:   aws.Bool(cfg.DryRun),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.Client.DeleteSubnetWithContext(ctx, params)
+		if err != nil {
+			cfg.logDeleteError(arn.EC2SubnetRType, n, err)
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Println(fmtStr, n)
+	}
+
+	return nil
+}
