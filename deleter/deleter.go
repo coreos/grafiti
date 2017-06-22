@@ -103,6 +103,49 @@ func InitResourceDeleter(t arn.ResourceType) ResourceDeleter {
 		return &AutoScalingGroupDeleter{ResourceType: t}
 	case arn.AutoScalingLaunchConfigurationRType:
 		return &AutoScalingLaunchConfigurationDeleter{ResourceType: t}
+	case arn.EC2CustomerGatewayRType:
+		return &EC2CustomerGatewayDeleter{ResourceType: t}
+	case arn.EC2EIPRType:
+		return &EC2ElasticIPAllocationDeleter{ResourceType: t}
+	case arn.EC2EIPAssociationRType:
+		return &EC2ElasticIPAssocationDeleter{ResourceType: t}
+	case arn.EC2NetworkInterfaceRType:
+		return &EC2NetworkInterfaceDeleter{ResourceType: t}
+	case arn.EC2NetworkInterfaceAttachmentRType:
+		return &EC2NetworkInterfaceAttachmentDeleter{ResourceType: t}
+	case arn.EC2InstanceRType:
+		return &EC2InstanceDeleter{ResourceType: t}
+	case arn.EC2InternetGatewayAttachmentRType:
+		return &EC2InternetGatewayAttachmentDeleter{ResourceType: t}
+	case arn.EC2InternetGatewayRType:
+		return &EC2InternetGatewayDeleter{ResourceType: t}
+	case arn.EC2NatGatewayRType:
+		return &EC2NatGatewayDeleter{ResourceType: t}
+	case arn.EC2RouteTableAssociationRType:
+		return &EC2RouteTableAssociationDeleter{ResourceType: t}
+	case arn.EC2RouteTableRType:
+		return &EC2RouteTableDeleter{ResourceType: t}
+	case arn.EC2SecurityGroupRType:
+		return &EC2SecurityGroupDeleter{ResourceType: t}
+	case arn.EC2SubnetRType:
+		return &EC2SubnetDeleter{ResourceType: t}
+	case arn.EC2VPCCIDRAssociationRType:
+		return &EC2VPCCIDRBlockAssociationDeleter{ResourceType: t}
+	case arn.EC2VPCRType:
+		return &EC2VPCDeleter{ResourceType: t}
+	case arn.ElasticLoadBalancingLoadBalancerRType:
+		return &ElasticLoadBalancingLoadBalancerDeleter{ResourceType: t}
+	case arn.IAMInstanceProfileRType:
+		return &IAMInstanceProfileDeleter{ResourceType: t}
+	case arn.IAMRoleRType:
+		return &IAMRoleDeleter{ResourceType: t}
+	case arn.IAMPolicyRType:
+		return &IAMRolePolicyDeleter{ResourceType: t}
+	case arn.Route53HostedZoneRType:
+		return &Route53HostedZoneDeleter{ResourceType: t}
+	case arn.S3BucketRType:
+		return &S3BucketDeleter{ResourceType: t}
 	}
+
 	return nil
 }

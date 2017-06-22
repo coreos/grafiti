@@ -137,11 +137,11 @@ func deleteFromTags(reader io.Reader) error {
 			continue
 		}
 
-		getARNsForResource(svc, t.TagFilters, &allARNs)
+		allARNs = getARNsForResource(svc, t.TagFilters, allARNs)
 
 		for rtk := range arn.RGTAUnsupportedResourceTypes {
 			// Request all RGTA-unsupported resources with the same tags
-			getARNsForUnsupportedResource(rtk, t.TagFilters, &allARNs)
+			allARNs = getARNsForUnsupportedResource(rtk, t.TagFilters, allARNs)
 		}
 	}
 
@@ -158,10 +158,7 @@ func deleteFromTags(reader io.Reader) error {
 	return nil
 }
 
-func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.TagFilter, arnList *arn.ResourceARNs) {
-	if arnList == nil {
-		return
-	}
+func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.TagFilter, arnList arn.ResourceARNs) arn.ResourceARNs {
 	// Get ARNs of matching tags
 	params := &rgta.GetResourcesInput{
 		TagFilters:  tags,
@@ -187,17 +184,17 @@ func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.
 		ctx := aws.BackgroundContext()
 		resp, err := svc.GetResourcesWithContext(ctx, params)
 		if err != nil {
-			return
+			return arnList
 		}
 
 		if len(resp.ResourceTagMappingList) == 0 {
-			fmt.Println("No resources match the specified tag filters")
-			return
+			fmt.Println(`{"error": "No resources match the specified tag filters"}`)
+			return arnList
 		}
 
 		for _, r := range resp.ResourceTagMappingList {
 			if r.ResourceARN != nil && *r.ResourceARN != "" {
-				*arnList = append(*arnList, arn.ResourceARN(*r.ResourceARN))
+				arnList = append(arnList, arn.ResourceARN(*r.ResourceARN))
 			}
 		}
 
@@ -207,9 +204,11 @@ func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.
 
 		params.PaginationToken = resp.PaginationToken
 	}
+
+	return arnList
 }
 
-func getARNsForUnsupportedResource(rt arn.ResourceType, tags []*rgta.TagFilter, arnList *arn.ResourceARNs) {
+func getARNsForUnsupportedResource(rt arn.ResourceType, tags []*rgta.TagFilter, arnList arn.ResourceARNs) arn.ResourceARNs {
 	sess := session.Must(session.NewSession(
 		&aws.Config{
 			Region: aws.String(viper.GetString("grafiti.region")),
@@ -218,10 +217,12 @@ func getARNsForUnsupportedResource(rt arn.ResourceType, tags []*rgta.TagFilter, 
 
 	switch arn.NamespaceForResource(rt) {
 	case arn.AutoScalingNamespace:
-		getAutoScalingResourcesByTags(autoscaling.New(sess), rt, tags, arnList)
+		getAutoScalingResourcesByTags(autoscaling.New(sess), rt, tags, &arnList)
 	case arn.Route53Namespace:
-		getRoute53ResourcesByTags(route53.New(sess), rt, tags, arnList)
+		getRoute53ResourcesByTags(route53.New(sess), rt, tags, &arnList)
 	}
+
+	return arnList
 }
 
 func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, rgtaTags []*rgta.TagFilter, arnList *arn.ResourceARNs) {

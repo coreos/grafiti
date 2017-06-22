@@ -21,6 +21,14 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "ResourceNames": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *ElasticLoadBalancingLoadBalancerDeleter) GetClient() elbiface.ELBAPI {
+	if rd.Client == nil {
+		rd.Client = elb.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds elastic load balancer names to ResourceNames
 func (rd *ElasticLoadBalancingLoadBalancerDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -45,10 +53,6 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) DeleteResources(cfg *DeleteCo
 		return nil
 	}
 
-	if rd.Client == nil {
-		rd.Client = elb.New(setUpAWSSession())
-	}
-
 	var params *elb.DeleteLoadBalancerInput
 	for _, lb := range lbs {
 		params = &elb.DeleteLoadBalancerInput{
@@ -59,7 +63,7 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) DeleteResources(cfg *DeleteCo
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteLoadBalancerWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteLoadBalancerWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.ElasticLoadBalancingLoadBalancerRType, arn.ResourceName(*lb.LoadBalancerName), err)
 			if cfg.IgnoreErrors {

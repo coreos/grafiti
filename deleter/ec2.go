@@ -22,6 +22,14 @@ func (rd *EC2CustomerGatewayDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2CustomerGatewayDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds EC2 customer gateway names to ResourceNames
 func (rd *EC2CustomerGatewayDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -38,10 +46,6 @@ func (rd *EC2CustomerGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		fmtStr = drStr + " " + fmtStr
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	var params *ec2.DeleteCustomerGatewayInput
 	for _, n := range rd.ResourceNames {
 		params = &ec2.DeleteCustomerGatewayInput{
@@ -53,7 +57,7 @@ func (rd *EC2CustomerGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteCustomerGatewayWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteCustomerGatewayWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2CustomerGatewayRType, n, err)
 			if cfg.IgnoreErrors {
@@ -79,6 +83,14 @@ func (rd *EC2ElasticIPAllocationDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "ResourceNames": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2ElasticIPAllocationDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds EC2 elastic IP allocation names to ResourceNames
 func (rd *EC2ElasticIPAllocationDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -95,10 +107,6 @@ func (rd *EC2ElasticIPAllocationDeleter) DeleteResources(cfg *DeleteConfig) erro
 		fmtStr = drStr + " " + fmtStr
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	var params *ec2.ReleaseAddressInput
 	for _, n := range rd.ResourceNames {
 		params = &ec2.ReleaseAddressInput{
@@ -110,7 +118,7 @@ func (rd *EC2ElasticIPAllocationDeleter) DeleteResources(cfg *DeleteConfig) erro
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.ReleaseAddressWithContext(ctx, params)
+		_, err := rd.GetClient().ReleaseAddressWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2EIPRType, n, err)
 			if cfg.IgnoreErrors {
@@ -136,6 +144,14 @@ func (rd *EC2ElasticIPAssocationDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "ResourceNames": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2ElasticIPAssocationDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds EC2 elastic IP association names to ResourceNames
 func (rd *EC2ElasticIPAssocationDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -152,10 +168,6 @@ func (rd *EC2ElasticIPAssocationDeleter) DeleteResources(cfg *DeleteConfig) erro
 		fmtStr = drStr + " " + fmtStr
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	var params *ec2.DisassociateAddressInput
 	for _, n := range rd.ResourceNames {
 		params = &ec2.DisassociateAddressInput{
@@ -167,7 +179,7 @@ func (rd *EC2ElasticIPAssocationDeleter) DeleteResources(cfg *DeleteConfig) erro
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DisassociateAddressWithContext(ctx, params)
+		_, err := rd.GetClient().DisassociateAddressWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2EIPAssociationRType, n, err)
 			if cfg.IgnoreErrors {
@@ -191,6 +203,14 @@ type EC2NetworkInterfaceDeleter struct {
 
 func (rd *EC2NetworkInterfaceDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "ResourceNames": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2NetworkInterfaceDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
 }
 
 // AddResourceNames adds EC2 network interface names to ResourceNames
@@ -223,17 +243,13 @@ func (rd *EC2NetworkInterfaceDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	// Detach network interfaces
 	eniaDel := &EC2NetworkInterfaceAttachmentDeleter{ResourceNames: eniaNames}
-	if err := eniaDel.DeleteResources(cfg); err != nil && !cfg.IgnoreErrors {
+	if err := eniaDel.DeleteResources(cfg); err != nil {
 		return err
 	}
 
 	fmtStr := "Deleted EC2 NetworkInterface"
 	if cfg.DryRun {
 		fmtStr = drStr + " " + fmtStr
-	}
-
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
 	}
 
 	var params *ec2.DeleteNetworkInterfaceInput
@@ -247,7 +263,7 @@ func (rd *EC2NetworkInterfaceDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteNetworkInterfaceWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteNetworkInterfaceWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2NetworkInterfaceRType, n, err)
 			if cfg.IgnoreErrors {
@@ -271,19 +287,14 @@ func (rd *EC2NetworkInterfaceDeleter) RequestEC2NetworkInterfaces() ([]*ec2.Netw
 
 	// If resource names are passed into the 'NetworkInterfaceId' field and an interface
 	// with one of those names does not exist, DescribeNetworkInterfaces will error.
-	// Using filters avoids this issue.
 	params := &ec2.DescribeNetworkInterfacesInput{
 		Filters: []*ec2.Filter{
 			{Name: aws.String("network-interface-id"), Values: rd.ResourceNames.AWSStringSlice()},
 		},
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeNetworkInterfacesWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeNetworkInterfacesWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -304,12 +315,8 @@ func (rd *EC2NetworkInterfaceDeleter) RequestEC2EIPAddressessFromNetworkInterfac
 		},
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeAddressesWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeAddressesWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -328,6 +335,14 @@ func (rd *EC2NetworkInterfaceAttachmentDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "ResourceNames": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2NetworkInterfaceAttachmentDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds EC2 network interface attachment names to ResourceNames
 func (rd *EC2NetworkInterfaceAttachmentDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -344,10 +359,6 @@ func (rd *EC2NetworkInterfaceAttachmentDeleter) DeleteResources(cfg *DeleteConfi
 		fmtStr = drStr + " " + fmtStr
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	var params *ec2.DetachNetworkInterfaceInput
 	for _, n := range rd.ResourceNames {
 		params = &ec2.DetachNetworkInterfaceInput{
@@ -360,7 +371,7 @@ func (rd *EC2NetworkInterfaceAttachmentDeleter) DeleteResources(cfg *DeleteConfi
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DetachNetworkInterfaceWithContext(ctx, params)
+		_, err := rd.GetClient().DetachNetworkInterfaceWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2NetworkInterfaceAttachmentRType, n, err)
 			if cfg.IgnoreErrors {
@@ -384,6 +395,14 @@ type EC2InstanceDeleter struct {
 
 func (rd *EC2InstanceDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "ResourceNames": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2InstanceDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
 }
 
 // AddResourceNames adds EC2 instance names to ResourceNames
@@ -425,12 +444,8 @@ func (rd *EC2InstanceDeleter) DeleteResources(cfg *DeleteConfig) error {
 		DryRun:      aws.Bool(cfg.DryRun),
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.TerminateInstancesWithContext(ctx, params)
+	resp, err := rd.GetClient().TerminateInstancesWithContext(ctx, params)
 	if err != nil {
 		for _, n := range iNames {
 			cfg.logDeleteError(arn.EC2InstanceRType, n, err)
@@ -441,12 +456,9 @@ func (rd *EC2InstanceDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return err
 	}
 
-	for _, id := range iNames {
-		fmt.Println(fmtStr, id)
-	}
-
 	// Instances take awhile to shut down, so block until they've terminated
 	if len(resp.TerminatingInstances) > 0 {
+		fmt.Println("Waiting for EC2 Instances to terminate...")
 		termInstances := make([]*string, 0, len(resp.TerminatingInstances))
 		for _, r := range resp.TerminatingInstances {
 			termInstances = append(termInstances, r.InstanceId)
@@ -454,27 +466,27 @@ func (rd *EC2InstanceDeleter) DeleteResources(cfg *DeleteConfig) error {
 		rd.waitUntilTerminated(cfg, termInstances)
 	}
 
+	for _, id := range iNames {
+		fmt.Println(fmtStr, id)
+	}
+
 	return nil
 }
 
 func (rd *EC2InstanceDeleter) waitUntilTerminated(cfg *DeleteConfig, tis []*string) {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	params := &ec2.DescribeInstancesInput{
 		InstanceIds: tis,
 	}
 
 	ctx := aws.BackgroundContext()
-	if err := rd.Client.WaitUntilInstanceTerminatedWithContext(ctx, params); err != nil {
+	if err := rd.GetClient().WaitUntilInstanceTerminatedWithContext(ctx, params); err != nil {
 		for _, ti := range tis {
 			cfg.logDeleteError(arn.EC2InstanceRType, arn.ResourceName(*ti), err)
 		}
 	}
 }
 
-// RequestEC2InstanceReservations retrieves EC2 instances by instance names from the AWS API
+// RequestEC2InstanceReservations requests EC2 instances by instance names from the AWS API
 func (rd *EC2InstanceDeleter) RequestEC2InstanceReservations() ([]*ec2.Reservation, error) {
 	if len(rd.ResourceNames) == 0 {
 		return nil, nil
@@ -484,12 +496,8 @@ func (rd *EC2InstanceDeleter) RequestEC2InstanceReservations() ([]*ec2.Reservati
 		InstanceIds: rd.ResourceNames.AWSStringSlice(),
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeInstancesWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeInstancesWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -509,6 +517,14 @@ func (rd *EC2InternetGatewayAttachmentDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "InternetGatewayName": "%s", "AttachmentNames": %v}`, rd.ResourceType, rd.InternetGatewayName, rd.AttachmentNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2InternetGatewayAttachmentDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds EC2 internet gateway attachment names to AttachmentNames
 func (rd *EC2InternetGatewayAttachmentDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.AttachmentNames = append(rd.AttachmentNames, ns...)
@@ -525,10 +541,6 @@ func (rd *EC2InternetGatewayAttachmentDeleter) DeleteResources(cfg *DeleteConfig
 		fmtStr = drStr + " " + fmtStr
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	var params *ec2.DetachInternetGatewayInput
 	for _, an := range rd.AttachmentNames {
 		params = &ec2.DetachInternetGatewayInput{
@@ -541,7 +553,7 @@ func (rd *EC2InternetGatewayAttachmentDeleter) DeleteResources(cfg *DeleteConfig
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DetachInternetGatewayWithContext(ctx, params)
+		_, err := rd.GetClient().DetachInternetGatewayWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2InternetGatewayAttachmentRType, an, err, logrus.Fields{
 				"parent_resource_type": arn.EC2InternetGatewayRType,
@@ -570,6 +582,14 @@ func (rd *EC2InternetGatewayDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2InternetGatewayDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds EC2 internet gateway names to ResourceNames
 func (rd *EC2InternetGatewayDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -583,10 +603,8 @@ func (rd *EC2InternetGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	igws, ierr := rd.RequestEC2InternetGateways()
-	if ierr != nil {
-		if !cfg.IgnoreErrors {
-			return ierr
-		}
+	if ierr != nil && !cfg.IgnoreErrors {
+		return ierr
 	}
 
 	// Detach internet gateways from all vpc's
@@ -598,19 +616,13 @@ func (rd *EC2InternetGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 			igwaDel.AddResourceNames(arn.ResourceName(*an.VpcId))
 		}
 		if err := igwaDel.DeleteResources(cfg); err != nil {
-			if !cfg.IgnoreErrors {
-				return err
-			}
+			return err
 		}
 	}
 
 	fmtStr := "Deleted EC2 InternetGateway"
 	if cfg.DryRun {
 		fmtStr = drStr + " " + fmtStr
-	}
-
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
 	}
 
 	var params *ec2.DeleteInternetGatewayInput
@@ -624,7 +636,7 @@ func (rd *EC2InternetGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteInternetGatewayWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteInternetGatewayWithContext(ctx, params)
 		if err != nil {
 			if cfg.IgnoreErrors {
 				continue
@@ -648,12 +660,8 @@ func (rd *EC2InternetGatewayDeleter) RequestEC2InternetGateways() ([]*ec2.Intern
 		InternetGatewayIds: rd.ResourceNames.AWSStringSlice(),
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeInternetGatewaysWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeInternetGatewaysWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -670,6 +678,14 @@ type EC2NatGatewayDeleter struct {
 
 func (rd *EC2NatGatewayDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2NatGatewayDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
 }
 
 // AddResourceNames adds EC2 NAT gateway names to ResourceNames
@@ -691,10 +707,6 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nil
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	var params *ec2.DeleteNatGatewayInput
 	for _, n := range rd.ResourceNames {
 		params = &ec2.DeleteNatGatewayInput{
@@ -705,7 +717,7 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteNatGatewayWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteNatGatewayWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2NatGatewayRType, n, err)
 			if cfg.IgnoreErrors {
@@ -737,6 +749,14 @@ func (rd *EC2RouteTableRouteDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "RouteTable": "%s", "Routes": %v}`, rd.ResourceType, *rd.RouteTable.RouteTableId, routes)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2RouteTableRouteDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // DeleteResources deletes EC2 route table routes from AWS
 func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 	if rd.RouteTable == nil {
@@ -746,10 +766,6 @@ func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 	fmtStr := "Deleted RouteTable Route"
 	if cfg.DryRun {
 		fmtStr = drStr + " " + fmtStr
-	}
-
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
 	}
 
 	var params *ec2.DeleteRouteInput
@@ -767,7 +783,7 @@ func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteRouteWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteRouteWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2RouteTableRouteRType, arn.ResourceName(*r.DestinationCidrBlock), err, logrus.Fields{
 				"parent_resource_type": arn.EC2RouteTableRType,
@@ -796,6 +812,14 @@ func (rd *EC2RouteTableAssociationDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2RouteTableAssociationDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds EC2 route table association names to ResourceNames
 func (rd *EC2RouteTableAssociationDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -812,10 +836,6 @@ func (rd *EC2RouteTableAssociationDeleter) DeleteResources(cfg *DeleteConfig) er
 		fmtStr = drStr + " " + fmtStr
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	var params *ec2.DisassociateRouteTableInput
 	for _, n := range rd.ResourceNames {
 		params = &ec2.DisassociateRouteTableInput{
@@ -827,7 +847,7 @@ func (rd *EC2RouteTableAssociationDeleter) DeleteResources(cfg *DeleteConfig) er
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DisassociateRouteTableWithContext(ctx, params)
+		_, err := rd.GetClient().DisassociateRouteTableWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2RouteTableAssociationRType, n, err)
 			if cfg.IgnoreErrors {
@@ -853,6 +873,14 @@ func (rd *EC2RouteTableDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2RouteTableDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds EC2 route table names to ResourceNames
 func (rd *EC2RouteTableDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -876,7 +904,7 @@ func (rd *EC2RouteTableDeleter) DeleteResources(cfg *DeleteConfig) error {
 	var rtrDel *EC2RouteTableRouteDeleter
 	for _, rt := range rts {
 		rtrDel = &EC2RouteTableRouteDeleter{RouteTable: rt}
-		if err := rtrDel.DeleteResources(cfg); err != nil && !cfg.IgnoreErrors {
+		if err := rtrDel.DeleteResources(cfg); err != nil {
 			return err
 		}
 	}
@@ -885,10 +913,6 @@ func (rd *EC2RouteTableDeleter) DeleteResources(cfg *DeleteConfig) error {
 	fmtStr := "Deleted EC2 RouteTable"
 	if cfg.DryRun {
 		fmtStr = drStr + " " + fmtStr
-	}
-
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
 	}
 
 	var params *ec2.DeleteRouteTableInput
@@ -902,7 +926,7 @@ func (rd *EC2RouteTableDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteRouteTableWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteRouteTableWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2RouteTableRType, n, err)
 			if cfg.IgnoreErrors {
@@ -917,14 +941,10 @@ func (rd *EC2RouteTableDeleter) DeleteResources(cfg *DeleteConfig) error {
 	return nil
 }
 
-// RequestEC2RouteTables requests EC2 route tables by route table name from the AWS API
+// RequestEC2RouteTables requests route tables by name from the AWS API
 func (rd *EC2RouteTableDeleter) RequestEC2RouteTables() ([]*ec2.RouteTable, error) {
 	if len(rd.ResourceNames) == 0 {
 		return nil, nil
-	}
-
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
 	}
 
 	params := &ec2.DescribeRouteTablesInput{
@@ -932,7 +952,7 @@ func (rd *EC2RouteTableDeleter) RequestEC2RouteTables() ([]*ec2.RouteTable, erro
 	}
 
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeRouteTablesWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeRouteTablesWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -955,6 +975,14 @@ func (rd *EC2SecurityGroupIngressRuleDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "IngressRules": %v}`, rd.ResourceType, rules)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2SecurityGroupIngressRuleDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // DeleteResources deletes EC2 security group ingress rules from AWS
 // NOTE: all security group ingress references must be removed before deleting before
 // deleting a security group ingress
@@ -966,10 +994,6 @@ func (rd *EC2SecurityGroupIngressRuleDeleter) DeleteResources(cfg *DeleteConfig)
 	fmtStr := "Deleted EC2 SecurityGroup Ingress Rule"
 	if cfg.DryRun {
 		fmtStr = drStr + " " + fmtStr
-	}
-
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
 	}
 
 	var params *ec2.RevokeSecurityGroupIngressInput
@@ -988,7 +1012,7 @@ func (rd *EC2SecurityGroupIngressRuleDeleter) DeleteResources(cfg *DeleteConfig)
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.RevokeSecurityGroupIngressWithContext(ctx, params)
+		_, err := rd.GetClient().RevokeSecurityGroupIngressWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2SecurityGroupIngressRType, arn.ResourceName(*sg.GroupId), err)
 			if cfg.IgnoreErrors {
@@ -1017,6 +1041,14 @@ func (rd *EC2SecurityGroupEgressRuleDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "EgressRules": %v}`, rd.ResourceType, rules)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2SecurityGroupEgressRuleDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // DeleteResources deletes EC2 security group egress rules from AWS
 func (rd *EC2SecurityGroupEgressRuleDeleter) DeleteResources(cfg *DeleteConfig) error {
 	if len(rd.SecurityGroups) == 0 {
@@ -1026,10 +1058,6 @@ func (rd *EC2SecurityGroupEgressRuleDeleter) DeleteResources(cfg *DeleteConfig) 
 	fmtStr := "Deleted EC2 SecurityGroup Egress Rule"
 	if cfg.DryRun {
 		fmtStr = drStr + " " + fmtStr
-	}
-
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
 	}
 
 	var params *ec2.RevokeSecurityGroupEgressInput
@@ -1048,7 +1076,7 @@ func (rd *EC2SecurityGroupEgressRuleDeleter) DeleteResources(cfg *DeleteConfig) 
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.RevokeSecurityGroupEgressWithContext(ctx, params)
+		_, err := rd.GetClient().RevokeSecurityGroupEgressWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2SecurityGroupEgressRType, arn.ResourceName(*sg.GroupId), err)
 			if cfg.IgnoreErrors {
@@ -1074,6 +1102,14 @@ func (rd *EC2SecurityGroupDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2SecurityGroupDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds EC2 security group names to ResourceNames
 func (rd *EC2SecurityGroupDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -1097,21 +1133,17 @@ func (rd *EC2SecurityGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	// Delete ingress/egress rules (security group references)
 	sgIngressDel := &EC2SecurityGroupIngressRuleDeleter{SecurityGroups: sgs}
-	if err := sgIngressDel.DeleteResources(cfg); err != nil && !cfg.IgnoreErrors {
+	if err := sgIngressDel.DeleteResources(cfg); err != nil {
 		return err
 	}
 	sgEgressDel := &EC2SecurityGroupIngressRuleDeleter{SecurityGroups: sgs}
-	if err := sgEgressDel.DeleteResources(cfg); err != nil && !cfg.IgnoreErrors {
+	if err := sgEgressDel.DeleteResources(cfg); err != nil {
 		return err
 	}
 
 	fmtStr := "Deleted EC2 SecurityGroup"
 	if cfg.DryRun {
 		fmtStr = drStr + " " + fmtStr
-	}
-
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
 	}
 
 	var params *ec2.DeleteSecurityGroupInput
@@ -1125,7 +1157,7 @@ func (rd *EC2SecurityGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteSecurityGroupWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteSecurityGroupWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2SecurityGroupRType, arn.ResourceName(*sg.GroupId), err)
 			if cfg.IgnoreErrors {
@@ -1142,7 +1174,7 @@ func (rd *EC2SecurityGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 const defaultGroupName = "default"
 
-// RequestEC2SecurityGroups requests EC2 security groups by security group name from the AWS API
+// RequestEC2SecurityGroups requests EC2 security groups by name from the AWS API
 func (rd *EC2SecurityGroupDeleter) RequestEC2SecurityGroups() ([]*ec2.SecurityGroup, error) {
 	if len(rd.ResourceNames) == 0 {
 		return nil, nil
@@ -1152,12 +1184,8 @@ func (rd *EC2SecurityGroupDeleter) RequestEC2SecurityGroups() ([]*ec2.SecurityGr
 		GroupIds: rd.ResourceNames.AWSStringSlice(),
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeSecurityGroupsWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeSecurityGroupsWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1184,6 +1212,14 @@ func (rd *EC2SubnetDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2SubnetDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds EC2 subnet names to ResourceNames
 func (rd *EC2SubnetDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -1201,10 +1237,6 @@ func (rd *EC2SubnetDeleter) DeleteResources(cfg *DeleteConfig) error {
 		fmtStr = drStr + " " + fmtStr
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	var params *ec2.DeleteSubnetInput
 	for _, n := range rd.ResourceNames {
 		params = &ec2.DeleteSubnetInput{
@@ -1216,7 +1248,7 @@ func (rd *EC2SubnetDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteSubnetWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteSubnetWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2SubnetRType, n, err)
 			if cfg.IgnoreErrors {
@@ -1243,6 +1275,14 @@ func (rd *EC2VPCCIDRBlockAssociationDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.VPCAssociationNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2VPCCIDRBlockAssociationDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds EC2 VPC CIDR block association names to VPCAssociationNames
 func (rd *EC2VPCCIDRBlockAssociationDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.VPCAssociationNames = append(rd.VPCAssociationNames, ns...)
@@ -1261,10 +1301,6 @@ func (rd *EC2VPCCIDRBlockAssociationDeleter) DeleteResources(cfg *DeleteConfig) 
 		return nil
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	var params *ec2.DisassociateVpcCidrBlockInput
 	for _, n := range rd.VPCAssociationNames {
 		params = &ec2.DisassociateVpcCidrBlockInput{
@@ -1275,7 +1311,7 @@ func (rd *EC2VPCCIDRBlockAssociationDeleter) DeleteResources(cfg *DeleteConfig) 
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DisassociateVpcCidrBlockWithContext(ctx, params)
+		_, err := rd.GetClient().DisassociateVpcCidrBlockWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2VPCCIDRAssociationRType, n, err)
 			if cfg.IgnoreErrors {
@@ -1301,6 +1337,14 @@ func (rd *EC2VPCDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2VPCDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds EC2 VPC names to ResourceNames
 func (rd *EC2VPCDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -1323,7 +1367,7 @@ func (rd *EC2VPCDeleter) DeleteResources(cfg *DeleteConfig) error {
 		for _, a := range vpc.Ipv6CidrBlockAssociationSet {
 			vpcaDel.AddResourceNames(arn.ResourceName(*a.AssociationId))
 		}
-		if err := vpcaDel.DeleteResources(cfg); err != nil && !cfg.IgnoreErrors {
+		if err := vpcaDel.DeleteResources(cfg); err != nil {
 			return err
 		}
 	}
@@ -1332,10 +1376,6 @@ func (rd *EC2VPCDeleter) DeleteResources(cfg *DeleteConfig) error {
 	fmtStr := "Deleted EC2 VPC"
 	if cfg.DryRun {
 		fmtStr = drStr + " " + fmtStr
-	}
-
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
 	}
 
 	var params *ec2.DeleteVpcInput
@@ -1349,7 +1389,7 @@ func (rd *EC2VPCDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteVpcWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteVpcWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.EC2VPCRType, n, err)
 			if cfg.IgnoreErrors {
@@ -1374,12 +1414,8 @@ func (rd *EC2VPCDeleter) RequestEC2VPCs() ([]*ec2.Vpc, error) {
 		VpcIds: rd.ResourceNames.AWSStringSlice(),
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeVpcsWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeVpcsWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1400,13 +1436,9 @@ func (rd *EC2VPCDeleter) RequestEC2InstanceReservationsFromVPCs() ([]*ec2.Reserv
 	}
 	irs := make([]*ec2.Reservation, 0)
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	for {
 		ctx := aws.BackgroundContext()
-		resp, err := rd.Client.DescribeInstancesWithContext(ctx, params)
+		resp, err := rd.GetClient().DescribeInstancesWithContext(ctx, params)
 		if err != nil {
 			return nil, err
 		}
@@ -1437,12 +1469,8 @@ func (rd *EC2VPCDeleter) RequestEC2InternetGatewaysFromVPCs() ([]*ec2.InternetGa
 		},
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeInternetGatewaysWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeInternetGatewaysWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1463,13 +1491,9 @@ func (rd *EC2VPCDeleter) RequestEC2NatGatewaysFromVPCs() ([]*ec2.NatGateway, err
 	}
 	ngws := make([]*ec2.NatGateway, 0)
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	for {
 		ctx := aws.BackgroundContext()
-		resp, err := rd.Client.DescribeNatGatewaysWithContext(ctx, params)
+		resp, err := rd.GetClient().DescribeNatGatewaysWithContext(ctx, params)
 		if err != nil {
 			return nil, err
 		}
@@ -1502,12 +1526,8 @@ func (rd *EC2VPCDeleter) RequestEC2NetworkInterfacesFromVPCs() ([]*ec2.NetworkIn
 		},
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeNetworkInterfacesWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeNetworkInterfacesWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1527,12 +1547,8 @@ func (rd *EC2VPCDeleter) RequestEC2RouteTablesFromVPCs() ([]*ec2.RouteTable, err
 		},
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeRouteTablesWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeRouteTablesWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1552,12 +1568,8 @@ func (rd *EC2VPCDeleter) RequestEC2SecurityGroupsFromVPCs() ([]*ec2.SecurityGrou
 		},
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeSecurityGroupsWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeSecurityGroupsWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1577,12 +1589,8 @@ func (rd *EC2VPCDeleter) RequestEC2SubnetsFromVPCs() ([]*ec2.Subnet, error) {
 		},
 	}
 
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeSubnetsWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeSubnetsWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}

@@ -1,20 +1,20 @@
 [grafiti]
-resourceType = "AWS::EC2::Instance"
+resourceTypes = ["AWS::EC2::Instance"]
 endHour = 0
 startHour = -8
-# endTimeStamp = "20170614T010101Z" # ISO-8601 format in UTC
-# startTimeStamp = "20170613T010101Z"
+# endTimeStamp = "2017-06-14T08:00:00Z" # RFC-3339 format in UTC
+# startTimeStamp = "2017-06-13T00:00:00Z"
 backoffTime = 1000 # 1 second in milliseconds
-az = "us-east-1"
+region = "us-west-2"
 includeEvent = false
 tagPatterns = [
   "{CreatedBy: .userIdentity.arn}",
-#  "{CreatedAt: .eventTime}",
-#  "{TaggedAt: now|todate}",
-   "{TaggedAt: now|strftime(\"%Y-%m-%d\")}",
-   "{ExpiresAt: (now+(60*60*24*14))|strftime(\"%Y-%m-%d\")}" # Expire in 2 weeks
+  # "{CreatedAt: .eventTime}",
+  # "{TaggedAt: now|todate}",
+  "{TaggedAt: now|strftime(\"%Y-%m-%d\")}",
+  "{ExpiresAt: (now+(60*60*24*14))|strftime(\"%Y-%m-%d\")}" # Expire in 2 weeks
 ]
 filterPatterns = [
-#  ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
-#  ".TaggingMetadata.ResourceType == \"AWS::ElasticLoadBalancing::LoadBalancer\"",
+  # ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
+  # ".TaggingMetadata.ResourceType == \"AWS::ElasticLoadBalancing::LoadBalancer\"",
 ]

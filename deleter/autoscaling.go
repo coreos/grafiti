@@ -21,6 +21,14 @@ func (rd *AutoScalingGroupDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *AutoScalingGroupDeleter) GetClient() autoscalingiface.AutoScalingAPI {
+	if rd.Client == nil {
+		rd.Client = autoscaling.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds autoscaling group names to ResourceNames
 func (rd *AutoScalingGroupDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -40,10 +48,6 @@ func (rd *AutoScalingGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nil
 	}
 
-	if rd.Client == nil {
-		rd.Client = autoscaling.New(setUpAWSSession())
-	}
-
 	var params *autoscaling.DeleteAutoScalingGroupInput
 	for _, n := range rd.ResourceNames {
 		params = &autoscaling.DeleteAutoScalingGroupInput{
@@ -55,7 +59,7 @@ func (rd *AutoScalingGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteAutoScalingGroupWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteAutoScalingGroupWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.AutoScalingGroupRType, n, err)
 			if cfg.IgnoreErrors {
@@ -78,10 +82,6 @@ func (rd *AutoScalingGroupDeleter) RequestAutoScalingGroups() ([]*autoscaling.Gr
 		return nil, nil
 	}
 
-	if rd.Client == nil {
-		rd.Client = autoscaling.New(setUpAWSSession())
-	}
-
 	params := &autoscaling.DescribeAutoScalingGroupsInput{
 		AutoScalingGroupNames: rd.ResourceNames.AWSStringSlice(),
 	}
@@ -89,7 +89,7 @@ func (rd *AutoScalingGroupDeleter) RequestAutoScalingGroups() ([]*autoscaling.Gr
 
 	for {
 		ctx := aws.BackgroundContext()
-		resp, err := rd.Client.DescribeAutoScalingGroupsWithContext(ctx, params)
+		resp, err := rd.GetClient().DescribeAutoScalingGroupsWithContext(ctx, params)
 		if err != nil {
 			return nil, err
 		}
@@ -119,6 +119,14 @@ func (rd *AutoScalingLaunchConfigurationDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *AutoScalingLaunchConfigurationDeleter) GetClient() autoscalingiface.AutoScalingAPI {
+	if rd.Client == nil {
+		rd.Client = autoscaling.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds launch configuration names to ResourceNames
 func (rd *AutoScalingLaunchConfigurationDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -138,10 +146,6 @@ func (rd *AutoScalingLaunchConfigurationDeleter) DeleteResources(cfg *DeleteConf
 		return nil
 	}
 
-	if rd.Client == nil {
-		rd.Client = autoscaling.New(setUpAWSSession())
-	}
-
 	var params *autoscaling.DeleteLaunchConfigurationInput
 	for _, n := range rd.ResourceNames {
 		params = &autoscaling.DeleteLaunchConfigurationInput{
@@ -152,7 +156,7 @@ func (rd *AutoScalingLaunchConfigurationDeleter) DeleteResources(cfg *DeleteConf
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteLaunchConfigurationWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteLaunchConfigurationWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.AutoScalingLaunchConfigurationRType, n, err)
 			if cfg.IgnoreErrors {
@@ -174,10 +178,6 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestAutoScalingLaunchConfigu
 		return nil, nil
 	}
 
-	if rd.Client == nil {
-		rd.Client = autoscaling.New(setUpAWSSession())
-	}
-
 	params := &autoscaling.DescribeLaunchConfigurationsInput{
 		LaunchConfigurationNames: rd.ResourceNames.AWSStringSlice(),
 	}
@@ -185,7 +185,7 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestAutoScalingLaunchConfigu
 
 	for {
 		ctx := aws.BackgroundContext()
-		resp, err := rd.Client.DescribeLaunchConfigurationsWithContext(ctx, params)
+		resp, err := rd.GetClient().DescribeLaunchConfigurationsWithContext(ctx, params)
 		if err != nil {
 			return nil, err
 		}

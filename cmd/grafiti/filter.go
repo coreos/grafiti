@@ -137,7 +137,7 @@ func initIgnoreTagMap(svc rgtaiface.ResourceGroupsTaggingAPIAPI, r io.Reader) (m
 			continue
 		}
 
-		getARNsForResource(svc, t.TagFilters, &arns)
+		arns = getARNsForResource(svc, t.TagFilters, arns)
 	}
 
 	for _, arn := range arns {
