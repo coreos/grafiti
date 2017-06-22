@@ -190,8 +190,14 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		if _, ok := depMap[arn.AutoScalingLaunchConfigurationRType]; !ok {
 			depMap[arn.AutoScalingLaunchConfigurationRType] = lcDel
 		}
+		if _, ok := depMap[arn.ElasticLoadBalancingLoadBalancerRType]; !ok {
+			depMap[arn.ElasticLoadBalancingLoadBalancerRType] = &deleter.ElasticLoadBalancingLoadBalancerDeleter{}
+		}
 		for _, asg := range asgs {
 			lcDel.AddResourceNames(arn.ResourceName(*asg.LaunchConfigurationName))
+			for _, elbName := range asg.LoadBalancerNames {
+				depMap[arn.ElasticLoadBalancingLoadBalancerRType].AddResourceNames(arn.ResourceName(*elbName))
+			}
 		}
 		// Get ELB's
 	case arn.AutoScalingLaunchConfigurationRType:
