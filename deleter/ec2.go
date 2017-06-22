@@ -939,3 +939,236 @@ func (rd *EC2RouteTableDeleter) RequestEC2RouteTables() ([]*ec2.RouteTable, erro
 
 	return resp.RouteTables, nil
 }
+
+// EC2SecurityGroupIngressRuleDeleter represents a collection of AWS EC2 security group ingress rules
+type EC2SecurityGroupIngressRuleDeleter struct {
+	Client         ec2iface.EC2API
+	ResourceType   arn.ResourceType
+	SecurityGroups []*ec2.SecurityGroup
+}
+
+func (rd *EC2SecurityGroupIngressRuleDeleter) String() string {
+	rules := make([]string, 0)
+	for _, sg := range rd.SecurityGroups {
+		rules = append(rules, fmt.Sprintf(`{"SecurityGroupName": "%s", "IpPermissions": %v}`, *sg.GroupName, sg.IpPermissions))
+	}
+	return fmt.Sprintf(`{"Type": "%s", "IngressRules": %v}`, rd.ResourceType, rules)
+}
+
+// DeleteResources deletes EC2 security group ingress rules from AWS
+// NOTE: all security group ingress references must be removed before deleting before
+// deleting a security group ingress
+func (rd *EC2SecurityGroupIngressRuleDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.SecurityGroups) == 0 {
+		return nil
+	}
+
+	fmtStr := "Deleted EC2 SecurityGroup Ingress Rule"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	var params *ec2.RevokeSecurityGroupIngressInput
+	for _, sg := range rd.SecurityGroups {
+		if len(sg.IpPermissions) == 0 {
+			continue
+		}
+
+		params = &ec2.RevokeSecurityGroupIngressInput{
+			GroupId:       sg.GroupId,
+			IpPermissions: sg.IpPermissions,
+			DryRun:        aws.Bool(cfg.DryRun),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.Client.RevokeSecurityGroupIngressWithContext(ctx, params)
+		if err != nil {
+			cfg.logDeleteError(arn.EC2SecurityGroupIngressRType, arn.ResourceName(*sg.GroupId), err)
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
+	}
+	return nil
+}
+
+// EC2SecurityGroupEgressRuleDeleter represents a collection of AWS EC2 security group egress rules
+type EC2SecurityGroupEgressRuleDeleter struct {
+	Client         ec2iface.EC2API
+	ResourceType   arn.ResourceType
+	SecurityGroups []*ec2.SecurityGroup
+}
+
+func (rd *EC2SecurityGroupEgressRuleDeleter) String() string {
+	rules := make([]string, 0)
+	for _, sg := range rd.SecurityGroups {
+		rules = append(rules, fmt.Sprintf(`{"SecurityGroupName": "%s", "IpPermissions": %v}`, *sg.GroupName, sg.IpPermissionsEgress))
+	}
+	return fmt.Sprintf(`{"Type": "%s", "EgressRules": %v}`, rd.ResourceType, rules)
+}
+
+// DeleteResources deletes EC2 security group egress rules from AWS
+func (rd *EC2SecurityGroupEgressRuleDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.SecurityGroups) == 0 {
+		return nil
+	}
+
+	fmtStr := "Deleted EC2 SecurityGroup Egress Rule"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	var params *ec2.RevokeSecurityGroupEgressInput
+	for _, sg := range rd.SecurityGroups {
+		if len(sg.IpPermissionsEgress) == 0 {
+			continue
+		}
+
+		params = &ec2.RevokeSecurityGroupEgressInput{
+			GroupId:       sg.GroupId,
+			IpPermissions: sg.IpPermissionsEgress,
+			DryRun:        aws.Bool(cfg.DryRun),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.Client.RevokeSecurityGroupEgressWithContext(ctx, params)
+		if err != nil {
+			cfg.logDeleteError(arn.EC2SecurityGroupEgressRType, arn.ResourceName(*sg.GroupId), err)
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
+	}
+
+	return nil
+}
+
+// EC2SecurityGroupDeleter represents a collection of AWS EC2 security groups
+type EC2SecurityGroupDeleter struct {
+	Client        ec2iface.EC2API
+	ResourceType  arn.ResourceType
+	ResourceNames arn.ResourceNames
+}
+
+func (rd *EC2SecurityGroupDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// AddResourceNames adds EC2 security group names to ResourceNames
+func (rd *EC2SecurityGroupDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.ResourceNames = append(rd.ResourceNames, ns...)
+}
+
+// DeleteResources deletes EC2 security groups from AWS
+// NOTE: all security group references must be removed before deleting before
+// deleting a security group
+func (rd *EC2SecurityGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.ResourceNames) == 0 {
+		return nil
+	}
+
+	sgs, rerr := rd.RequestEC2SecurityGroups()
+	if rerr != nil && !cfg.IgnoreErrors {
+		return rerr
+	}
+	if len(sgs) == 0 {
+		return nil
+	}
+
+	// Delete ingress/egress rules (security group references)
+	sgIngressDel := &EC2SecurityGroupIngressRuleDeleter{SecurityGroups: sgs}
+	if err := sgIngressDel.DeleteResources(cfg); err != nil && !cfg.IgnoreErrors {
+		return err
+	}
+	sgEgressDel := &EC2SecurityGroupIngressRuleDeleter{SecurityGroups: sgs}
+	if err := sgEgressDel.DeleteResources(cfg); err != nil && !cfg.IgnoreErrors {
+		return err
+	}
+
+	fmtStr := "Deleted EC2 SecurityGroup"
+	if cfg.DryRun {
+		fmtStr = drStr + " " + fmtStr
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	var params *ec2.DeleteSecurityGroupInput
+	for _, sg := range sgs {
+		params = &ec2.DeleteSecurityGroupInput{
+			GroupId: sg.GroupId,
+			DryRun:  aws.Bool(cfg.DryRun),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.Client.DeleteSecurityGroupWithContext(ctx, params)
+		if err != nil {
+			cfg.logDeleteError(arn.EC2SecurityGroupRType, arn.ResourceName(*sg.GroupId), err)
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Println(fmtStr, *sg.GroupId)
+	}
+
+	return nil
+}
+
+const defaultGroupName = "default"
+
+// RequestEC2SecurityGroups requests EC2 security groups by security group name from the AWS API
+func (rd *EC2SecurityGroupDeleter) RequestEC2SecurityGroups() ([]*ec2.SecurityGroup, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeSecurityGroupsInput{
+		GroupIds: rd.ResourceNames.AWSStringSlice(),
+	}
+
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.Client.DescribeSecurityGroupsWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	// Default security groups cannot be deleted, so remove them from response elements
+	sgs := make([]*ec2.SecurityGroup, 0)
+	for _, sg := range resp.SecurityGroups {
+		if *sg.GroupName != defaultGroupName {
+			sgs = append(sgs, sg)
+		}
+	}
+
+	return sgs, nil
+}

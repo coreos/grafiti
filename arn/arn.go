@@ -158,6 +158,10 @@ const (
 	EC2ScheduledInstanceRType = "AWS::EC2::ScheduledInstance"
 	// EC2SecurityGroupRType is an AWS ResourceType enum value
 	EC2SecurityGroupRType = "AWS::EC2::SecurityGroup"
+	// EC2SecurityGroupEgressRType is an AWS ResourceType enum value
+	EC2SecurityGroupEgressRType = "AWS::EC2::SecurityGroupEgressRule"
+	// EC2SecurityGroupIngressRType is an AWS ResourceType enum value
+	EC2SecurityGroupIngressRType = "AWS::EC2::SecurityGroupIngressRule"
 	// EC2SnapshotRType is an AWS ResourceType enum value
 	EC2SnapshotRType = "AWS::EC2::Snapshot"
 	// EC2SpotFleetRequestRType is an AWS ResourceType enum value
