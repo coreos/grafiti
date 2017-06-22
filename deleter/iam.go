@@ -24,6 +24,14 @@ func (rd *IAMInstanceProfileDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *IAMInstanceProfileDeleter) GetClient() iamiface.IAMAPI {
+	if rd.Client == nil {
+		rd.Client = iam.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds instance profile names to Names
 func (rd *IAMInstanceProfileDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -58,10 +66,6 @@ func (rd *IAMInstanceProfileDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nil
 	}
 
-	if rd.Client == nil {
-		rd.Client = iam.New(setUpAWSSession())
-	}
-
 	var params *iam.DeleteInstanceProfileInput
 	for _, n := range rd.ResourceNames {
 		params = &iam.DeleteInstanceProfileInput{
@@ -72,7 +76,7 @@ func (rd *IAMInstanceProfileDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteInstanceProfileWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteInstanceProfileWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.IAMInstanceProfileRType, n, err)
 			if cfg.IgnoreErrors {
@@ -98,10 +102,6 @@ func (rd *IAMInstanceProfileDeleter) deleteIAMRolesFromInstanceProfiles(cfg *Del
 		return nil
 	}
 
-	if rd.Client == nil {
-		rd.Client = iam.New(setUpAWSSession())
-	}
-
 	var params *iam.RemoveRoleFromInstanceProfileInput
 	for _, ipr := range iprs {
 		for _, rl := range ipr.Roles {
@@ -114,7 +114,7 @@ func (rd *IAMInstanceProfileDeleter) deleteIAMRolesFromInstanceProfiles(cfg *Del
 			time.Sleep(cfg.BackoffTime)
 
 			ctx := aws.BackgroundContext()
-			_, err := rd.Client.RemoveRoleFromInstanceProfileWithContext(ctx, params)
+			_, err := rd.GetClient().RemoveRoleFromInstanceProfileWithContext(ctx, params)
 			if err != nil {
 				cfg.logDeleteError(arn.IAMRoleRType, arn.ResourceName(*rl.RoleName), err, logrus.Fields{
 					"parent_resource_type": arn.IAMInstanceProfileRType,
@@ -149,10 +149,6 @@ func (rd *IAMInstanceProfileDeleter) RequestIAMInstanceProfiles() ([]*iam.Instan
 		}
 	}
 
-	if rd.Client == nil {
-		rd.Client = iam.New(setUpAWSSession())
-	}
-
 	params := &iam.ListInstanceProfilesInput{
 		MaxItems: aws.Int64(100),
 	}
@@ -160,7 +156,7 @@ func (rd *IAMInstanceProfileDeleter) RequestIAMInstanceProfiles() ([]*iam.Instan
 	iprs := make([]*iam.InstanceProfile, 0)
 	for {
 		ctx := aws.BackgroundContext()
-		resp, err := rd.Client.ListInstanceProfilesWithContext(ctx, params)
+		resp, err := rd.GetClient().ListInstanceProfilesWithContext(ctx, params)
 		if err != nil {
 			return nil, err
 		}
@@ -212,16 +208,12 @@ func (rd *IAMInstanceProfileDeleter) RequestIAMInstanceProfilesFromLaunchConfigu
 		}
 	}
 
-	if rd.Client == nil {
-		rd.Client = iam.New(setUpAWSSession())
-	}
-
 	iprs := make([]*iam.InstanceProfile, 0)
 	params := &iam.ListInstanceProfilesInput{}
 
 	for {
 		ctx := aws.BackgroundContext()
-		resp, err := rd.Client.ListInstanceProfilesWithContext(ctx, params)
+		resp, err := rd.GetClient().ListInstanceProfilesWithContext(ctx, params)
 		if err != nil {
 			return nil, err
 		}
@@ -253,6 +245,14 @@ func (rd *IAMRoleDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *IAMRoleDeleter) GetClient() iamiface.IAMAPI {
+	if rd.Client == nil {
+		rd.Client = iam.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds IAM role names to Names
 func (rd *IAMRoleDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -270,10 +270,6 @@ func (rd *IAMRoleDeleter) DeleteResources(cfg *DeleteConfig) error {
 			fmt.Println(drStr, fmtStr, n)
 		}
 		return nil
-	}
-
-	if rd.Client == nil {
-		rd.Client = iam.New(setUpAWSSession())
 	}
 
 	var (
@@ -302,7 +298,7 @@ func (rd *IAMRoleDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteRoleWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteRoleWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.IAMRoleRType, n, err)
 			if cfg.IgnoreErrors {
@@ -331,15 +327,11 @@ func (rd *IAMRoleDeleter) RequestIAMRoles() ([]*iam.Role, error) {
 		}
 	}
 
-	if rd.Client == nil {
-		rd.Client = iam.New(setUpAWSSession())
-	}
-
 	var params *iam.ListRolesInput
 	rls := make([]*iam.Role, 0)
 	for {
 		ctx := aws.BackgroundContext()
-		resp, err := rd.Client.ListRolesWithContext(ctx, params)
+		resp, err := rd.GetClient().ListRolesWithContext(ctx, params)
 		if err != nil {
 			return nil, err
 		}
@@ -372,6 +364,14 @@ func (rd *IAMRolePolicyDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "RoleName": %s, "PolicyNames": %v}`, rd.ResourceType, rd.RoleName, rd.PolicyNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *IAMRolePolicyDeleter) GetClient() iamiface.IAMAPI {
+	if rd.Client == nil {
+		rd.Client = iam.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds IAM role policy names to Names
 func (rd *IAMRolePolicyDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.PolicyNames = append(rd.PolicyNames, ns...)
@@ -391,10 +391,6 @@ func (rd *IAMRolePolicyDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nil
 	}
 
-	if rd.Client == nil {
-		rd.Client = iam.New(setUpAWSSession())
-	}
-
 	var params *iam.DeleteRolePolicyInput
 	for _, pn := range rd.PolicyNames {
 		params = &iam.DeleteRolePolicyInput{
@@ -406,7 +402,7 @@ func (rd *IAMRolePolicyDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteRolePolicyWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteRolePolicyWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.IAMPolicyRType, pn, err, logrus.Fields{
 				"parent_resource_type": arn.IAMRoleRType,
@@ -431,10 +427,6 @@ func (rd *IAMRolePolicyDeleter) RequestIAMRolePoliciesFromRoles() (arn.ResourceN
 		return nil, nil
 	}
 
-	if rd.Client == nil {
-		rd.Client = iam.New(setUpAWSSession())
-	}
-
 	params := &iam.ListRolePoliciesInput{
 		MaxItems: aws.Int64(100),
 		RoleName: rd.RoleName.AWSString(),
@@ -442,7 +434,7 @@ func (rd *IAMRolePolicyDeleter) RequestIAMRolePoliciesFromRoles() (arn.ResourceN
 	pls := make(arn.ResourceNames, 0)
 	for {
 		ctx := aws.BackgroundContext()
-		resp, lerr := rd.Client.ListRolePoliciesWithContext(ctx, params)
+		resp, lerr := rd.GetClient().ListRolePoliciesWithContext(ctx, params)
 		if lerr != nil {
 			return nil, lerr
 		}

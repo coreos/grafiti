@@ -23,6 +23,14 @@ func (rd *Route53HostedZoneDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *Route53HostedZoneDeleter) GetClient() route53iface.Route53API {
+	if rd.Client == nil {
+		rd.Client = route53.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds route53 hosted zone names to Names
 func (rd *Route53HostedZoneDeleter) AddResourceNames(ns ...arn.ResourceName) {
 	rd.ResourceNames = append(rd.ResourceNames, ns...)
@@ -63,7 +71,7 @@ func (rd *Route53HostedZoneDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteHostedZoneWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteHostedZoneWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.Route53HostedZoneRType, n, err)
 			if cfg.IgnoreErrors {
@@ -146,7 +154,7 @@ func (rd *Route53HostedZoneDeleter) RequestAllRoute53HostedZones() ([]*route53.H
 
 	for {
 		ctx := aws.BackgroundContext()
-		resp, err := rd.Client.ListHostedZonesWithContext(ctx, params)
+		resp, err := rd.GetClient().ListHostedZonesWithContext(ctx, params)
 		if err != nil {
 			return nil, err
 		}
@@ -174,6 +182,14 @@ type Route53ResourceRecordSetDeleter struct {
 
 func (rd *Route53ResourceRecordSetDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *Route53ResourceRecordSetDeleter) GetClient() route53iface.Route53API {
+	if rd.Client == nil {
+		rd.Client = route53.New(setUpAWSSession())
+	}
+	return rd.Client
 }
 
 // AddResourceNames adds route53 resource record set names to Names
@@ -231,7 +247,7 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.ChangeResourceRecordSetsWithContext(ctx, params)
+		_, err := rd.GetClient().ChangeResourceRecordSetsWithContext(ctx, params)
 		if err != nil {
 			for _, rrs := range rrss {
 				cfg.logDeleteError(arn.Route53ResourceRecordSetRType, arn.ResourceName(*rrs.Name), err, logrus.Fields{
@@ -276,7 +292,7 @@ func (rd *Route53ResourceRecordSetDeleter) RequestRoute53ResourceRecordSets() (m
 
 		for {
 			ctx := aws.BackgroundContext()
-			resp, err := rd.Client.ListResourceRecordSetsWithContext(ctx, params)
+			resp, err := rd.GetClient().ListResourceRecordSetsWithContext(ctx, params)
 			if err != nil {
 				return nil, err
 			}

@@ -23,6 +23,14 @@ func (rd *S3ObjectDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "BucketName": "%s", "ObjectIdentifiers": %v}`, rd.ResourceType, rd.BucketName, rd.ObjectIdentifiers)
 }
 
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *S3ObjectDeleter) GetClient() s3iface.S3API {
+	if rd.Client == nil {
+		rd.Client = s3.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
 // AddResourceNames adds S3 object names to ResourceNames
 func (rd *S3ObjectDeleter) AddResourceNames(keys ...arn.ResourceName) {
 	for _, key := range keys {
@@ -54,7 +62,7 @@ func (rd *S3ObjectDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DeleteObjectsWithContext(ctx, params)
+	resp, err := rd.GetClient().DeleteObjectsWithContext(ctx, params)
 	if err != nil {
 		for _, o := range rd.ObjectIdentifiers {
 			cfg.logDeleteError(arn.S3ObjectRType, arn.ResourceName(*o.Key), err, logrus.Fields{
@@ -88,7 +96,7 @@ func (rd *S3ObjectDeleter) RequestS3ObjectsByBucket() ([]*s3.Object, error) {
 
 	for {
 		ctx := aws.BackgroundContext()
-		resp, err := rd.Client.ListObjectsV2WithContext(ctx, params)
+		resp, err := rd.GetClient().ListObjectsV2WithContext(ctx, params)
 		if err != nil {
 			return nil, err
 		}
@@ -116,6 +124,14 @@ type S3BucketDeleter struct {
 
 func (rd *S3BucketDeleter) String() string {
 	return fmt.Sprintf(`{"Type": "%s", "ResourceNames": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *S3BucketDeleter) GetClient() s3iface.S3API {
+	if rd.Client == nil {
+		rd.Client = s3.New(setUpAWSSession())
+	}
+	return rd.Client
 }
 
 // AddResourceNames adds S3 bucket names to ResourceNames
@@ -168,7 +184,7 @@ func (rd *S3BucketDeleter) DeleteResources(cfg *DeleteConfig) error {
 		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
-		_, err := rd.Client.DeleteBucketWithContext(ctx, params)
+		_, err := rd.GetClient().DeleteBucketWithContext(ctx, params)
 		if err != nil {
 			cfg.logDeleteError(arn.S3BucketRType, n, err)
 			if cfg.IgnoreErrors {
