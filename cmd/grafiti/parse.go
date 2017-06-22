@@ -42,7 +42,7 @@ func init() {
 
 var parseCmd = &cobra.Command{
 	Use:   "parse",
-	Short: "parse and output resources by reading CloudTrail logs",
+	Short: "Parse and output resources by reading CloudTrail logs",
 	Long:  "Parse a CloudTrail Log and output resources. By default, talks to the configured aws account and reads directly from CloudTrail.",
 	RunE:  runParseCommand,
 }

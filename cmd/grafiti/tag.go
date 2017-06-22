@@ -120,7 +120,7 @@ func init() {
 
 var tagCmd = &cobra.Command{
 	Use:   "tag",
-	Short: "tag resources in AWS",
+	Short: "Tag resources in AWS",
 	Long:  "Tag resources in AWS. By default, talks to the configured aws account and reads directly from CloudTrail.",
 	RunE:  runTagCommand,
 }
