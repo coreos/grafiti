@@ -59,18 +59,76 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 
 	switch rt {
 	case arn.EC2VPCRType:
-		// Get Subnets
-		// Get Instances
-		// Get IGW's
-		// Get NGW's
-		// Get Security Groups
+		vpcDel := depMap[rt].(*deleter.EC2VPCDeleter)
+
+		// Get EC2 instances
+		ress, _ := vpcDel.RequestEC2InstanceReservationsFromVPCs()
+		if _, ok := depMap[arn.EC2InstanceRType]; !ok {
+			depMap[arn.EC2InstanceRType] = &deleter.EC2InstanceDeleter{}
+		}
+		for _, res := range ress {
+			for _, ins := range res.Instances {
+				depMap[arn.EC2InstanceRType].AddResourceNames(arn.ResourceName(*ins.InstanceId))
+			}
+		}
+
+		// Get EC2 internet gateways's
+		igws, _ := vpcDel.RequestEC2InternetGatewaysFromVPCs()
+		if _, ok := depMap[arn.EC2InternetGatewayRType]; !ok {
+			depMap[arn.EC2InternetGatewayRType] = &deleter.EC2InternetGatewayDeleter{}
+		}
+		for _, igw := range igws {
+			depMap[arn.EC2InternetGatewayRType].AddResourceNames(arn.ResourceName(*igw.InternetGatewayId))
+		}
+
+		// Get EC2 NAT gateways's
+		ngws, _ := vpcDel.RequestEC2NatGatewaysFromVPCs()
+		if _, ok := depMap[arn.EC2NatGatewayRType]; !ok {
+			depMap[arn.EC2NatGatewayRType] = &deleter.EC2NatGatewayDeleter{}
+		}
+		for _, ngw := range ngws {
+			depMap[arn.EC2NatGatewayRType].AddResourceNames(arn.ResourceName(*ngw.NatGatewayId))
+		}
+
+		// Get EC2 network interfaces
+		enis, _ := vpcDel.RequestEC2NetworkInterfacesFromVPCs()
+		if _, ok := depMap[arn.EC2NetworkInterfaceRType]; !ok {
+			depMap[arn.EC2NetworkInterfaceRType] = &deleter.EC2NetworkInterfaceDeleter{}
+		}
+		for _, eni := range enis {
+			depMap[arn.EC2NetworkInterfaceRType].AddResourceNames(arn.ResourceName(*eni.NetworkInterfaceId))
+		}
+
 		// Get Route Tables
-		// Get Network Interfaces
+		rts, _ := vpcDel.RequestEC2RouteTablesFromVPCs()
+		if _, ok := depMap[arn.EC2RouteTableRType]; !ok {
+			depMap[arn.EC2RouteTableRType] = &deleter.EC2RouteTableDeleter{}
+		}
+		for _, rt := range rts {
+			depMap[arn.EC2RouteTableRType].AddResourceNames(arn.ResourceName(*rt.RouteTableId))
+		}
+
+		// Get Security Groups
+		sgs, _ := vpcDel.RequestEC2SecurityGroupsFromVPCs()
+		if _, ok := depMap[arn.EC2SecurityGroupRType]; !ok {
+			depMap[arn.EC2SecurityGroupRType] = &deleter.EC2SecurityGroupDeleter{}
+		}
+		for _, sg := range sgs {
+			depMap[arn.EC2SecurityGroupRType].AddResourceNames(arn.ResourceName(*sg.GroupName))
+		}
+
+		// Get Subnets
+		sns, _ := vpcDel.RequestEC2SubnetsFromVPCs()
+		if _, ok := depMap[arn.EC2SubnetRType]; !ok {
+			depMap[arn.EC2SubnetRType] = &deleter.EC2SubnetDeleter{}
+		}
+		for _, sn := range sns {
+			depMap[arn.EC2SubnetRType].AddResourceNames(arn.ResourceName(*sn.SubnetId))
+		}
 	case arn.EC2SubnetRType:
 		// Get Network ACL's
 	case arn.EC2SecurityGroupRType:
-		// Get SecurityGroup Rule
-		// IP permissions Ingress/Egress will be deleted when deleting SecurityGroups
+		// EC2 Ingress/Egress rules will be deleted when deleting SecurityGroups
 	case arn.EC2InstanceRType:
 		// Get EBS Volumes
 	case arn.EC2NetworkInterfaceRType:
