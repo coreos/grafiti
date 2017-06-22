@@ -53,6 +53,9 @@ func initConfig() {
 		viper.SetConfigFile(cfgFile)
 	}
 
+	// Default bucket ejection time: 10 minutes in seconds
+	viper.SetDefault("grafiti.bucketEjectLimitSeconds", 300)
+
 	viper.SetConfigName(".grafiti") // name of config file (without extension)
 	viper.AddConfigPath("$HOME")    // adding home directory as first search path
 	viper.AutomaticEnv()            // read in environment variables that match

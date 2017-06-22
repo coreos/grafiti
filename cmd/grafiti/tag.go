@@ -61,7 +61,16 @@ type TagInput struct {
 	Tags            Tags
 }
 
-// ARNSet maps an ARN to a general struct
+func shouldEject(ejectSize, setSize int, createdAt time.Time) bool {
+	limitInt := viper.GetInt("grafiti.bucketEjectLimitSeconds")
+	limit := time.Duration(limitInt) * time.Second
+
+	ejectTime := time.Time(createdAt.Add(limit))
+
+	return setSize == ejectSize || ((createdAt.After(ejectTime) || createdAt.Equal(ejectTime)) && setSize > 0)
+}
+
+// ARNSet is a set of ARNs (no duplicates)
 type ARNSet map[arn.ResourceARN]struct{}
 
 // NewARNSet creates a new ARNSet
@@ -69,53 +78,149 @@ func NewARNSet() ARNSet {
 	return make(map[arn.ResourceARN]struct{})
 }
 
-// AddARN adds an empty struct to an ARNSet
+// AddARN adds an ARN to an ARNSet
 func (a *ARNSet) AddARN(ARN arn.ResourceARN) {
 	(*a)[ARN] = struct{}{}
 }
 
-// ToList generates a list of ARNSet's from a map
-func (a *ARNSet) ToList() arn.ResourceARNs {
-	var arnList = make(arn.ResourceARNs, 0, len(*a))
+// ToARNList generates a list of ResourceARNs from a ARNSet
+func (a *ARNSet) ToARNList() arn.ResourceARNs {
+	var arns = make(arn.ResourceARNs, 0, len(*a))
 	for k := range *a {
-		arnList = append(arnList, k)
+		arns = append(arns, arn.ResourceARN(k))
 	}
-	return arnList
+	return arns
 }
 
-// ARNSetBucket maps a tag to a set of ARN strings
-type ARNSetBucket map[Tag]ARNSet
+// TrackedARNSet tracks how long since ARNs in a bucket have been ejected. If
+// running in daemon mode, buckets may be half full for long periods of time.
+// To prevent this, eject ARNs from buckets after a set period of time. Default
+// limit of 10 minutes
+type TrackedARNSet struct {
+	ARNSet
+	CreatedAt time.Time
+}
 
-// NewARNSetBucket creates a new map of Tag -> ARNSet
+// ShouldEject calculates whether a bucket has at least 20 member ARNs or
+// CreatedAt is after the user-specified duration
+func (s *TrackedARNSet) ShouldEject() bool {
+	return shouldEject(20, len(s.ARNSet), s.CreatedAt)
+}
+
+// ARNSetBucket maps a tag to a set of tracked ARNs
+type ARNSetBucket map[Tag]TrackedARNSet
+
+// NewARNSetBucket creates a new map of Tag -> TrackedARNSet
 func NewARNSetBucket() ARNSetBucket {
-	return make(map[Tag]ARNSet)
+	return make(map[Tag]TrackedARNSet)
 }
 
-// AddARNToBuckets adds tags to an ARNSet, or creates a new set if one does not
-// exist
+// AddARNToBuckets adds tags to an ARNSet, or creates a new set if one does
+// not exist
 func (b *ARNSetBucket) AddARNToBuckets(ARN arn.ResourceARN, tags map[string]string) {
 	if ARN == "" {
 		return
 	}
 	for tagKey, tagValue := range tags {
 		tag := Tag{tagKey, tagValue}
-		arnSet, found := (*b)[tag]
+
+		resourceSet, found := (*b)[tag]
 		if !found {
-			arnSet = NewARNSet()
-			(*b)[tag] = arnSet
+			resourceSet = TrackedARNSet{
+				ARNSet:    NewARNSet(),
+				CreatedAt: time.Now(),
+			}
+			(*b)[tag] = resourceSet
 		}
-		arnSet.AddARN(ARN)
+		resourceSet.AddARN(ARN)
 	}
 }
 
 // ClearBucket creates a new ARNSet for a specific Tag
 func (b *ARNSetBucket) ClearBucket(bucket Tag) {
-	(*b)[bucket] = NewARNSet()
+	(*b)[bucket] = TrackedARNSet{
+		ARNSet:    NewARNSet(),
+		CreatedAt: time.Now(),
+	}
+}
+
+// ResourceNameSet is a set of ResourceNames (no duplicates) mapped to a map of
+// applied Tags
+type ResourceNameSet map[arn.ResourceName]Tags
+
+// NewResourceNameSet creates a new map of ResourceNameSet -> Tags
+func NewResourceNameSet() ResourceNameSet {
+	return make(map[arn.ResourceName]Tags)
+}
+
+// AddResourceName adds an ResourceName to an ResourceNameSet
+func (a *ResourceNameSet) AddResourceName(name arn.ResourceName) {
+	(*a)[name] = make(map[string]string)
+}
+
+// AddTags adds Tags to a ResourceName in a ResourceNameSet
+func (a *ResourceNameSet) AddTags(name arn.ResourceName, tags map[string]string) {
+	if _, ok := (*a)[name]; !ok {
+		a.AddResourceName(name)
+	}
+	for tagKey, tagValue := range tags {
+		(*a)[name][tagKey] = tagValue
+	}
+}
+
+// TrackedResourceNameSet tracks how long since ResourceNames in a bucket have been ejected. If
+// running in daemon mode, buckets may be half full for long periods of time.
+// To prevent this, eject ResourceNames from buckets after a set period of time. Default
+// limit of 10 minutes
+type TrackedResourceNameSet struct {
+	ResourceNameSet
+	CreatedAt time.Time
+}
+
+// ShouldEject calculates whether a bucket has at least 10 member ResourceNames
+// or CreatedAt is after the user-specified duration
+func (s *TrackedResourceNameSet) ShouldEject() bool {
+	return shouldEject(10, len(s.ResourceNameSet), s.CreatedAt)
+}
+
+// ResourceNameSetBucket maps a ResourceType to a set of tracked ResourceNames
+type ResourceNameSetBucket map[arn.ResourceType]TrackedResourceNameSet
+
+// NewResourceNameSetBucket creates a new map of Tag -> TrackedResourceNameSet
+func NewResourceNameSetBucket() ResourceNameSetBucket {
+	return make(map[arn.ResourceType]TrackedResourceNameSet)
+}
+
+// AddResourceNameToBucket adds tags to an ResourceNameSet, or creates a new
+// set if one does not exist
+func (b *ResourceNameSetBucket) AddResourceNameToBucket(bucket arn.ResourceType, name arn.ResourceName, tags map[string]string) {
+	if bucket == "" || name == "" {
+		return
+	}
+
+	nameSet, ok := (*b)[bucket]
+	if !ok {
+		nameSet = TrackedResourceNameSet{
+			ResourceNameSet: NewResourceNameSet(),
+			CreatedAt:       time.Now(),
+		}
+		(*b)[bucket] = nameSet
+	}
+	nameSet.AddTags(name, tags)
+}
+
+// ClearBucket creates a new ResourceNameSet for a ResourceType and sets the
+// creation time to now
+func (b *ResourceNameSetBucket) ClearBucket(bucket arn.ResourceType) {
+	(*b)[bucket] = TrackedResourceNameSet{
+		ResourceNameSet: NewResourceNameSet(),
+		CreatedAt:       time.Now(),
+	}
 }
 
 func init() {
 	RootCmd.AddCommand(tagCmd)
-	tagCmd.PersistentFlags().StringVarP(&tagFile, "tag-file", "f", "", "File containing JSON objects of taggable resource ARN's and tag key/value pairs. Format is the output format of grafiti parse.")
+	tagCmd.PersistentFlags().StringVarP(&tagFile, "tag-file", "f", "", "File containing JSON objects of taggable resources and tag key/value pairs. Format is the output format of grafiti parse.")
 }
 
 var tagCmd = &cobra.Command{
@@ -156,10 +261,10 @@ func tag(reader io.Reader) error {
 	)))
 	dec := json.NewDecoder(reader)
 
-	ARNBuckets := NewARNSetBucket()
-	// Non-RGTA resources are tagged one:many::resource:tag, so an inverted ARNSet
-	// mapped by arn.ResourceType handles such resources nicely
-	otherResBuckets := make(map[arn.ResourceType]map[arn.ResourceName]Tags)
+	// Holds all ARN's of resources supported by the RGTA
+	arnBuckets := NewARNSetBucket()
+	// Holds all resource names of resources not supported by the RGTA
+	resourceNameBuckets := NewResourceNameSetBucket()
 
 	for {
 		t, isEOF, err := decodeInput(dec)
@@ -175,28 +280,27 @@ func tag(reader io.Reader) error {
 		tm := t.TaggingMetadata
 		if tm.ResourceType != "" && tm.ResourceName != "" && tm.ResourceARN != "" {
 			if _, ok := arn.RGTAUnsupportedResourceTypes[tm.ResourceType]; ok {
-				if _, ok := otherResBuckets[tm.ResourceType]; !ok {
-					otherResBuckets[tm.ResourceType] = make(map[arn.ResourceName]Tags)
-				}
-				otherResBuckets[tm.ResourceType][tm.ResourceName] = t.Tags
+				resourceNameBuckets.AddResourceNameToBucket(tm.ResourceType, tm.ResourceName, t.Tags)
 			} else {
-				ARNBuckets.AddARNToBuckets(tm.ResourceARN, t.Tags)
+				arnBuckets.AddARNToBuckets(tm.ResourceARN, t.Tags)
 			}
 		}
 
-		for tag, bucket := range ARNBuckets {
-			if len(bucket) == 20 || (isEOF && len(bucket) > 0) {
-				if err := tagARNBucket(svc, bucket.ToList(), tag); err != nil {
+		for tag, bucket := range arnBuckets {
+			if bucket.ShouldEject() || (isEOF && len(bucket.ARNSet) > 0) {
+				if err := tagARNBucket(svc, bucket.ToARNList(), tag); err != nil {
 					return err
 				}
-				ARNBuckets.ClearBucket(tag)
+				arnBuckets.ClearBucket(tag)
 			}
 		}
 
-		for rt, bucket := range otherResBuckets {
-			if len(bucket) == 20 || (isEOF && len(bucket) > 0) {
-				tagUnsupportedResourceType(rt, bucket)
-				delete(otherResBuckets, rt)
+		for rt, buckets := range resourceNameBuckets {
+			if buckets.ShouldEject() || (isEOF && len(buckets.ResourceNameSet) > 0) {
+				if err := tagUnsupportedResourceType(rt, buckets.ResourceNameSet); err != nil {
+					return err
+				}
+				resourceNameBuckets.ClearBucket(rt)
 			}
 		}
 
@@ -208,7 +312,7 @@ func tag(reader io.Reader) error {
 	return nil
 }
 
-func tagUnsupportedResourceType(rt arn.ResourceType, rnMap map[arn.ResourceName]Tags) {
+func tagUnsupportedResourceType(rt arn.ResourceType, nameSet ResourceNameSet) error {
 	sess := session.Must(session.NewSession(
 		&aws.Config{
 			Region: aws.String(viper.GetString("grafiti.region")),
@@ -217,21 +321,22 @@ func tagUnsupportedResourceType(rt arn.ResourceType, rnMap map[arn.ResourceName]
 
 	switch arn.NamespaceForResource(rt) {
 	case arn.AutoScalingNamespace:
-		for n, tags := range rnMap {
-			tagAutoScalingResource(autoscaling.New(sess), rt, n, tags)
+		for n, tags := range nameSet {
+			return tagAutoScalingResource(autoscaling.New(sess), rt, n, tags)
 		}
 	case arn.Route53Namespace:
-		for n, tags := range rnMap {
-			tagRoute53Resource(route53.New(sess), rt, n, tags)
+		for n, tags := range nameSet {
+			return tagRoute53Resource(route53.New(sess), rt, n, tags)
 		}
 	}
-	return
+
+	return nil
 }
 
-func tagAutoScalingResource(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, rn arn.ResourceName, tags Tags) {
+func tagAutoScalingResource(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, rn arn.ResourceName, tags Tags) error {
 	// Only AutoScaling Groups support tagging
 	if rt != arn.AutoScalingGroupRType || rn == "" {
-		return
+		return nil
 	}
 
 	asTags := make([]*autoscaling.Tag, 0, len(tags))
@@ -252,19 +357,20 @@ func tagAutoScalingResource(svc autoscalingiface.AutoScalingAPI, rt arn.Resource
 	ctx := aws.BackgroundContext()
 	if _, err := svc.CreateOrUpdateTagsWithContext(ctx, params); err != nil {
 		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-	} else {
-		pj, _ := json.Marshal(params)
-		fmt.Println(string(pj))
+		return err
 	}
 
-	return
+	pj, _ := json.Marshal(params)
+	fmt.Println(string(pj))
+
+	return nil
 }
 
-func tagRoute53Resource(svc route53iface.Route53API, rt arn.ResourceType, rn arn.ResourceName, tags Tags) {
+func tagRoute53Resource(svc route53iface.Route53API, rt arn.ResourceType, rn arn.ResourceName, tags Tags) error {
 	// Only hostedzones (and healthchecks, but they are not supported yet) allow
 	// tagging
 	if rt != arn.Route53HostedZoneRType || rn == "" {
-		return
+		return nil
 	}
 
 	hzTags := make([]*route53.Tag, 0, len(tags))
@@ -284,12 +390,13 @@ func tagRoute53Resource(svc route53iface.Route53API, rt arn.ResourceType, rn arn
 	ctx := aws.BackgroundContext()
 	if _, err := svc.ChangeTagsForResourceWithContext(ctx, params); err != nil {
 		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-	} else {
-		pj, _ := json.Marshal(params)
-		fmt.Println(string(pj))
+		return err
 	}
 
-	return
+	pj, _ := json.Marshal(params)
+	fmt.Println(string(pj))
+
+	return nil
 }
 
 func tagARNBucket(svc rgtaiface.ResourceGroupsTaggingAPIAPI, bucket arn.ResourceARNs, tag Tag) error {

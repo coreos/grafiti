@@ -21,6 +21,144 @@ import (
 	"github.com/coreos/grafiti/arn"
 )
 
+func TestAddResourceARNToBucket(t *testing.T) {
+	cases := []struct {
+		TagInputs      []TagInput
+		ExpectedBucket ARNSetBucket
+	}{
+		{
+			TagInputs: []TagInput{
+				{
+					TaggingMetadata: TaggingMetadata{
+						ResourceType: arn.AutoScalingGroupRType,
+						ResourceARN:  "aws:arn:s3:::bucket-name/s3-bucket-name-1",
+					},
+					Tags: map[string]string{"CreatedBy": "test-user", "ExpiresAt": "2017-05-31"},
+				},
+				{
+					TaggingMetadata: TaggingMetadata{
+						ResourceType: arn.AutoScalingGroupRType,
+						ResourceARN:  "aws:arn:s3:::bucket-name/s3-bucket-name-2",
+					},
+					Tags: map[string]string{"CreatedBy": "test-user", "ExpiresAt": "2017-05-31"},
+				},
+			},
+			ExpectedBucket: ARNSetBucket{
+				Tag{"CreatedBy", "test-user"}: TrackedARNSet{
+					ARNSet: ARNSet{
+						"aws:arn:s3:::bucket-name/s3-bucket-name-1": {},
+						"aws:arn:s3:::bucket-name/s3-bucket-name-2": {},
+					},
+				},
+				Tag{"ExpiresAt", "2017-05-31"}: TrackedARNSet{
+					ARNSet: ARNSet{
+						"aws:arn:s3:::bucket-name/s3-bucket-name-1": {},
+						"aws:arn:s3:::bucket-name/s3-bucket-name-2": {},
+					},
+				},
+			},
+		},
+	}
+
+	for i, c := range cases {
+		testBucket := NewARNSetBucket()
+		for _, ti := range c.TagInputs {
+			tm := ti.TaggingMetadata
+			testBucket.AddARNToBuckets(tm.ResourceARN, ti.Tags)
+		}
+
+		for tag, bucket := range c.ExpectedBucket {
+			if !reflect.DeepEqual(bucket.ARNSet, testBucket[tag].ARNSet) {
+				t.Errorf("AddARNToBuckets case %d failed on Tag %s\nwanted\n%s\ngot\n%s\n", i+1, tag, bucket.ARNSet, testBucket[tag].ARNSet)
+			}
+		}
+	}
+}
+
+func TestAddResourceNameToBucket(t *testing.T) {
+	cases := []struct {
+		TagInputs      []TagInput
+		ExpectedBucket ResourceNameSetBucket
+	}{
+		{
+			TagInputs: []TagInput{
+				{
+					TaggingMetadata: TaggingMetadata{
+						ResourceType: arn.AutoScalingGroupRType,
+						ResourceName: "autoscaling-group-name-1",
+					},
+					Tags: map[string]string{"CreatedBy": "test-user", "ExpiresAt": "2017-05-31"},
+				},
+				{
+					TaggingMetadata: TaggingMetadata{
+						ResourceType: arn.AutoScalingGroupRType,
+						ResourceName: "autoscaling-group-name-2",
+					},
+					Tags: map[string]string{"CreatedBy": "test-user", "ExpiresAt": "2017-05-31"},
+				},
+			},
+			ExpectedBucket: ResourceNameSetBucket{
+				arn.AutoScalingGroupRType: TrackedResourceNameSet{
+					ResourceNameSet: ResourceNameSet{
+						"autoscaling-group-name-1": map[string]string{"CreatedBy": "test-user", "ExpiresAt": "2017-05-31"},
+						"autoscaling-group-name-2": map[string]string{"CreatedBy": "test-user", "ExpiresAt": "2017-05-31"},
+					},
+				},
+			},
+		},
+		{
+			TagInputs: []TagInput{
+				{
+					TaggingMetadata: TaggingMetadata{
+						ResourceType: arn.AutoScalingGroupRType,
+						ResourceName: "autoscaling-group-name-1",
+					},
+					Tags: map[string]string{"CreatedBy": "test-user", "ExpiresAt": "2017-05-31"},
+				},
+				{
+					TaggingMetadata: TaggingMetadata{
+						ResourceType: arn.Route53HostedZoneRType,
+						ResourceName: "HOSTEDZONEIDEXAMPLE",
+					},
+					Tags: map[string]string{"CreatedBy": "root", "ExpiresAt": "2017-06-01"},
+				},
+			},
+			ExpectedBucket: ResourceNameSetBucket{
+				arn.AutoScalingGroupRType: TrackedResourceNameSet{
+					ResourceNameSet: ResourceNameSet{
+						"autoscaling-group-name-1": map[string]string{"CreatedBy": "test-user", "ExpiresAt": "2017-05-31"},
+					},
+				},
+				arn.Route53HostedZoneRType: TrackedResourceNameSet{
+					ResourceNameSet: ResourceNameSet{
+						"HOSTEDZONEIDEXAMPLE": map[string]string{"CreatedBy": "root", "ExpiresAt": "2017-06-01"},
+					},
+				},
+			},
+		},
+	}
+
+	for i, c := range cases {
+		testBucket := NewResourceNameSetBucket()
+		for _, ti := range c.TagInputs {
+			tm := ti.TaggingMetadata
+			testBucket.AddResourceNameToBucket(tm.ResourceType, tm.ResourceName, ti.Tags)
+		}
+
+		for rt, buckets := range c.ExpectedBucket {
+			if reflect.DeepEqual(testBucket[rt].ResourceNameSet, TrackedResourceNameSet{}) {
+				t.Errorf("AddResourceNameToBucket case %d failed\nwanted bucket:\n%s\ngot:\nnil", i+1, buckets)
+			}
+			for name, tags := range buckets.ResourceNameSet {
+				testTags := testBucket[rt].ResourceNameSet[name]
+				if !reflect.DeepEqual(testTags, tags) {
+					t.Errorf("AddResourceNameToBucket case %d failed\nwanted tags:\n%s\ngot:\n%s", i+1, tags, testTags)
+				}
+			}
+		}
+	}
+}
+
 // Set stdout to pipe and capture printed output of a Print event
 func captureRGTAStdOut(f func(rgtaiface.ResourceGroupsTaggingAPIAPI, arn.ResourceARNs, Tag) error, i rgtaiface.ResourceGroupsTaggingAPIAPI, as arn.ResourceARNs, t Tag) string {
 	oldStdOut := os.Stdout
