@@ -67,9 +67,9 @@ func (rd *IAMInstanceProfileDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	var params *iam.DeleteInstanceProfileInput
-	for _, n := range rd.ResourceNames {
+	for _, ipr := range iprs {
 		params = &iam.DeleteInstanceProfileInput{
-			InstanceProfileName: n.AWSString(),
+			InstanceProfileName: ipr.InstanceProfileName,
 		}
 
 		// Prevent throttling
@@ -78,15 +78,16 @@ func (rd *IAMInstanceProfileDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteInstanceProfileWithContext(ctx, params)
 		if err != nil {
-			cfg.logDeleteError(arn.IAMInstanceProfileRType, n, err)
+			cfg.logDeleteError(arn.IAMInstanceProfileRType, arn.ResourceName(*ipr.InstanceProfileName), err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, n)
+		fmt.Println(fmtStr, *ipr.InstanceProfileName)
 	}
+
 	return nil
 }
 

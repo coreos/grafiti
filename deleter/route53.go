@@ -299,11 +299,9 @@ func (rd *Route53ResourceRecordSetDeleter) RequestRoute53ResourceRecordSets() (m
 
 			for _, rrs := range resp.ResourceRecordSets {
 				// Cannot delete NS/SOA type record sets
-				if *rrs.Type == "NS" || *rrs.Type == "SOA" {
-					continue
+				if rrs.Type != nil && *rrs.Type != "NS" && *rrs.Type != "SOA" {
+					rrsMap[hz] = append(rrsMap[hz], rrs)
 				}
-
-				rrsMap[hz] = append(rrsMap[hz], rrs)
 			}
 
 			if resp.IsTruncated == nil || !*resp.IsTruncated {

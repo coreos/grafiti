@@ -61,6 +61,17 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 	case arn.EC2VPCRType:
 		vpcDel := depMap[rt].(*deleter.EC2VPCDeleter)
 
+		// Ensures that no default VPC's are used
+		vpcs, err := vpcDel.RequestEC2VPCs()
+		if err != nil || len(vpcs) == 0 {
+			break
+		}
+
+		vpcDel.ResourceNames = nil
+		for _, vpc := range vpcs {
+			vpcDel.AddResourceNames(arn.ResourceName(*vpc.VpcId))
+		}
+
 		// Get EC2 instances
 		ress, _ := vpcDel.RequestEC2InstanceReservationsFromVPCs()
 		if _, ok := depMap[arn.EC2InstanceRType]; !ok {

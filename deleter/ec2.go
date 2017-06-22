@@ -41,15 +41,20 @@ func (rd *EC2CustomerGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nil
 	}
 
+	cgws, rerr := rd.RequestEC2CustomerGateways()
+	if rerr != nil && !cfg.IgnoreErrors {
+		return rerr
+	}
+
 	fmtStr := "Deleted EC2 CustomerGateway"
 	if cfg.DryRun {
 		fmtStr = drStr + " " + fmtStr
 	}
 
 	var params *ec2.DeleteCustomerGatewayInput
-	for _, n := range rd.ResourceNames {
+	for _, cgw := range cgws {
 		params = &ec2.DeleteCustomerGatewayInput{
-			CustomerGatewayId: n.AWSString(),
+			CustomerGatewayId: cgw.CustomerGatewayId,
 			DryRun:            aws.Bool(cfg.DryRun),
 		}
 
@@ -59,17 +64,36 @@ func (rd *EC2CustomerGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteCustomerGatewayWithContext(ctx, params)
 		if err != nil {
-			cfg.logDeleteError(arn.EC2CustomerGatewayRType, n, err)
+			cfg.logDeleteError(arn.EC2CustomerGatewayRType, arn.ResourceName(*cgw.CustomerGatewayId), err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, n)
+		fmt.Println(fmtStr, *cgw.CustomerGatewayId)
 	}
 
 	return nil
+}
+
+// RequestEC2CustomerGateways requests EC2 customer gateways by names from the AWS API
+func (rd *EC2CustomerGatewayDeleter) RequestEC2CustomerGateways() ([]*ec2.CustomerGateway, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeCustomerGatewaysInput{
+		CustomerGatewayIds: rd.ResourceNames.AWSStringSlice(),
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.GetClient().DescribeCustomerGatewaysWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.CustomerGateways, nil
 }
 
 // EC2ElasticIPAllocationDeleter represents a collection of AWS EC2 elastic IP allocations
@@ -253,9 +277,9 @@ func (rd *EC2NetworkInterfaceDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	var params *ec2.DeleteNetworkInterfaceInput
-	for _, n := range rd.ResourceNames {
+	for _, eni := range enis {
 		params = &ec2.DeleteNetworkInterfaceInput{
-			NetworkInterfaceId: n.AWSString(),
+			NetworkInterfaceId: eni.NetworkInterfaceId,
 			DryRun:             aws.Bool(cfg.DryRun),
 		}
 
@@ -265,14 +289,14 @@ func (rd *EC2NetworkInterfaceDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteNetworkInterfaceWithContext(ctx, params)
 		if err != nil {
-			cfg.logDeleteError(arn.EC2NetworkInterfaceRType, n, err)
+			cfg.logDeleteError(arn.EC2NetworkInterfaceRType, arn.ResourceName(*eni.NetworkInterfaceId), err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, n)
+		fmt.Println(fmtStr, *eni.NetworkInterfaceId)
 	}
 
 	return nil
@@ -626,9 +650,9 @@ func (rd *EC2InternetGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	var params *ec2.DeleteInternetGatewayInput
-	for _, n := range rd.ResourceNames {
+	for _, igw := range igws {
 		params = &ec2.DeleteInternetGatewayInput{
-			InternetGatewayId: n.AWSString(),
+			InternetGatewayId: igw.InternetGatewayId,
 			DryRun:            aws.Bool(cfg.DryRun),
 		}
 
@@ -638,13 +662,14 @@ func (rd *EC2InternetGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteInternetGatewayWithContext(ctx, params)
 		if err != nil {
+			cfg.logDeleteError(arn.EC2InternetGatewayRType, arn.ResourceName(*igw.InternetGatewayId), err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, n)
+		fmt.Println(fmtStr, *igw.InternetGatewayId)
 	}
 
 	return nil
@@ -699,6 +724,11 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nil
 	}
 
+	ngws, rerr := rd.RequestEC2NatGateways()
+	if rerr != nil && !cfg.IgnoreErrors {
+		return rerr
+	}
+
 	fmtStr := "Deleted EC2 NatGateway"
 	if cfg.DryRun {
 		for _, n := range rd.ResourceNames {
@@ -708,9 +738,9 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	var params *ec2.DeleteNatGatewayInput
-	for _, n := range rd.ResourceNames {
+	for _, ngw := range ngws {
 		params = &ec2.DeleteNatGatewayInput{
-			NatGatewayId: n.AWSString(),
+			NatGatewayId: ngw.NatGatewayId,
 		}
 
 		// Prevent throttling
@@ -719,19 +749,38 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteNatGatewayWithContext(ctx, params)
 		if err != nil {
-			cfg.logDeleteError(arn.EC2NatGatewayRType, n, err)
+			cfg.logDeleteError(arn.EC2NatGatewayRType, arn.ResourceName(*ngw.NatGatewayId), err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, n)
+		fmt.Println(fmtStr, *ngw.NatGatewayId)
 	}
 
 	// Wait for NAT Gateways to delete
 	time.Sleep(time.Duration(1) * time.Minute)
 	return nil
+}
+
+// RequestEC2NatGateways requests EC2 nat gateways by name from the AWS API
+func (rd *EC2NatGatewayDeleter) RequestEC2NatGateways() ([]*ec2.NatGateway, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeNatGatewaysInput{
+		NatGatewayIds: rd.ResourceNames.AWSStringSlice(),
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.GetClient().DescribeNatGatewaysWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.NatGateways, nil
 }
 
 // EC2RouteTableRouteDeleter represents a collection of AWS EC2 route table routes
@@ -757,6 +806,8 @@ func (rd *EC2RouteTableRouteDeleter) GetClient() ec2iface.EC2API {
 	return rd.Client
 }
 
+const localGatewayID = "local"
+
 // DeleteResources deletes EC2 route table routes from AWS
 func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 	if rd.RouteTable == nil {
@@ -770,9 +821,10 @@ func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	var params *ec2.DeleteRouteInput
 	for _, r := range rd.RouteTable.Routes {
-		if r.GatewayId != nil && *r.GatewayId == "local" {
+		if r.GatewayId != nil && *r.GatewayId == localGatewayID {
 			continue
 		}
+
 		params = &ec2.DeleteRouteInput{
 			DestinationCidrBlock: r.DestinationCidrBlock,
 			RouteTableId:         rd.RouteTable.RouteTableId,
@@ -916,9 +968,9 @@ func (rd *EC2RouteTableDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	var params *ec2.DeleteRouteTableInput
-	for _, n := range rd.ResourceNames {
+	for _, rt := range rts {
 		params = &ec2.DeleteRouteTableInput{
-			RouteTableId: n.AWSString(),
+			RouteTableId: rt.RouteTableId,
 			DryRun:       aws.Bool(cfg.DryRun),
 		}
 
@@ -928,14 +980,14 @@ func (rd *EC2RouteTableDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteRouteTableWithContext(ctx, params)
 		if err != nil {
-			cfg.logDeleteError(arn.EC2RouteTableRType, n, err)
+			cfg.logDeleteError(arn.EC2RouteTableRType, arn.ResourceName(*rt.RouteTableId), err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, n)
+		fmt.Println(fmtStr, *rt.RouteTableId)
 	}
 
 	return nil
@@ -957,7 +1009,17 @@ func (rd *EC2RouteTableDeleter) RequestEC2RouteTables() ([]*ec2.RouteTable, erro
 		return nil, err
 	}
 
-	return resp.RouteTables, nil
+	rts := make([]*ec2.RouteTable, 0)
+	for _, rt := range resp.RouteTables {
+		for _, a := range rt.Associations {
+			if a.Main != nil && !*a.Main {
+				rts = append(rts, rt)
+				break
+			}
+		}
+	}
+
+	return rts, nil
 }
 
 // EC2SecurityGroupIngressRuleDeleter represents a collection of AWS EC2 security group ingress rules
@@ -1263,6 +1325,32 @@ func (rd *EC2SubnetDeleter) DeleteResources(cfg *DeleteConfig) error {
 	return nil
 }
 
+// RequestEC2Subnets requests EC2 subnets by subnet name from the AWS API
+func (rd *EC2SubnetDeleter) RequestEC2Subnets() ([]*ec2.Subnet, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeSubnetsInput{
+		SubnetIds: rd.ResourceNames.AWSStringSlice(),
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.GetClient().DescribeSubnetsWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	sns := make([]*ec2.Subnet, 0)
+	for _, sn := range resp.Subnets {
+		if sn.DefaultForAz != nil && !*sn.DefaultForAz {
+			sns = append(sns, sn)
+		}
+	}
+
+	return sns, nil
+}
+
 // EC2VPCCIDRBlockAssociationDeleter represents a collection of AWS EC2 VPC CIDR block associations
 type EC2VPCCIDRBlockAssociationDeleter struct {
 	Client              ec2iface.EC2API
@@ -1420,7 +1508,14 @@ func (rd *EC2VPCDeleter) RequestEC2VPCs() ([]*ec2.Vpc, error) {
 		return nil, err
 	}
 
-	return resp.Vpcs, nil
+	vpcs := make([]*ec2.Vpc, 0)
+	for _, vpc := range resp.Vpcs {
+		if vpc.IsDefault != nil && !*vpc.IsDefault {
+			vpcs = append(vpcs, vpc)
+		}
+	}
+
+	return vpcs, nil
 }
 
 // RequestEC2InstanceReservationsFromVPCs requests EC2 instance reservations from vpc names from the AWS API
@@ -1553,7 +1648,17 @@ func (rd *EC2VPCDeleter) RequestEC2RouteTablesFromVPCs() ([]*ec2.RouteTable, err
 		return nil, err
 	}
 
-	return resp.RouteTables, nil
+	rts := make([]*ec2.RouteTable, 0)
+	for _, rt := range resp.RouteTables {
+		for _, a := range rt.Associations {
+			if a.Main != nil && !*a.Main {
+				rts = append(rts, rt)
+				break
+			}
+		}
+	}
+
+	return rts, nil
 }
 
 // RequestEC2SecurityGroupsFromVPCs requests EC2 security groups by vpc names from the AWS API
@@ -1574,7 +1679,14 @@ func (rd *EC2VPCDeleter) RequestEC2SecurityGroupsFromVPCs() ([]*ec2.SecurityGrou
 		return nil, err
 	}
 
-	return resp.SecurityGroups, nil
+	sgs := make([]*ec2.SecurityGroup, 0)
+	for _, sg := range resp.SecurityGroups {
+		if sg.GroupName != nil && *sg.GroupName != defaultGroupName {
+			sgs = append(sgs, sg)
+		}
+	}
+
+	return sgs, nil
 }
 
 // RequestEC2SubnetsFromVPCs requests EC2 subnets by vpc names from the AWS API
@@ -1595,5 +1707,12 @@ func (rd *EC2VPCDeleter) RequestEC2SubnetsFromVPCs() ([]*ec2.Subnet, error) {
 		return nil, err
 	}
 
-	return resp.Subnets, nil
+	sns := make([]*ec2.Subnet, 0)
+	for _, sn := range resp.Subnets {
+		if sn.DefaultForAz != nil && !*sn.DefaultForAz {
+			sns = append(sns, sn)
+		}
+	}
+
+	return sns, nil
 }
