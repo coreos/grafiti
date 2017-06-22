@@ -64,7 +64,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		// Get EC2 instances
 		ress, _ := vpcDel.RequestEC2InstanceReservationsFromVPCs()
 		if _, ok := depMap[arn.EC2InstanceRType]; !ok {
-			depMap[arn.EC2InstanceRType] = &deleter.EC2InstanceDeleter{}
+			depMap[arn.EC2InstanceRType] = deleter.InitResourceDeleter(arn.EC2InstanceRType)
 		}
 		for _, res := range ress {
 			for _, ins := range res.Instances {
@@ -75,7 +75,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		// Get EC2 internet gateways's
 		igws, _ := vpcDel.RequestEC2InternetGatewaysFromVPCs()
 		if _, ok := depMap[arn.EC2InternetGatewayRType]; !ok {
-			depMap[arn.EC2InternetGatewayRType] = &deleter.EC2InternetGatewayDeleter{}
+			depMap[arn.EC2InternetGatewayRType] = deleter.InitResourceDeleter(arn.EC2InternetGatewayRType)
 		}
 		for _, igw := range igws {
 			depMap[arn.EC2InternetGatewayRType].AddResourceNames(arn.ResourceName(*igw.InternetGatewayId))
@@ -84,7 +84,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		// Get EC2 NAT gateways's
 		ngws, _ := vpcDel.RequestEC2NatGatewaysFromVPCs()
 		if _, ok := depMap[arn.EC2NatGatewayRType]; !ok {
-			depMap[arn.EC2NatGatewayRType] = &deleter.EC2NatGatewayDeleter{}
+			depMap[arn.EC2NatGatewayRType] = deleter.InitResourceDeleter(arn.EC2NatGatewayRType)
 		}
 		for _, ngw := range ngws {
 			depMap[arn.EC2NatGatewayRType].AddResourceNames(arn.ResourceName(*ngw.NatGatewayId))
@@ -93,7 +93,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		// Get EC2 network interfaces
 		enis, _ := vpcDel.RequestEC2NetworkInterfacesFromVPCs()
 		if _, ok := depMap[arn.EC2NetworkInterfaceRType]; !ok {
-			depMap[arn.EC2NetworkInterfaceRType] = &deleter.EC2NetworkInterfaceDeleter{}
+			depMap[arn.EC2NetworkInterfaceRType] = deleter.InitResourceDeleter(arn.EC2NetworkInterfaceRType)
 		}
 		for _, eni := range enis {
 			depMap[arn.EC2NetworkInterfaceRType].AddResourceNames(arn.ResourceName(*eni.NetworkInterfaceId))
@@ -102,7 +102,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		// Get Route Tables
 		rts, _ := vpcDel.RequestEC2RouteTablesFromVPCs()
 		if _, ok := depMap[arn.EC2RouteTableRType]; !ok {
-			depMap[arn.EC2RouteTableRType] = &deleter.EC2RouteTableDeleter{}
+			depMap[arn.EC2RouteTableRType] = deleter.InitResourceDeleter(arn.EC2RouteTableRType)
 		}
 		for _, rt := range rts {
 			depMap[arn.EC2RouteTableRType].AddResourceNames(arn.ResourceName(*rt.RouteTableId))
@@ -111,7 +111,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		// Get Security Groups
 		sgs, _ := vpcDel.RequestEC2SecurityGroupsFromVPCs()
 		if _, ok := depMap[arn.EC2SecurityGroupRType]; !ok {
-			depMap[arn.EC2SecurityGroupRType] = &deleter.EC2SecurityGroupDeleter{}
+			depMap[arn.EC2SecurityGroupRType] = deleter.InitResourceDeleter(arn.EC2SecurityGroupRType)
 		}
 		for _, sg := range sgs {
 			depMap[arn.EC2SecurityGroupRType].AddResourceNames(arn.ResourceName(*sg.GroupName))
@@ -120,15 +120,13 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		// Get Subnets
 		sns, _ := vpcDel.RequestEC2SubnetsFromVPCs()
 		if _, ok := depMap[arn.EC2SubnetRType]; !ok {
-			depMap[arn.EC2SubnetRType] = &deleter.EC2SubnetDeleter{}
+			depMap[arn.EC2SubnetRType] = deleter.InitResourceDeleter(arn.EC2SubnetRType)
 		}
 		for _, sn := range sns {
 			depMap[arn.EC2SubnetRType].AddResourceNames(arn.ResourceName(*sn.SubnetId))
 		}
 	case arn.EC2SubnetRType:
 		// Get Network ACL's
-	case arn.EC2SecurityGroupRType:
-		// EC2 Ingress/Egress rules will be deleted when deleting SecurityGroups
 	case arn.EC2InstanceRType:
 		// Get EBS Volumes
 	case arn.EC2NetworkInterfaceRType:
@@ -140,24 +138,21 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		}
 
 		// Get EIP Allocations
-		eipDel := &deleter.EC2ElasticIPAllocationDeleter{}
 		if _, ok := depMap[arn.EC2EIPRType]; !ok {
-			depMap[arn.EC2EIPRType] = eipDel
+			depMap[arn.EC2EIPRType] = deleter.InitResourceDeleter(arn.EC2EIPRType)
 		}
 		// Get EIP Associations
-		eipaDel := &deleter.EC2ElasticIPAssocationDeleter{}
 		if _, ok := depMap[arn.EC2EIPAssociationRType]; !ok {
-			depMap[arn.EC2EIPAssociationRType] = eipaDel
+			depMap[arn.EC2EIPAssociationRType] = deleter.InitResourceDeleter(arn.EC2EIPAssociationRType)
 		}
 		for _, adr := range adrs {
 			if adr.AllocationId != nil {
-				eipDel.AddResourceNames(arn.ResourceName(*adr.AllocationId))
+				depMap[arn.EC2EIPRType].AddResourceNames(arn.ResourceName(*adr.AllocationId))
 			}
 			if adr.AssociationId != nil {
-				eipaDel.AddResourceNames(arn.ResourceName(*adr.AssociationId))
+				depMap[arn.EC2EIPAssociationRType].AddResourceNames(arn.ResourceName(*adr.AssociationId))
 			}
 		}
-	case arn.ElasticLoadBalancingLoadBalancerRType:
 	case arn.EC2RouteTableRType:
 		// RouteTable Routes will be deleted when deleting a RouteTable
 		rtDel := depMap[rt].(*deleter.EC2RouteTableDeleter)
@@ -168,7 +163,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 
 		// Get Subnet-RouteTable Association
 		if _, ok := depMap[arn.EC2RouteTableAssociationRType]; !ok {
-			depMap[arn.EC2RouteTableAssociationRType] = &deleter.EC2RouteTableAssociationDeleter{}
+			depMap[arn.EC2RouteTableAssociationRType] = deleter.InitResourceDeleter(arn.EC2RouteTableAssociationRType)
 		}
 		for _, rt := range rts {
 			for _, rta := range rt.Associations {
@@ -178,7 +173,6 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			}
 		}
 	case arn.AutoScalingGroupRType:
-		// Get autoscaling groups
 		asgDel := depMap[rt].(*deleter.AutoScalingGroupDeleter)
 		asgs, err := asgDel.RequestAutoScalingGroups()
 		if err != nil || len(asgs) == 0 {
@@ -186,56 +180,49 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		}
 
 		// Get launch configurations
-		lcDel := &deleter.AutoScalingLaunchConfigurationDeleter{}
 		if _, ok := depMap[arn.AutoScalingLaunchConfigurationRType]; !ok {
-			depMap[arn.AutoScalingLaunchConfigurationRType] = lcDel
+			depMap[arn.AutoScalingLaunchConfigurationRType] = deleter.InitResourceDeleter(arn.AutoScalingLaunchConfigurationRType)
 		}
+		// Get ELB's
 		if _, ok := depMap[arn.ElasticLoadBalancingLoadBalancerRType]; !ok {
-			depMap[arn.ElasticLoadBalancingLoadBalancerRType] = &deleter.ElasticLoadBalancingLoadBalancerDeleter{}
+			depMap[arn.ElasticLoadBalancingLoadBalancerRType] = deleter.InitResourceDeleter(arn.ElasticLoadBalancingLoadBalancerRType)
 		}
 		for _, asg := range asgs {
-			lcDel.AddResourceNames(arn.ResourceName(*asg.LaunchConfigurationName))
+			depMap[arn.AutoScalingLaunchConfigurationRType].AddResourceNames(arn.ResourceName(*asg.LaunchConfigurationName))
 			for _, elbName := range asg.LoadBalancerNames {
 				depMap[arn.ElasticLoadBalancingLoadBalancerRType].AddResourceNames(arn.ResourceName(*elbName))
 			}
 		}
-		// Get ELB's
 	case arn.AutoScalingLaunchConfigurationRType:
-		// Get IAM instance profiles
 		lcDel := depMap[rt].(*deleter.AutoScalingLaunchConfigurationDeleter)
 		lcs, err := lcDel.RequestAutoScalingLaunchConfigurations()
 		if err != nil || len(lcs) == 0 {
 			break
 		}
 
-		iprDel := &deleter.IAMInstanceProfileDeleter{}
+		// Get IAM instance profiles
 		if _, ok := depMap[arn.IAMInstanceProfileRType]; !ok {
-			depMap[arn.IAMInstanceProfileRType] = iprDel
+			depMap[arn.IAMInstanceProfileRType] = deleter.InitResourceDeleter(arn.IAMInstanceProfileRType)
 		}
 		for _, lc := range lcs {
 			depMap[arn.IAMInstanceProfileRType].AddResourceNames(arn.ResourceName(*lc.IamInstanceProfile))
 		}
 
 		// Get IAM roles
+		iprDel := depMap[arn.IAMInstanceProfileRType].(*deleter.IAMInstanceProfileDeleter)
 		iprs, err := iprDel.RequestIAMInstanceProfilesFromLaunchConfigurations(lcs)
 		if err != nil || len(iprs) == 0 {
 			break
 		}
 
 		if _, ok := depMap[arn.IAMRoleRType]; !ok {
-			depMap[arn.IAMRoleRType] = &deleter.IAMRoleDeleter{}
+			depMap[arn.IAMRoleRType] = deleter.InitResourceDeleter(arn.IAMRoleRType)
 		}
 		for _, ipr := range iprs {
 			for _, rl := range ipr.Roles {
 				depMap[arn.IAMRoleRType].AddResourceNames(arn.ResourceName(*rl.RoleName))
 			}
 		}
-	case arn.IAMRoleRType:
-		// IAM RolePolicies will be deleted when deleting Roles
-	case arn.Route53HostedZoneRType:
-		// Route53 RecordSets will be deleted when deleting HostedZones
-	case arn.S3BucketRType:
-		// S3 Objects will be deleted when deleting a Bucket
 	}
 
 	return depMap

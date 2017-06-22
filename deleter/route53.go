@@ -80,7 +80,10 @@ func (rd *Route53HostedZoneDeleter) DeleteResources(cfg *DeleteConfig) error {
 // DeletePrivateRoute53HostedZones deletes only private hosted zones
 func (rd *Route53HostedZoneDeleter) DeletePrivateRoute53HostedZones(cfg *DeleteConfig) error {
 	hzs, err := rd.RequestRoute53HostedZones()
-	if err != nil || len(hzs) == 0 {
+	if err != nil && !cfg.IgnoreErrors {
+		return err
+	}
+	if len(hzs) == 0 {
 		return nil
 	}
 
@@ -185,8 +188,11 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 	}
 
 	rrsMap, rerr := rd.RequestRoute53ResourceRecordSets()
-	if rerr != nil || len(rrsMap) == 0 {
+	if rerr != nil && !cfg.IgnoreErrors {
 		return rerr
+	}
+	if len(rrsMap) == 0 {
+		return nil
 	}
 
 	fmtStr := "Deleted Route53 ResourceRecordSet"

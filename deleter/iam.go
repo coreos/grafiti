@@ -38,15 +38,16 @@ func (rd *IAMInstanceProfileDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	iprs, err := rd.RequestIAMInstanceProfiles()
-	if err != nil {
+	if err != nil && !cfg.IgnoreErrors {
 		return err
+	}
+	if len(iprs) == 0 {
+		return nil
 	}
 
 	// Delete roles from instance profiles
-	if len(iprs) != 0 {
-		if err := rd.deleteIAMRolesFromInstanceProfiles(cfg, iprs); err != nil {
-			return err
-		}
+	if err := rd.deleteIAMRolesFromInstanceProfiles(cfg, iprs); err != nil {
+		return err
 	}
 
 	fmtStr := "Deleted IAM InstanceProfile"

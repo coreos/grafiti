@@ -1,4 +1,2 @@
 [grafiti]
-endHour = 0
-startHour = -8
-az = "us-west-2"
+region = "us-west-2"

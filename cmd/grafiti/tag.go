@@ -179,7 +179,7 @@ func tag(reader io.Reader) error {
 		}
 
 		for tag, bucket := range ARNBuckets {
-			if len(bucket) == 20 || isEOF {
+			if len(bucket) == 20 || (isEOF && len(bucket) > 0) {
 				if err := tagARNBucket(svc, bucket.ToList(), tag); err != nil {
 					return err
 				}
@@ -187,7 +187,7 @@ func tag(reader io.Reader) error {
 			}
 		}
 
-		if len(otherResBuckets[tm.ResourceType]) == 20 || isEOF {
+		if len(otherResBuckets[tm.ResourceType]) == 20 || (isEOF && len(otherResBuckets[tm.ResourceType]) > 0) {
 			tagUnsupportedResourceType(tm.ResourceType, otherResBuckets[tm.ResourceType], t.Tags)
 			delete(otherResBuckets, tm.ResourceType)
 		}
@@ -213,14 +213,12 @@ func tagUnsupportedResourceType(rt arn.ResourceType, rns arn.ResourceNames, tags
 
 	switch arn.NamespaceForResource(rt) {
 	case arn.AutoScalingNamespace:
-		svc := autoscaling.New(sess)
 		for _, n := range rns {
-			tagAutoScalingResource(svc, rt, n, tags)
+			tagAutoScalingResource(autoscaling.New(sess), rt, n, tags)
 		}
 	case arn.Route53Namespace:
-		svc := route53.New(sess)
 		for _, n := range rns {
-			tagRoute53Resource(svc, rt, n, tags)
+			tagRoute53Resource(route53.New(sess), rt, n, tags)
 		}
 	}
 	return

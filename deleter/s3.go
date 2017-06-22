@@ -156,7 +156,7 @@ func (rd *S3BucketDeleter) DeleteResources(cfg *DeleteConfig) error {
 		for _, obj := range objs {
 			objDel.AddResourceNames(arn.ResourceName(*obj.Key))
 		}
-		if err := objDel.DeleteResources(cfg); err != nil && !cfg.IgnoreErrors {
+		if err := objDel.DeleteResources(cfg); err != nil {
 			return err
 		}
 
