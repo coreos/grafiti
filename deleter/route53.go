@@ -3,7 +3,6 @@ package deleter
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
@@ -67,9 +66,6 @@ func (rd *Route53HostedZoneDeleter) DeleteResources(cfg *DeleteConfig) error {
 		params = &route53.DeleteHostedZoneInput{
 			Id: n.AWSString(),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteHostedZoneWithContext(ctx, params)
@@ -243,9 +239,6 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 			ChangeBatch:  &route53.ChangeBatch{Changes: changes},
 			HostedZoneId: hz.AWSString(),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().ChangeResourceRecordSetsWithContext(ctx, params)

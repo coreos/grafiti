@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/coreos/grafiti/arn"
+	"github.com/coreos/grafiti/deleter/retryer"
 	"github.com/spf13/viper"
 )
 
@@ -20,7 +20,8 @@ const drStr = "(dry-run)"
 func setUpAWSSession() *session.Session {
 	return session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(viper.GetString("grafiti.region")),
+			Region:  aws.String(viper.GetString("grafiti.region")),
+			Retryer: retryer.DeleteRetryer{NumMaxRetries: 11},
 		},
 	))
 }
@@ -37,7 +38,6 @@ func CalcChunk(curr, size, chunk int) int {
 type DeleteConfig struct {
 	DryRun       bool
 	IgnoreErrors bool
-	BackoffTime  time.Duration
 	Logger       logrus.FieldLogger
 }
 
@@ -79,8 +79,7 @@ func (c *DeleteConfig) logDeleteError(rt arn.ResourceType, rn arn.ResourceName, 
 		"resource_name": rn.String(),
 	}
 
-	aerr, ok := err.(awserr.Error)
-	if ok {
+	if aerr, ok := err.(awserr.Error); ok {
 		fields["aws_err_code"] = aerr.Code()
 		fields["aws_err_msg"] = aerr.Message()
 		fmt.Printf("Failed to delete %s \"%s\": %s\n", rt, rn, aerr.Code())

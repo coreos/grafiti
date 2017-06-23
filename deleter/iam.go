@@ -2,7 +2,6 @@ package deleter
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
@@ -69,9 +68,6 @@ func (rd *IAMInstanceProfileDeleter) DeleteResources(cfg *DeleteConfig) error {
 			InstanceProfileName: ipr.InstanceProfileName,
 		}
 
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
-
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteInstanceProfileWithContext(ctx, params)
 		if err != nil {
@@ -105,9 +101,6 @@ func (rd *IAMInstanceProfileDeleter) deleteIAMRolesFromInstanceProfiles(cfg *Del
 				InstanceProfileName: ipr.InstanceProfileName,
 				RoleName:            rl.RoleName,
 			}
-
-			// Prevent throttling
-			time.Sleep(cfg.BackoffTime)
 
 			ctx := aws.BackgroundContext()
 			_, err := rd.GetClient().RemoveRoleFromInstanceProfileWithContext(ctx, params)
@@ -240,9 +233,6 @@ func (rd *IAMRoleDeleter) DeleteResources(cfg *DeleteConfig) error {
 			RoleName: rl.RoleName,
 		}
 
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
-
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteRoleWithContext(ctx, params)
 		if err != nil {
@@ -336,9 +326,6 @@ func (rd *IAMRolePolicyDeleter) DeleteResources(cfg *DeleteConfig) error {
 			RoleName:   rd.RoleName.AWSString(),
 			PolicyName: pn.AWSString(),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteRolePolicyWithContext(ctx, params)

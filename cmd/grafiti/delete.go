@@ -431,7 +431,6 @@ func deleteARNs(ARNs arn.ResourceARNs) error {
 	cfg := &deleter.DeleteConfig{
 		IgnoreErrors: ignoreErrors,
 		DryRun:       dryRun,
-		BackoffTime:  time.Duration(viper.GetInt("grafiti.backoffTime")) * time.Millisecond,
 		Logger:       deleter.InitRequestLogger(logFilePath),
 	}
 
