@@ -138,6 +138,11 @@ func initIgnoreTagMap(svc rgtaiface.ResourceGroupsTaggingAPIAPI, r io.Reader) (m
 		}
 
 		arns = getARNsForResource(svc, t.TagFilters, arns)
+
+		for rtk := range arn.RGTAUnsupportedResourceTypes {
+			// Request all RGTA-unsupported resources with the same tags
+			arns = getARNsForUnsupportedResource(rtk, t.TagFilters, arns)
+		}
 	}
 
 	for _, arn := range arns {

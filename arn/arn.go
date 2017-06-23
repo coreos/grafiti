@@ -625,6 +625,77 @@ func MapARNToRTypeAndRName(arnStr ResourceARN) (ResourceType, ResourceName) {
 			return AutoScalingLaunchConfigurationRType, arnToID("launchConfigurationName/", sfx)
 		}
 
+	case strings.HasPrefix(arn, "arn:aws:ec2:"):
+		erEC2, err := re.Compile("arn:aws:ec2:[^:]+:(?:[^:]+:)?(.+)")
+		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			break
+		}
+		m := erEC2.FindStringSubmatch(arn)
+		if len(m) == 2 {
+			sfx = m[1]
+		} else {
+			break
+		}
+		switch {
+		case strings.HasPrefix(sfx, "customer-gateway/"):
+			return EC2CustomerGatewayRType, arnToID("customer-gateway/", sfx)
+		case strings.HasPrefix(sfx, "instance/"):
+			return EC2InstanceRType, arnToID("instance/", sfx)
+		case strings.HasPrefix(sfx, "internet-gateway/"):
+			return EC2InternetGatewayRType, arnToID("internet-gateway/", sfx)
+		case strings.HasPrefix(sfx, "network-interface/"):
+			return EC2NetworkInterfaceRType, arnToID("network-interface/", sfx)
+		case strings.HasPrefix(sfx, "route-table/"):
+			return EC2RouteTableRType, arnToID("route-table/", sfx)
+		case strings.HasPrefix(sfx, "security-group/"):
+			return EC2SecurityGroupRType, arnToID("security-group/", sfx)
+		case strings.HasPrefix(sfx, "subnet/"):
+			return EC2SubnetRType, arnToID("subnet/", sfx)
+		case strings.HasPrefix(sfx, "vpc/"):
+			return EC2VPCRType, arnToID("vpc/", sfx)
+		}
+
+	case strings.HasPrefix(arn, "arn:aws:elasticloadbalancing"):
+		return ElasticLoadBalancingLoadBalancerRType, arnToID("loadbalancer/", arn)
+
+	case strings.HasPrefix(arn, "arn:aws:iam::"):
+		erIAM, err := re.Compile("arn:aws:iam::[^:]+:(.+)")
+		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			break
+		}
+		m := erIAM.FindStringSubmatch(arn)
+		if len(m) == 2 {
+			sfx = m[1]
+		} else {
+			break
+		}
+		switch {
+		case strings.HasPrefix(sfx, "instance-profile/"):
+			return IAMInstanceProfileRType, arnToID("instance-profile/", sfx)
+		case strings.HasPrefix(sfx, "policy/"):
+			return IAMPolicyRType, arnToID("policy/", sfx)
+		case strings.HasPrefix(sfx, "role/"):
+			return IAMRoleRType, arnToID("role/", sfx)
+		case strings.HasPrefix(sfx, "user/"):
+			return IAMUserRType, arnToID("user/", sfx)
+		}
+
+	case strings.HasPrefix(arn, "arn:aws:route53:::"):
+		m := strings.Split(arn, "arn:aws:route53:::")
+		if len(m) == 2 {
+			sfx = m[1]
+		} else {
+			break
+		}
+		switch {
+		case strings.HasPrefix(sfx, "hostedzone/"):
+			return Route53HostedZoneRType, arnToID("hostedzone/", sfx)
+		}
+
+	case strings.HasPrefix(arn, "arn:aws:s3:::"):
+		return S3BucketRType, arnToID(":::", arn)
 	}
 	return "", ""
 }

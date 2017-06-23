@@ -262,9 +262,10 @@ func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.R
 			return
 		}
 
-		if resp.Tags == nil {
-			break
+		if len(resp.Tags) == 0 {
+			return
 		}
+
 		for _, t := range resp.Tags {
 			asgNames = append(asgNames, arn.ResourceName(*t.ResourceId))
 		}
