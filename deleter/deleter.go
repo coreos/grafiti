@@ -1,6 +1,9 @@
 package deleter
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -84,6 +87,51 @@ func (c *DeleteConfig) logDeleteError(rt arn.ResourceType, rn arn.ResourceName, 
 	}
 
 	c.Logger.WithFields(fields).Info("Failed to delete resource")
+}
+
+// LogFormatFunc formats LogEntry structs into a string
+type LogFormatFunc func(*LogEntry) string
+
+// PrintLogFileReport prints LogEntry structs with format determined by lff
+func PrintLogFileReport(reader io.Reader, lff LogFormatFunc) {
+	dec := json.NewDecoder(reader)
+
+	for {
+		e, isEOF, err := decodeLogEntry(dec)
+		if err != nil {
+			fmt.Println("Error decoding log entry:", err.Error())
+			break
+		}
+		if isEOF {
+			break
+		}
+		if e == nil {
+			continue
+		}
+
+		fmt.Println(lff(e))
+	}
+
+	return
+}
+
+func decodeLogEntry(decoder *json.Decoder) (*LogEntry, bool, error) {
+	var decoded LogEntry
+	if err := decoder.Decode(&decoded); err != nil {
+		if err == io.EOF {
+			return &decoded, true, nil
+		}
+		return nil, false, err
+	}
+	return &decoded, false, nil
+}
+
+// Handle dry run printing
+const drCode = "DryRunOperation"
+
+func isDryRun(err error) bool {
+	aerr, ok := err.(awserr.Error)
+	return ok && aerr.Code() == drCode
 }
 
 // A ResourceDeleter is any type that can delete itself from AWS and describe

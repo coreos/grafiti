@@ -57,10 +57,6 @@ func (rd *S3ObjectDeleter) DeleteResources(cfg *DeleteConfig) error {
 		Delete: &s3.Delete{Objects: rd.ObjectIdentifiers},
 	}
 
-	if rd.Client == nil {
-		rd.Client = s3.New(setUpAWSSession())
-	}
-
 	ctx := aws.BackgroundContext()
 	resp, err := rd.GetClient().DeleteObjectsWithContext(ctx, params)
 	if err != nil {
@@ -89,10 +85,6 @@ func (rd *S3ObjectDeleter) RequestS3ObjectsByBucket() ([]*s3.Object, error) {
 		Bucket: rd.BucketName.AWSString(),
 	}
 	objs := make([]*s3.Object, 0)
-
-	if rd.Client == nil {
-		rd.Client = s3.New(setUpAWSSession())
-	}
 
 	for {
 		ctx := aws.BackgroundContext()
@@ -146,16 +138,6 @@ func (rd *S3BucketDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	fmtStr := "Deleted S3 Bucket"
-	if cfg.DryRun {
-		for _, n := range rd.ResourceNames {
-			fmt.Println(drStr, fmtStr, n)
-		}
-		return nil
-	}
-
-	if rd.Client == nil {
-		rd.Client = s3.New(setUpAWSSession())
-	}
 
 	var (
 		params *s3.DeleteBucketInput
@@ -174,6 +156,11 @@ func (rd *S3BucketDeleter) DeleteResources(cfg *DeleteConfig) error {
 		}
 		if err := objDel.DeleteResources(cfg); err != nil {
 			return err
+		}
+
+		if cfg.DryRun {
+			fmt.Println(drStr, fmtStr, n)
+			continue
 		}
 
 		params = &s3.DeleteBucketInput{
