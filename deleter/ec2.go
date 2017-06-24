@@ -415,6 +415,179 @@ func (rd *EC2NetworkInterfaceAttachmentDeleter) DeleteResources(cfg *DeleteConfi
 	return nil
 }
 
+// EC2NetworkACLEntryDeleter represents a collection of AWS EC2 network acl entries
+type EC2NetworkACLEntryDeleter struct {
+	Client            ec2iface.EC2API
+	ResourceType      arn.ResourceType
+	NetworkACLName    arn.ResourceName
+	NetworkACLEntries []*ec2.NetworkAclEntry
+}
+
+func (rd *EC2NetworkACLEntryDeleter) String() string {
+	aclEntries := []struct {
+		RuleNumber int64
+		Egress     bool
+	}{}
+	for _, entry := range rd.NetworkACLEntries {
+		aclEntries = append(aclEntries, struct {
+			RuleNumber int64
+			Egress     bool
+		}{*entry.RuleNumber, *entry.Egress})
+	}
+	return fmt.Sprintf(`{"Type": "%s", "NetworkACLName": %v, "NetworkACLEntries": %v}`, rd.ResourceType, rd.NetworkACLName, aclEntries)
+}
+
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2NetworkACLEntryDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
+// DeleteResources deletes EC2 network acl entries from AWS
+func (rd *EC2NetworkACLEntryDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if rd.NetworkACLName == "" || len(rd.NetworkACLEntries) == 0 {
+		return nil
+	}
+
+	fmtStr := "Deleted EC2 NetworkAcl Association"
+
+	var params *ec2.DeleteNetworkAclEntryInput
+	for _, entry := range rd.NetworkACLEntries {
+		params = &ec2.DeleteNetworkAclEntryInput{
+			NetworkAclId: rd.NetworkACLName.AWSString(),
+			RuleNumber:   entry.RuleNumber,
+			Egress:       entry.Egress,
+			DryRun:       aws.Bool(cfg.DryRun),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.GetClient().DeleteNetworkAclEntryWithContext(ctx, params)
+		if err != nil {
+			if isDryRun(err) {
+				fmt.Printf("%s %s %s Entry %d\n", drStr, fmtStr, rd.NetworkACLName, *entry.RuleNumber)
+				continue
+			}
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Printf("%s %s Entry %d\n", fmtStr, rd.NetworkACLName, *entry.RuleNumber)
+	}
+
+	return nil
+}
+
+// EC2NetworkACLDeleter represents a collection of AWS EC2 network acl's
+type EC2NetworkACLDeleter struct {
+	Client        ec2iface.EC2API
+	ResourceType  arn.ResourceType
+	ResourceNames arn.ResourceNames
+}
+
+func (rd *EC2NetworkACLDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "ResourceNames": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2NetworkACLDeleter) GetClient() ec2iface.EC2API {
+	if rd.Client == nil {
+		rd.Client = ec2.New(setUpAWSSession())
+	}
+	return rd.Client
+}
+
+// AddResourceNames adds EC2 network acl names to ResourceNames
+func (rd *EC2NetworkACLDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.ResourceNames = append(rd.ResourceNames, ns...)
+}
+
+// DeleteResources deletes EC2 network acl's from AWS
+func (rd *EC2NetworkACLDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.ResourceNames) == 0 {
+		return nil
+	}
+
+	acls, rerr := rd.RequestEC2NetworkACLs()
+	if rerr != nil && !cfg.IgnoreErrors {
+		return rerr
+	}
+
+	fmtStr := "Deleted EC2 NetworkAcl"
+
+	var (
+		params       *ec2.DeleteNetworkAclInput
+		naclEntryDel *EC2NetworkACLEntryDeleter
+	)
+	for _, acl := range acls {
+		// First delete network acl entries
+		naclEntryDel = &EC2NetworkACLEntryDeleter{NetworkACLName: arn.ResourceName(*acl.NetworkAclId)}
+		if err := naclEntryDel.DeleteResources(cfg); err != nil {
+			return err
+		}
+
+		params = &ec2.DeleteNetworkAclInput{
+			NetworkAclId: acl.NetworkAclId,
+			DryRun:       aws.Bool(cfg.DryRun),
+		}
+
+		// Prevent throttling
+		time.Sleep(cfg.BackoffTime)
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.GetClient().DeleteNetworkAclWithContext(ctx, params)
+		if err != nil {
+			if isDryRun(err) {
+				fmt.Println(drStr, fmtStr, *acl.NetworkAclId)
+				continue
+			}
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Println(fmtStr, *acl.NetworkAclId)
+	}
+
+	return nil
+}
+
+// RequestEC2NetworkACLs retrieves network acl's by network acl ID
+func (rd *EC2NetworkACLDeleter) RequestEC2NetworkACLs() ([]*ec2.NetworkAcl, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	params := &ec2.DescribeNetworkAclsInput{
+		NetworkAclIds: rd.ResourceNames.AWSStringSlice(),
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := rd.GetClient().DescribeNetworkAclsWithContext(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return filterDefaultNetworkACLs(resp.NetworkAcls), nil
+}
+
+func filterDefaultNetworkACLs(acls []*ec2.NetworkAcl) []*ec2.NetworkAcl {
+	filteredACLs := make([]*ec2.NetworkAcl, 0)
+	for _, acl := range filteredACLs {
+		if acl.IsDefault != nil && !*acl.IsDefault {
+			filteredACLs = append(filteredACLs, acl)
+		}
+	}
+	return filteredACLs
+}
+
 // EC2InstanceDeleter represents a collection of AWS EC2 instances
 type EC2InstanceDeleter struct {
 	Client        ec2iface.EC2API
