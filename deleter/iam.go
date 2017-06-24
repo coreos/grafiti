@@ -154,6 +154,7 @@ func (rd *IAMInstanceProfileDeleter) RequestIAMInstanceProfiles() ([]*iam.Instan
 		ctx := aws.BackgroundContext()
 		resp, err := rd.GetClient().ListInstanceProfilesWithContext(ctx, params)
 		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
 			return nil, err
 		}
 
@@ -276,6 +277,7 @@ func (rd *IAMRoleDeleter) RequestIAMRoles() ([]*iam.Role, error) {
 		ctx := aws.BackgroundContext()
 		resp, err := rd.GetClient().ListRolesWithContext(ctx, params)
 		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
 			return nil, err
 		}
 
@@ -376,9 +378,10 @@ func (rd *IAMRolePolicyDeleter) RequestIAMRolePoliciesFromRoles() (arn.ResourceN
 	pls := make(arn.ResourceNames, 0)
 	for {
 		ctx := aws.BackgroundContext()
-		resp, lerr := rd.GetClient().ListRolePoliciesWithContext(ctx, params)
-		if lerr != nil {
-			return nil, lerr
+		resp, err := rd.GetClient().ListRolePoliciesWithContext(ctx, params)
+		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
+			return nil, err
 		}
 
 		for _, rp := range resp.PolicyNames {

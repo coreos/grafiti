@@ -42,6 +42,7 @@ var (
 	deleteFile string
 	silent     bool
 	delAllDeps bool
+	wantReport bool
 )
 
 // DeleteOrder contains the REVERSE order of deletion for all resource types
@@ -80,6 +81,7 @@ func init() {
 	deleteCmd.PersistentFlags().StringVarP(&deleteFile, "delete-file", "f", "", "File of tags of resources to delete.")
 	deleteCmd.PersistentFlags().BoolVarP(&silent, "silent", "s", false, "Suppress JSON output.")
 	deleteCmd.PersistentFlags().BoolVar(&delAllDeps, "all-deps", false, "Delete all dependencies of all tagged resourcs.")
+	deleteCmd.PersistentFlags().BoolVar(&wantReport, "report", false, "Pretty-print a report of errors encountered while deleting resources.")
 }
 
 var deleteCmd = &cobra.Command{
@@ -441,7 +443,7 @@ func deleteARNs(ARNs arn.ResourceARNs) error {
 	}
 
 	// Print all failed deletion logs in report format at end of deletion cycle
-	if !dryRun {
+	if wantReport {
 		f, ferr := os.Open(logFilePath)
 		if ferr != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", ferr.Error())

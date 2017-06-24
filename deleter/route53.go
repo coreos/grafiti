@@ -149,6 +149,7 @@ func (rd *Route53HostedZoneDeleter) RequestAllRoute53HostedZones() ([]*route53.H
 		ctx := aws.BackgroundContext()
 		resp, err := rd.GetClient().ListHostedZonesWithContext(ctx, params)
 		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
 			return nil, err
 		}
 
@@ -276,6 +277,7 @@ func (rd *Route53ResourceRecordSetDeleter) RequestRoute53ResourceRecordSets() (m
 			ctx := aws.BackgroundContext()
 			resp, err := rd.GetClient().ListResourceRecordSetsWithContext(ctx, params)
 			if err != nil {
+				fmt.Printf("{\"error\": \"%s\"}\n", err)
 				return nil, err
 			}
 

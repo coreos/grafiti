@@ -92,6 +92,7 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) RequestElasticLoadBalancers()
 	ctx := aws.BackgroundContext()
 	resp, err := rd.GetClient().DescribeLoadBalancersWithContext(ctx, params)
 	if err != nil {
+		fmt.Printf("{\"error\": \"%s\"}\n", err)
 		return nil, err
 	}
 

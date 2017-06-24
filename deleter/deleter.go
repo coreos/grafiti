@@ -75,6 +75,7 @@ func (c *DeleteConfig) logDeleteError(rt arn.ResourceType, rn arn.ResourceName, 
 	if ok {
 		fields["aws_err_code"] = aerr.Code()
 		fields["aws_err_msg"] = aerr.Message()
+		fmt.Printf("Failed to delete %s \"%s\": %s\n", rt, rn, aerr.Code())
 	} else {
 		fields["err_msg"] = err.Error()
 	}
@@ -195,5 +196,6 @@ func InitResourceDeleter(t arn.ResourceType) ResourceDeleter {
 		return &S3BucketDeleter{ResourceType: t}
 	}
 
+	fmt.Printf("Resource type %s does not implement a ResourceDeleter\n", t)
 	return nil
 }

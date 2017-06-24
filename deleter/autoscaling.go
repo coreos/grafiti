@@ -92,6 +92,7 @@ func (rd *AutoScalingGroupDeleter) RequestAutoScalingGroups() ([]*autoscaling.Gr
 		ctx := aws.BackgroundContext()
 		resp, err := rd.GetClient().DescribeAutoScalingGroupsWithContext(ctx, params)
 		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
 			return nil, err
 		}
 
@@ -187,6 +188,7 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestAutoScalingLaunchConfigu
 		ctx := aws.BackgroundContext()
 		resp, err := rd.GetClient().DescribeLaunchConfigurationsWithContext(ctx, params)
 		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
 			return nil, err
 		}
 
@@ -248,6 +250,7 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestIAMInstanceProfilesFromL
 		ctx := aws.BackgroundContext()
 		resp, err := svc.ListInstanceProfilesWithContext(ctx, params)
 		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
 			return nil, err
 		}
 
