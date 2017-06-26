@@ -12,10 +12,22 @@ import (
 	"github.com/coreos/grafiti/arn"
 )
 
-const deletingState = "deleting"
-const deletedState = "deleted"
-const localInternetGatewayID = "local"
-const defaultSecurityGroupName = "default"
+const (
+	deletingState            = "deleting"
+	deletedState             = "deleted"
+	detachingState           = "detaching"
+	detachedState            = "detached"
+	localInternetGatewayID   = "local"
+	defaultSecurityGroupName = "default"
+)
+
+func isDeleting(state string) bool {
+	return state == deletingState || state == deletedState
+}
+
+func isDetaching(state string) bool {
+	return state == detachingState || state == detachedState
+}
 
 // Filter keys
 const (
@@ -30,6 +42,8 @@ const (
 	subnetFilterKey        = "subnet-id"
 	vpcFilterKey           = "vpc-id"
 	vpcAttachmentFilterKey = "attachment.vpc-id"
+	vconnFilterKey         = "vpn-connection-id"
+	vgwFilterKey           = "vpn-gateway-id"
 )
 
 // EC2Client aliases an EC2API so requestEC2* functions can be shared between
@@ -139,7 +153,7 @@ func (c *EC2Client) requestEC2CustomerGateways(filterKey string, chunk arn.Resou
 	}
 
 	for _, cgw := range resp.CustomerGateways {
-		if cgw.State != nil && *cgw.State != deletingState && *cgw.State != deletedState {
+		if !isDeleting(aws.StringValue(cgw.State)) {
 			cgws = append(cgws, cgw)
 		}
 	}
@@ -667,12 +681,16 @@ func (c *EC2Client) requestEC2NetworkACLs(filterKey string, chunk arn.ResourceNa
 	}
 
 	for _, acl := range resp.NetworkAcls {
-		if acl.IsDefault != nil && !*acl.IsDefault {
+		if !isDefaultNACL(acl) {
 			acls = append(acls, acl)
 		}
 	}
 
 	return acls, nil
+}
+
+func isDefaultNACL(acl *ec2.NetworkAcl) bool {
+	return aws.BoolValue(acl.IsDefault)
 }
 
 // EC2InstanceDeleter represents a collection of AWS EC2 instances
@@ -1180,7 +1198,7 @@ func (c *EC2Client) requestEC2NatGateways(filterKey string, chunk arn.ResourceNa
 		}
 
 		for _, ngw := range resp.NatGateways {
-			if ngw.State != nil && *ngw.State != deletingState && *ngw.State != deletedState {
+			if !isDeleting(aws.StringValue(ngw.State)) {
 				ngws = append(ngws, ngw)
 			}
 		}
@@ -1228,7 +1246,7 @@ func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	var params *ec2.DeleteRouteInput
 	for _, r := range rd.RouteTable.Routes {
-		if r.GatewayId != nil && *r.GatewayId == localInternetGatewayID {
+		if isLocalGateway(r.GatewayId) {
 			continue
 		}
 
@@ -1259,6 +1277,10 @@ func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	return nil
+}
+
+func isLocalGateway(gwID *string) bool {
+	return aws.StringValue(gwID) == localInternetGatewayID
 }
 
 // EC2RouteTableAssociationDeleter represents a collection of AWS EC2 route table associations
@@ -1706,9 +1728,10 @@ func (c *EC2Client) requestEC2SecurityGroups(filterKey string, chunk arn.Resourc
 	return sgs, nil
 }
 
-// Default security groups cannot be deleted, so remove them from response elements
+// Default security groups cannot be deleted, so remove them from response
+// elements
 func isDefaultSecurityGroup(sg *ec2.SecurityGroup) bool {
-	return sg.GroupName != nil && *sg.GroupName == defaultSecurityGroupName
+	return aws.StringValue(sg.GroupName) == defaultSecurityGroupName
 }
 
 // EC2SubnetDeleter represents a collection of AWS EC2 subnets
@@ -1823,7 +1846,7 @@ func (c *EC2Client) requestEC2Subnets(filterKey string, chunk arn.ResourceNames,
 }
 
 func isDefaultSubnet(sn *ec2.Subnet) bool {
-	return sn.DefaultForAz != nil && *sn.DefaultForAz
+	return aws.BoolValue(sn.DefaultForAz)
 }
 
 // EC2VPCCIDRBlockAssociationDeleter represents a collection of AWS EC2 VPC CIDR block associations
@@ -2007,7 +2030,7 @@ func (c *EC2Client) requestEC2VPCs(filterKey string, chunk arn.ResourceNames, vp
 }
 
 func isDefaultVPC(vpc *ec2.Vpc) bool {
-	return vpc.IsDefault != nil && *vpc.IsDefault
+	return aws.BoolValue(vpc.IsDefault)
 }
 
 // RequestEC2InstancesFromVPCs requests EC2 instance reservations from vpc names from the AWS API
@@ -2156,4 +2179,428 @@ func (rd *EC2VPCDeleter) RequestEC2SubnetsFromVPCs() ([]*ec2.Subnet, error) {
 	}
 
 	return subnets, nil
+}
+
+// RequestEC2VPNGatewaysFromVPCs requests EC2 vpn gateways by vpc names from the AWS API
+func (rd *EC2VPCDeleter) RequestEC2VPNGatewaysFromVPCs() ([]*ec2.VpnGateway, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	size, chunk := len(rd.ResourceNames), 200
+	vgws := make([]*ec2.VpnGateway, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		vgws, err = rd.GetClient().requestEC2VPNGateways(vpcAttachmentFilterKey, rd.ResourceNames[i:stop], vgws)
+		if err != nil {
+			return vgws, err
+		}
+	}
+
+	return vgws, nil
+}
+
+// EC2VPNConnectionRouteDeleter represents a collection of AWS EC2 vpn
+// connection routes
+type EC2VPNConnectionRouteDeleter struct {
+	Client        EC2Client
+	ResourceType  arn.ResourceType
+	VPNConnection *ec2.VpnConnection
+}
+
+func (rd *EC2VPNConnectionRouteDeleter) String() string {
+	routes := make([]string, 0)
+	for _, route := range rd.VPNConnection.Routes {
+		routes = append(routes, fmt.Sprintf(`{"VpnConnectionId": "%s", "DestinationCidrBlock": "%s"}`, *rd.VPNConnection.VpnConnectionId, *route.DestinationCidrBlock))
+	}
+	return fmt.Sprintf(`{"Type": "%s", "VPNRoutes": %v}`, rd.ResourceType, routes)
+}
+
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2VPNConnectionRouteDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
+	}
+	return &rd.Client
+}
+
+// DeleteResources deletes EC2 vpn connection routes from AWS
+func (rd *EC2VPNConnectionRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if rd.VPNConnection == nil {
+		return nil
+	}
+
+	fmtStr := "Deleted EC2 VPN Connection Route"
+
+	var params *ec2.DeleteVpnConnectionRouteInput
+	for _, route := range rd.VPNConnection.Routes {
+		if isDeleting(aws.StringValue(route.State)) {
+			continue
+		}
+
+		params = &ec2.DeleteVpnConnectionRouteInput{
+			DestinationCidrBlock: route.DestinationCidrBlock,
+			VpnConnectionId:      rd.VPNConnection.VpnConnectionId,
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.GetClient().DeleteVpnConnectionRouteWithContext(ctx, params)
+		if err != nil {
+			if isDryRun(err) {
+				fmt.Printf("%s %s %s from %s\n", drStr, fmtStr, *route.DestinationCidrBlock, *rd.VPNConnection.VpnConnectionId)
+				continue
+			}
+			cfg.logDeleteError(arn.EC2VPNConnectionRouteRType, arn.ResourceName(*route.DestinationCidrBlock), err, logrus.Fields{
+				"parent_resource_type": arn.EC2VPNConnectionRType,
+				"parent_resource_name": *rd.VPNConnection.VpnConnectionId,
+			})
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Printf("%s %s from %s\n", fmtStr, *route.DestinationCidrBlock, *rd.VPNConnection.VpnConnectionId)
+	}
+
+	return nil
+}
+
+// EC2VPNConnectionDeleter represents a collection of AWS EC2 vpn connections
+type EC2VPNConnectionDeleter struct {
+	Client        EC2Client
+	ResourceType  arn.ResourceType
+	ResourceNames arn.ResourceNames
+}
+
+func (rd *EC2VPNConnectionDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2VPNConnectionDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
+	}
+	return &rd.Client
+}
+
+// AddResourceNames adds EC2 vpn connection names to ResourceNames
+func (rd *EC2VPNConnectionDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.ResourceNames = append(rd.ResourceNames, ns...)
+}
+
+// DeleteResources deletes EC2 vpn connections from AWS
+func (rd *EC2VPNConnectionDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.ResourceNames) == 0 {
+		return nil
+	}
+
+	vcs, rerr := rd.RequestEC2VPNConnections()
+	if rerr != nil && !cfg.IgnoreErrors {
+		return rerr
+	}
+
+	fmtStr := "Deleted EC2 VPN Connection"
+
+	var (
+		params *ec2.DeleteVpnConnectionInput
+		vcrDel *EC2VPNConnectionRouteDeleter
+	)
+	for _, vc := range vcs {
+		if isDeleting(aws.StringValue(vc.State)) {
+			continue
+		}
+
+		vcrDel = &EC2VPNConnectionRouteDeleter{VPNConnection: vc}
+		if err := vcrDel.DeleteResources(cfg); err != nil {
+			return err
+		}
+
+		params = &ec2.DeleteVpnConnectionInput{
+			VpnConnectionId: vc.VpnConnectionId,
+			DryRun:          aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.GetClient().DeleteVpnConnectionWithContext(ctx, params)
+		if err != nil {
+			if isDryRun(err) {
+				fmt.Println(drStr, fmtStr, *vc.VpnConnectionId)
+				continue
+			}
+			cfg.logDeleteError(arn.EC2VPNConnectionRType, arn.ResourceName(*vc.VpnConnectionId), err)
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Println(fmtStr, *vc.VpnConnectionId)
+	}
+
+	return nil
+}
+
+// RequestEC2VPNConnections requests EC2 vpn connections by names from the AWS API
+func (rd *EC2VPNConnectionDeleter) RequestEC2VPNConnections() ([]*ec2.VpnConnection, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	size, chunk := len(rd.ResourceNames), 200
+	vconns := make([]*ec2.VpnConnection, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		vconns, err = rd.GetClient().requestEC2VPNConnections(vconnFilterKey, rd.ResourceNames[i:stop], vconns)
+		if err != nil {
+			return vconns, err
+		}
+	}
+
+	return vconns, nil
+}
+
+// Requesting vpn connections using filters prevents API errors caused by
+// requesting non-existent vpn connections and requesting too many vpn
+// connections in one request
+func (c *EC2Client) requestEC2VPNConnections(filterKey string, chunk arn.ResourceNames, vconns []*ec2.VpnConnection) ([]*ec2.VpnConnection, error) {
+	params := &ec2.DescribeVpnConnectionsInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := c.DescribeVpnConnectionsWithContext(ctx, params)
+	if err != nil {
+		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		return vconns, err
+	}
+
+	for _, vconn := range resp.VpnConnections {
+		if !isDeleting(aws.StringValue(vconn.State)) {
+			vconns = append(vconns, vconn)
+		}
+	}
+
+	return vconns, nil
+}
+
+// EC2VPNGatewayAttachmentDeleter represents a collection of AWS EC2 vpn gateway
+// attachments
+type EC2VPNGatewayAttachmentDeleter struct {
+	Client       EC2Client
+	ResourceType arn.ResourceType
+	VPNGateway   *ec2.VpnGateway
+}
+
+func (rd *EC2VPNGatewayAttachmentDeleter) String() string {
+	attachments := make([]string, 0)
+	for _, attachment := range rd.VPNGateway.VpcAttachments {
+		attachments = append(attachments, fmt.Sprintf(`{"VpnGatewayId": "%s", "VpcId": "%s"}`, *rd.VPNGateway.VpnGatewayId, *attachment.VpcId))
+	}
+	return fmt.Sprintf(`{"Type": "%s", "VPNAttachments": %v}`, rd.ResourceType, attachments)
+}
+
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2VPNGatewayAttachmentDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
+	}
+	return &rd.Client
+}
+
+// DeleteResources deletes EC2 vpn gateway attachments from AWS
+func (rd *EC2VPNGatewayAttachmentDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if rd.VPNGateway == nil {
+		return nil
+	}
+
+	fmtStr := "Detached EC2 VPN Gateway"
+
+	var params *ec2.DetachVpnGatewayInput
+	for _, attachment := range rd.VPNGateway.VpcAttachments {
+		// Skip attachments that are in the process of detaching
+		if isDetaching(aws.StringValue(attachment.State)) {
+			continue
+		}
+
+		params = &ec2.DetachVpnGatewayInput{
+			VpcId:        attachment.VpcId,
+			VpnGatewayId: rd.VPNGateway.VpnGatewayId,
+			DryRun:       aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.GetClient().DetachVpnGatewayWithContext(ctx, params)
+		if err != nil {
+			if isDryRun(err) {
+				fmt.Printf("%s %s %s from %s\n", drStr, fmtStr, *rd.VPNGateway.VpnGatewayId, *attachment.VpcId)
+				continue
+			}
+			cfg.logDeleteError(arn.EC2VPNGatewayAttachmentRType, arn.ResourceName(*attachment.VpcId), err, logrus.Fields{
+				"parent_resource_type": arn.EC2VPNGatewayRType,
+				"parent_resource_name": *rd.VPNGateway.VpnGatewayId,
+			})
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Printf("%s %s from %s\n", fmtStr, *rd.VPNGateway.VpnGatewayId, *attachment.VpcId)
+	}
+
+	return nil
+}
+
+// EC2VPNGatewayDeleter represents a collection of AWS EC2 vpn gateways
+type EC2VPNGatewayDeleter struct {
+	Client        EC2Client
+	ResourceType  arn.ResourceType
+	ResourceNames arn.ResourceNames
+}
+
+func (rd *EC2VPNGatewayDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2VPNGatewayDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
+	}
+	return &rd.Client
+}
+
+// AddResourceNames adds EC2 vpn gateway names to ResourceNames
+func (rd *EC2VPNGatewayDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.ResourceNames = append(rd.ResourceNames, ns...)
+}
+
+// DeleteResources deletes EC2 vpn gateways from AWS
+func (rd *EC2VPNGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.ResourceNames) == 0 {
+		return nil
+	}
+
+	vgws, rerr := rd.RequestEC2VPNGateways()
+	if rerr != nil && !cfg.IgnoreErrors {
+		return rerr
+	}
+
+	// Now delete VPN gateway itself
+	fmtStr := "Deleted EC2 VPN Gateway"
+
+	var (
+		params  *ec2.DeleteVpnGatewayInput
+		vpnaDel *EC2VPNGatewayAttachmentDeleter
+	)
+	for _, vgw := range vgws {
+		if isDeleting(aws.StringValue(vgw.State)) {
+			continue
+		}
+
+		vpnaDel = &EC2VPNGatewayAttachmentDeleter{VPNGateway: vgw}
+		if err := vpnaDel.DeleteResources(cfg); err != nil {
+			return err
+		}
+
+		params = &ec2.DeleteVpnGatewayInput{
+			VpnGatewayId: vgw.VpnGatewayId,
+			DryRun:       aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.GetClient().DeleteVpnGatewayWithContext(ctx, params)
+		if err != nil {
+			if isDryRun(err) {
+				fmt.Println(drStr, fmtStr, *vgw.VpnGatewayId)
+				continue
+			}
+			cfg.logDeleteError(arn.EC2VPNGatewayRType, arn.ResourceName(*vgw.VpnGatewayId), err)
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Println(fmtStr, *vgw.VpnGatewayId)
+	}
+
+	return nil
+}
+
+// RequestEC2VPNGateways requests EC2 vpn gateways by names from the AWS API
+func (rd *EC2VPNGatewayDeleter) RequestEC2VPNGateways() ([]*ec2.VpnGateway, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	size, chunk := len(rd.ResourceNames), 200
+	vgws := make([]*ec2.VpnGateway, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		vgws, err = rd.GetClient().requestEC2VPNGateways(vgwFilterKey, rd.ResourceNames[i:stop], vgws)
+		if err != nil {
+			return vgws, err
+		}
+	}
+
+	return vgws, nil
+}
+
+// Requesting vpn gateways using filters prevents API errors caused by
+// requesting non-existent vpn gateways and requesting too many vpn gateways
+// in one request
+func (c *EC2Client) requestEC2VPNGateways(filterKey string, chunk arn.ResourceNames, vgws []*ec2.VpnGateway) ([]*ec2.VpnGateway, error) {
+	params := &ec2.DescribeVpnGatewaysInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := c.DescribeVpnGatewaysWithContext(ctx, params)
+	if err != nil {
+		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		return vgws, err
+	}
+
+	for _, vgw := range resp.VpnGateways {
+		if !isDeleting(aws.StringValue(vgw.State)) {
+			vgws = append(vgws, vgw)
+		}
+	}
+
+	return vgws, nil
+}
+
+// RequestEC2VPNConnectionsFromVPNGateways requests EC2 vpn connections by vpn
+// gateway names from the AWS API
+func (rd *EC2VPNGatewayDeleter) RequestEC2VPNConnectionsFromVPNGateways() ([]*ec2.VpnConnection, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	size, chunk := len(rd.ResourceNames), 200
+	vconns := make([]*ec2.VpnConnection, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		vconns, err = rd.GetClient().requestEC2VPNConnections(vgwFilterKey, rd.ResourceNames[i:stop], vconns)
+		if err != nil {
+			return vconns, err
+		}
+	}
+
+	return vconns, nil
 }

@@ -186,8 +186,12 @@ const (
 	EC2VPCPeeringConnectionRType = "AWS::EC2::VPCPeeringConnection"
 	// EC2VPNConnectionRType is an AWS ResourceType enum value
 	EC2VPNConnectionRType = "AWS::EC2::VPNConnection"
+	// EC2VPNConnectionRouteRType is an AWS ResourceType enum value
+	EC2VPNConnectionRouteRType = "AWS::EC2::VPNConnectionRoute"
 	// EC2VPNGatewayRType is an AWS ResourceType enum value
 	EC2VPNGatewayRType = "AWS::EC2::VPNGateway"
+	// EC2VPNGatewayAttachmentRType is an AWS ResourceType enum value
+	EC2VPNGatewayAttachmentRType = "AWS::EC2::VPNGatewayAttachment"
 	// ElasticLoadBalancingLoadBalancerRType is an AWS ResourceType enum value
 	ElasticLoadBalancingLoadBalancerRType = "AWS::ElasticLoadBalancing::LoadBalancer"
 	// IAMAccessKeyRType is an AWS ResourceType enum value
@@ -644,6 +648,8 @@ func MapARNToRTypeAndRName(arnStr ResourceARN) (ResourceType, ResourceName) {
 			return EC2InstanceRType, arnToID("instance/", sfx)
 		case strings.HasPrefix(sfx, "internet-gateway/"):
 			return EC2InternetGatewayRType, arnToID("internet-gateway/", sfx)
+		case strings.HasPrefix(sfx, "network-acl/"):
+			return EC2NetworkACLRType, arnToID("network-acl/", sfx)
 		case strings.HasPrefix(sfx, "network-interface/"):
 			return EC2NetworkInterfaceRType, arnToID("network-interface/", sfx)
 		case strings.HasPrefix(sfx, "route-table/"):
@@ -654,6 +660,10 @@ func MapARNToRTypeAndRName(arnStr ResourceARN) (ResourceType, ResourceName) {
 			return EC2SubnetRType, arnToID("subnet/", sfx)
 		case strings.HasPrefix(sfx, "vpc/"):
 			return EC2VPCRType, arnToID("vpc/", sfx)
+		case strings.HasPrefix(sfx, "vpn-connection/"):
+			return EC2VPNConnectionRType, arnToID("vpn-connection/", sfx)
+		case strings.HasPrefix(sfx, "vpn-gateway/"):
+			return EC2VPNGatewayRType, arnToID("vpn-gateway/", sfx)
 		}
 
 	case strings.HasPrefix(arn, "arn:aws:elasticloadbalancing"):

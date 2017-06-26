@@ -16,6 +16,7 @@ var r0 = arn.ResourceTypes{
 }
 
 var r1 = arn.ResourceTypes{
+	arn.EC2VPNGatewayRType,
 	arn.EC2NatGatewayRType,
 	arn.EC2InternetGatewayRType,
 	arn.EC2InstanceRType,
@@ -143,6 +144,31 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		for _, sn := range sns {
 			fmt.Println("EC2SubnetRType:", *sn.SubnetId)
 			depMap[arn.EC2SubnetRType].AddResourceNames(arn.ResourceName(*sn.SubnetId))
+		}
+
+		// Get VPN Gateways
+		vgws, _ := vpcDel.RequestEC2VPNGatewaysFromVPCs()
+		if _, ok := depMap[arn.EC2VPNGatewayRType]; !ok {
+			depMap[arn.EC2VPNGatewayRType] = deleter.InitResourceDeleter(arn.EC2VPNGatewayRType)
+		}
+		for _, vgw := range vgws {
+			fmt.Println("EC2VPNGatewayRType:", *vgw.VpnGatewayId)
+			depMap[arn.EC2VPNGatewayRType].AddResourceNames(arn.ResourceName(*vgw.VpnGatewayId))
+		}
+	case arn.EC2VPNGatewayRType:
+		vgwDel := depMap[rt].(*deleter.EC2VPNGatewayDeleter)
+		// Get EC2 vpn connections
+		vcs, err := vgwDel.RequestEC2VPNConnectionsFromVPNGateways()
+		if err != nil || len(vcs) == 0 {
+			break
+		}
+
+		if _, ok := depMap[arn.EC2VPNConnectionRType]; !ok {
+			depMap[arn.EC2VPNConnectionRType] = deleter.InitResourceDeleter(arn.EC2VPNConnectionRType)
+		}
+		for _, vc := range vcs {
+			fmt.Println("EC2VPNConnectionRType:", *vc.VpnConnectionId)
+			depMap[arn.EC2VPNConnectionRType].AddResourceNames(arn.ResourceName(*vc.VpnConnectionId))
 		}
 	case arn.EC2SubnetRType:
 		// Get Network ACL's
