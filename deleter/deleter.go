@@ -25,6 +25,14 @@ func setUpAWSSession() *session.Session {
 	))
 }
 
+// CalcChunk calculates the ending index of a slice
+func CalcChunk(curr, size, chunk int) int {
+	if curr+chunk > size {
+		return size
+	}
+	return curr + chunk
+}
+
 // DeleteConfig holds configuration info for resource deletion
 type DeleteConfig struct {
 	DryRun       bool

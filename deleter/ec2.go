@@ -13,9 +13,35 @@ import (
 	"github.com/coreos/grafiti/arn"
 )
 
+const deletingState = "deleting"
+const deletedState = "deleted"
+const localInternetGatewayID = "local"
+const defaultSecurityGroupName = "default"
+
+// Filter keys
+const (
+	cgwFilterKey           = "customer-gateway-id"
+	eniFilterKey           = "network-interface-id"
+	instanceFilterKey      = "instance-id"
+	igwFilterKey           = "internet-gateway-id"
+	ngwFilterKey           = "nat-gateway-id"
+	naclFilterKey          = "network-acl-id"
+	rtbFilterKey           = "route-table-id"
+	sgFilterKey            = "group-id"
+	subnetFilterKey        = "subnet-id"
+	vpcFilterKey           = "vpc-id"
+	vpcAttachmentFilterKey = "attachment.vpc-id"
+)
+
+// EC2Client aliases an EC2API so requestEC2* functions can be shared between
+// RequestEC2* functions
+type EC2Client struct {
+	ec2iface.EC2API
+}
+
 // EC2CustomerGatewayDeleter represents a collection of AWS EC2 customer gateways
 type EC2CustomerGatewayDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -25,11 +51,11 @@ func (rd *EC2CustomerGatewayDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2CustomerGatewayDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2CustomerGatewayDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 customer gateway names to ResourceNames
@@ -86,23 +112,48 @@ func (rd *EC2CustomerGatewayDeleter) RequestEC2CustomerGateways() ([]*ec2.Custom
 		return nil, nil
 	}
 
+	size, chunk := len(rd.ResourceNames), 200
+	cgws := make([]*ec2.CustomerGateway, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		cgws, err = rd.GetClient().requestEC2CustomerGateways(cgwFilterKey, rd.ResourceNames[i:stop], cgws)
+		if err != nil {
+			return cgws, err
+		}
+	}
+	return cgws, nil
+}
+
+// Requesting customer gateways using filters prevents API errors caused by
+// requesting non-existent customer gateways
+func (c *EC2Client) requestEC2CustomerGateways(filterKey string, chunk arn.ResourceNames, cgws []*ec2.CustomerGateway) ([]*ec2.CustomerGateway, error) {
 	params := &ec2.DescribeCustomerGatewaysInput{
-		CustomerGatewayIds: rd.ResourceNames.AWSStringSlice(),
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
 	}
 
 	ctx := aws.BackgroundContext()
-	resp, err := rd.GetClient().DescribeCustomerGatewaysWithContext(ctx, params)
+	resp, err := c.DescribeCustomerGatewaysWithContext(ctx, params)
 	if err != nil {
 		fmt.Printf("{\"error\": \"%s\"}\n", err)
-		return nil, err
+		return cgws, err
 	}
 
-	return resp.CustomerGateways, nil
+	for _, cgw := range resp.CustomerGateways {
+		if cgw.State != nil && *cgw.State != deletingState && *cgw.State != deletedState {
+			cgws = append(cgws, cgw)
+		}
+	}
+
+	return cgws, nil
 }
 
 // EC2ElasticIPAllocationDeleter represents a collection of AWS EC2 elastic IP allocations
 type EC2ElasticIPAllocationDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -112,11 +163,11 @@ func (rd *EC2ElasticIPAllocationDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2ElasticIPAllocationDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2ElasticIPAllocationDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 elastic IP allocation names to ResourceNames
@@ -164,7 +215,7 @@ func (rd *EC2ElasticIPAllocationDeleter) DeleteResources(cfg *DeleteConfig) erro
 
 // EC2ElasticIPAssocationDeleter represents a collection of AWS EC2 elastic IP associations
 type EC2ElasticIPAssocationDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -174,11 +225,11 @@ func (rd *EC2ElasticIPAssocationDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2ElasticIPAssocationDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2ElasticIPAssocationDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 elastic IP association names to ResourceNames
@@ -226,7 +277,7 @@ func (rd *EC2ElasticIPAssocationDeleter) DeleteResources(cfg *DeleteConfig) erro
 
 // EC2NetworkInterfaceDeleter represents a collection of AWS EC2 network interfaces
 type EC2NetworkInterfaceDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -236,11 +287,11 @@ func (rd *EC2NetworkInterfaceDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2NetworkInterfaceDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2NetworkInterfaceDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 network interface names to ResourceNames
@@ -316,35 +367,38 @@ func (rd *EC2NetworkInterfaceDeleter) RequestEC2NetworkInterfaces() ([]*ec2.Netw
 		return nil, nil
 	}
 
-	// If resource names are passed into the 'NetworkInterfaceId' field and an interface
-	// with one of those names does not exist, DescribeNetworkInterfaces will error.
-	var params *ec2.DescribeNetworkInterfacesInput
-	size := len(rd.ResourceNames)
+	size, chunk := len(rd.ResourceNames), 200
 	enis := make([]*ec2.NetworkInterface, 0)
+	var err error
 	// Can only filter in batches of 200
-	for i := 0; i < size; i += 200 {
-		stop := i + 200
-		if size-stop < 0 {
-			stop = i + size%200
-		}
-
-		params = &ec2.DescribeNetworkInterfacesInput{
-			Filters: []*ec2.Filter{
-				{Name: aws.String("network-interface-id"), Values: rd.ResourceNames[i:stop].AWSStringSlice()},
-			},
-		}
-
-		ctx := aws.BackgroundContext()
-		resp, err := rd.GetClient().DescribeNetworkInterfacesWithContext(ctx, params)
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		enis, err = rd.GetClient().requestEC2NetworkInterfaces(eniFilterKey, rd.ResourceNames[i:stop], enis)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
-		}
-
-		for _, eni := range resp.NetworkInterfaces {
-			enis = append(enis, eni)
+			return enis, err
 		}
 	}
+
+	return enis, nil
+}
+
+// Requesting network interfaces using filters prevents API errors caused by
+// requesting non-existent network interfaces
+func (c *EC2Client) requestEC2NetworkInterfaces(filterKey string, chunk arn.ResourceNames, enis []*ec2.NetworkInterface) ([]*ec2.NetworkInterface, error) {
+	params := &ec2.DescribeNetworkInterfacesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := c.DescribeNetworkInterfacesWithContext(ctx, params)
+	if err != nil {
+		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		return enis, err
+	}
+
+	enis = append(enis, resp.NetworkInterfaces...)
 
 	return enis, nil
 }
@@ -356,40 +410,43 @@ func (rd *EC2NetworkInterfaceDeleter) RequestEC2EIPAddressessFromNetworkInterfac
 		return nil, nil
 	}
 
-	var params *ec2.DescribeAddressesInput
-	size := len(rd.ResourceNames)
+	size, chunk := len(rd.ResourceNames), 200
 	addresses := make([]*ec2.Address, 0)
+	var err error
 	// Can only filter in batches of 200
-	for i := 0; i < size; i += 200 {
-		stop := i + 200
-		if size-stop < 0 {
-			stop = i + size%200
-		}
-
-		params = &ec2.DescribeAddressesInput{
-			Filters: []*ec2.Filter{
-				{Name: aws.String("network-interface-id"), Values: rd.ResourceNames[i:stop].AWSStringSlice()},
-			},
-		}
-
-		ctx := aws.BackgroundContext()
-		resp, err := rd.GetClient().DescribeAddressesWithContext(ctx, params)
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		addresses, err = rd.GetClient().requestEC2EIPAddresses(eniFilterKey, rd.ResourceNames[i:stop], addresses)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
-		}
-
-		for _, adr := range resp.Addresses {
-			addresses = append(addresses, adr)
+			return addresses, err
 		}
 	}
 
 	return addresses, nil
 }
 
+func (c *EC2Client) requestEC2EIPAddresses(filterKey string, chunk arn.ResourceNames, addresses []*ec2.Address) ([]*ec2.Address, error) {
+	params := &ec2.DescribeAddressesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
+	}
+
+	ctx := aws.BackgroundContext()
+	resp, err := c.DescribeAddressesWithContext(ctx, params)
+	if err != nil {
+		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		return addresses, err
+	}
+
+	addresses = append(addresses, resp.Addresses...)
+
+	return addresses, nil
+}
+
 // EC2NetworkInterfaceAttachmentDeleter represents a collection of AWS EC2 network interface attachments
 type EC2NetworkInterfaceAttachmentDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -399,11 +456,11 @@ func (rd *EC2NetworkInterfaceAttachmentDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2NetworkInterfaceAttachmentDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2NetworkInterfaceAttachmentDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 network interface attachment names to ResourceNames
@@ -452,7 +509,7 @@ func (rd *EC2NetworkInterfaceAttachmentDeleter) DeleteResources(cfg *DeleteConfi
 
 // EC2NetworkACLEntryDeleter represents a collection of AWS EC2 network acl entries
 type EC2NetworkACLEntryDeleter struct {
-	Client            ec2iface.EC2API
+	Client            EC2Client
 	ResourceType      arn.ResourceType
 	NetworkACLName    arn.ResourceName
 	NetworkACLEntries []*ec2.NetworkAclEntry
@@ -473,11 +530,11 @@ func (rd *EC2NetworkACLEntryDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2NetworkACLEntryDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2NetworkACLEntryDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // DeleteResources deletes EC2 network acl entries from AWS
@@ -486,7 +543,7 @@ func (rd *EC2NetworkACLEntryDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nil
 	}
 
-	fmtStr := "Deleted EC2 NetworkAcl Association"
+	fmtStr := "Deleted EC2 NetworkAcl"
 
 	var params *ec2.DeleteNetworkAclEntryInput
 	for _, entry := range rd.NetworkACLEntries {
@@ -521,7 +578,7 @@ func (rd *EC2NetworkACLEntryDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 // EC2NetworkACLDeleter represents a collection of AWS EC2 network acl's
 type EC2NetworkACLDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -531,11 +588,11 @@ func (rd *EC2NetworkACLDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2NetworkACLDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2NetworkACLDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 network acl names to ResourceNames
@@ -600,33 +657,49 @@ func (rd *EC2NetworkACLDeleter) RequestEC2NetworkACLs() ([]*ec2.NetworkAcl, erro
 		return nil, nil
 	}
 
+	size, chunk := len(rd.ResourceNames), 200
+	acls := make([]*ec2.NetworkAcl, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		acls, err = rd.GetClient().requestEC2NetworkACLs(naclFilterKey, rd.ResourceNames[i:stop], acls)
+		if err != nil {
+			return acls, err
+		}
+	}
+
+	return acls, nil
+}
+
+// Requesting network acl's using filters prevents API errors caused by
+// requesting non-existent network acl's
+func (c *EC2Client) requestEC2NetworkACLs(filterKey string, chunk arn.ResourceNames, acls []*ec2.NetworkAcl) ([]*ec2.NetworkAcl, error) {
 	params := &ec2.DescribeNetworkAclsInput{
-		NetworkAclIds: rd.ResourceNames.AWSStringSlice(),
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
 	}
 
 	ctx := aws.BackgroundContext()
-	resp, err := rd.GetClient().DescribeNetworkAclsWithContext(ctx, params)
+	resp, err := c.DescribeNetworkAclsWithContext(ctx, params)
 	if err != nil {
 		fmt.Printf("{\"error\": \"%s\"}\n", err)
-		return nil, err
+		return acls, err
 	}
 
-	return filterDefaultNetworkACLs(resp.NetworkAcls), nil
-}
-
-func filterDefaultNetworkACLs(acls []*ec2.NetworkAcl) []*ec2.NetworkAcl {
-	filteredACLs := make([]*ec2.NetworkAcl, 0)
-	for _, acl := range filteredACLs {
+	for _, acl := range resp.NetworkAcls {
 		if acl.IsDefault != nil && !*acl.IsDefault {
-			filteredACLs = append(filteredACLs, acl)
+			acls = append(acls, acl)
 		}
 	}
-	return filteredACLs
+
+	return acls, nil
 }
 
 // EC2InstanceDeleter represents a collection of AWS EC2 instances
 type EC2InstanceDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -636,11 +709,11 @@ func (rd *EC2InstanceDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2InstanceDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2InstanceDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 instance names to ResourceNames
@@ -710,19 +783,6 @@ func (rd *EC2InstanceDeleter) DeleteResources(cfg *DeleteConfig) error {
 	return nil
 }
 
-func filterTerminatingInstances(reservations []*ec2.Reservation) []*ec2.Instance {
-	instances := make([]*ec2.Instance, 0)
-	for _, res := range reservations {
-		for _, ins := range res.Instances {
-			// If instance is shutting down (32) or terminated (48), skip
-			if ins.State.Code != nil && *ins.State.Code != 32 && *ins.State.Code != 48 {
-				instances = append(instances, ins)
-			}
-		}
-	}
-	return instances
-}
-
 func (rd *EC2InstanceDeleter) waitUntilTerminated(cfg *DeleteConfig, tis []*string) {
 	params := &ec2.DescribeInstancesInput{
 		InstanceIds: tis,
@@ -742,22 +802,63 @@ func (rd *EC2InstanceDeleter) RequestEC2Instances() ([]*ec2.Instance, error) {
 		return nil, nil
 	}
 
-	params := &ec2.DescribeInstancesInput{
-		InstanceIds: rd.ResourceNames.AWSStringSlice(),
+	size, chunk := len(rd.ResourceNames), 200
+	instances := make([]*ec2.Instance, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		instances, err = rd.GetClient().requestEC2Instances(instanceFilterKey, rd.ResourceNames[i:stop], instances)
+		if err != nil {
+			return instances, err
+		}
 	}
 
-	ctx := aws.BackgroundContext()
-	resp, err := rd.GetClient().DescribeInstancesWithContext(ctx, params)
-	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
-		return nil, err
-	}
-
-	return filterTerminatingInstances(resp.Reservations), nil
+	return instances, nil
 }
 
-// RequestIAMInstanceProfilesByInstances retrieves instance profiles from instance ID's
-func (rd *EC2InstanceDeleter) RequestIAMInstanceProfilesByInstances() ([]*iam.InstanceProfile, error) {
+// Requesting nat gateways using filters prevents API errors caused by
+// requesting non-existent nat gateways
+func (c *EC2Client) requestEC2Instances(filterKey string, chunk arn.ResourceNames, instances []*ec2.Instance) ([]*ec2.Instance, error) {
+	params := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
+	}
+
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := c.DescribeInstancesWithContext(ctx, params)
+		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
+			return nil, err
+		}
+
+		for _, reservation := range resp.Reservations {
+			for _, instance := range reservation.Instances {
+				if !isInstanceTerminating(instance) {
+					instances = append(instances, instance)
+				}
+			}
+		}
+
+		if resp.NextToken == nil || *resp.NextToken == "" {
+			break
+		}
+
+		params.NextToken = resp.NextToken
+	}
+
+	return instances, nil
+}
+
+func isInstanceTerminating(instance *ec2.Instance) bool {
+	// Instance is shutting down (32) or terminated (48)
+	return instance.State.Code != nil && (*instance.State.Code == 32 || *instance.State.Code == 48)
+}
+
+// RequestIAMInstanceProfilesFromInstances retrieves instance profiles from instance ID's
+func (rd *EC2InstanceDeleter) RequestIAMInstanceProfilesFromInstances() ([]*iam.InstanceProfile, error) {
 	if len(rd.ResourceNames) == 0 {
 		return nil, nil
 	}
@@ -816,7 +917,7 @@ func (rd *EC2InstanceDeleter) RequestIAMInstanceProfilesByInstances() ([]*iam.In
 
 // EC2InternetGatewayAttachmentDeleter represents a collection of AWS EC2 internet gateway attachments
 type EC2InternetGatewayAttachmentDeleter struct {
-	Client              ec2iface.EC2API
+	Client              EC2Client
 	ResourceType        arn.ResourceType
 	InternetGatewayName arn.ResourceName
 	AttachmentNames     arn.ResourceNames
@@ -827,11 +928,11 @@ func (rd *EC2InternetGatewayAttachmentDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2InternetGatewayAttachmentDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2InternetGatewayAttachmentDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 internet gateway attachment names to AttachmentNames
@@ -883,7 +984,7 @@ func (rd *EC2InternetGatewayAttachmentDeleter) DeleteResources(cfg *DeleteConfig
 
 // EC2InternetGatewayDeleter represents a collection of AWS EC2 internet gateways
 type EC2InternetGatewayDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -893,11 +994,11 @@ func (rd *EC2InternetGatewayDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2InternetGatewayDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2InternetGatewayDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 internet gateway names to ResourceNames
@@ -968,23 +1069,45 @@ func (rd *EC2InternetGatewayDeleter) RequestEC2InternetGateways() ([]*ec2.Intern
 		return nil, nil
 	}
 
+	size, chunk := len(rd.ResourceNames), 200
+	igws := make([]*ec2.InternetGateway, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		igws, err = rd.GetClient().requestEC2InternetGateways(igwFilterKey, rd.ResourceNames[i:stop], igws)
+		if err != nil {
+			return igws, err
+		}
+	}
+
+	return igws, nil
+}
+
+// Requesting internet gateways using filters prevents API errors caused by
+// requesting non-existent internet gateways
+func (c *EC2Client) requestEC2InternetGateways(filterKey string, chunk arn.ResourceNames, igws []*ec2.InternetGateway) ([]*ec2.InternetGateway, error) {
 	params := &ec2.DescribeInternetGatewaysInput{
-		InternetGatewayIds: rd.ResourceNames.AWSStringSlice(),
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
 	}
 
 	ctx := aws.BackgroundContext()
-	resp, err := rd.GetClient().DescribeInternetGatewaysWithContext(ctx, params)
+	resp, err := c.DescribeInternetGatewaysWithContext(ctx, params)
 	if err != nil {
 		fmt.Printf("{\"error\": \"%s\"}\n", err)
-		return nil, err
+		return igws, err
 	}
 
-	return resp.InternetGateways, nil
+	igws = append(igws, resp.InternetGateways...)
+
+	return igws, nil
 }
 
 // EC2NatGatewayDeleter represents a collection of AWS EC2 NAT gateways
 type EC2NatGatewayDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -994,11 +1117,11 @@ func (rd *EC2NatGatewayDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2NatGatewayDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2NatGatewayDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 NAT gateway names to ResourceNames
@@ -1057,23 +1180,57 @@ func (rd *EC2NatGatewayDeleter) RequestEC2NatGateways() ([]*ec2.NatGateway, erro
 		return nil, nil
 	}
 
+	size, chunk := len(rd.ResourceNames), 200
+	ngws := make([]*ec2.NatGateway, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		ngws, err = rd.GetClient().requestEC2NatGateways(ngwFilterKey, rd.ResourceNames[i:stop], ngws)
+		if err != nil {
+			return ngws, err
+		}
+	}
+
+	return ngws, nil
+}
+
+// Requesting nat gateways using filters prevents API errors caused by
+// requesting non-existent nat gateways
+func (c *EC2Client) requestEC2NatGateways(filterKey string, chunk arn.ResourceNames, ngws []*ec2.NatGateway) ([]*ec2.NatGateway, error) {
 	params := &ec2.DescribeNatGatewaysInput{
-		NatGatewayIds: rd.ResourceNames.AWSStringSlice(),
+		Filter: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
 	}
 
-	ctx := aws.BackgroundContext()
-	resp, err := rd.GetClient().DescribeNatGatewaysWithContext(ctx, params)
-	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
-		return nil, err
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := c.DescribeNatGatewaysWithContext(ctx, params)
+		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
+			return nil, err
+		}
+
+		for _, ngw := range resp.NatGateways {
+			if ngw.State != nil && *ngw.State != deletingState && *ngw.State != deletedState {
+				ngws = append(ngws, ngw)
+			}
+		}
+
+		if resp.NextToken == nil || *resp.NextToken == "" {
+			break
+		}
+
+		params.NextToken = resp.NextToken
 	}
 
-	return resp.NatGateways, nil
+	return ngws, nil
 }
 
 // EC2RouteTableRouteDeleter represents a collection of AWS EC2 route table routes
 type EC2RouteTableRouteDeleter struct {
-	Client       ec2iface.EC2API
+	Client       EC2Client
 	ResourceType arn.ResourceType
 	RouteTable   *ec2.RouteTable
 }
@@ -1087,14 +1244,12 @@ func (rd *EC2RouteTableRouteDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2RouteTableRouteDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2RouteTableRouteDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
-
-const localGatewayID = "local"
 
 // DeleteResources deletes EC2 route table routes from AWS
 func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
@@ -1106,7 +1261,7 @@ func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	var params *ec2.DeleteRouteInput
 	for _, r := range rd.RouteTable.Routes {
-		if r.GatewayId != nil && *r.GatewayId == localGatewayID {
+		if r.GatewayId != nil && *r.GatewayId == localInternetGatewayID {
 			continue
 		}
 
@@ -1144,7 +1299,7 @@ func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 // EC2RouteTableAssociationDeleter represents a collection of AWS EC2 route table associations
 type EC2RouteTableAssociationDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -1154,11 +1309,11 @@ func (rd *EC2RouteTableAssociationDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2RouteTableAssociationDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2RouteTableAssociationDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 route table association names to ResourceNames
@@ -1206,7 +1361,7 @@ func (rd *EC2RouteTableAssociationDeleter) DeleteResources(cfg *DeleteConfig) er
 
 // EC2RouteTableDeleter represents a collection of AWS EC2 route tables
 type EC2RouteTableDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -1216,11 +1371,11 @@ func (rd *EC2RouteTableDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2RouteTableDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2RouteTableDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 route table names to ResourceNames
@@ -1290,45 +1445,60 @@ func (rd *EC2RouteTableDeleter) RequestEC2RouteTables() ([]*ec2.RouteTable, erro
 		return nil, nil
 	}
 
+	size, chunk := len(rd.ResourceNames), 200
+	rtbs := make([]*ec2.RouteTable, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		rtbs, err = rd.GetClient().requestEC2RouteTables(rtbFilterKey, rd.ResourceNames[i:stop], rtbs)
+		if err != nil {
+			return rtbs, err
+		}
+	}
+
+	return rtbs, nil
+}
+
+// Requesting route tables using filters prevents API errors caused by
+// requesting non-existent route tables
+func (c *EC2Client) requestEC2RouteTables(filterKey string, chunk arn.ResourceNames, rtbs []*ec2.RouteTable) ([]*ec2.RouteTable, error) {
 	params := &ec2.DescribeRouteTablesInput{
-		RouteTableIds: rd.ResourceNames.AWSStringSlice(),
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
 	}
 
 	ctx := aws.BackgroundContext()
-	resp, err := rd.GetClient().DescribeRouteTablesWithContext(ctx, params)
+	resp, err := c.DescribeRouteTablesWithContext(ctx, params)
 	if err != nil {
 		fmt.Printf("{\"error\": \"%s\"}\n", err)
-		return nil, err
+		return rtbs, err
 	}
 
-	return filterMainRouteTables(resp.RouteTables), nil
+	for _, rtb := range resp.RouteTables {
+		if !isMainRouteTable(rtb) {
+			rtbs = append(rtbs, rtb)
+		}
+	}
+
+	return rtbs, nil
 }
 
 // If a route tables' association is a main association, the route table
 // cannot be deleted explicitly
-func filterMainRouteTables(rts []*ec2.RouteTable) []*ec2.RouteTable {
-	filteredRts := make([]*ec2.RouteTable, 0)
-	var isMain bool
-	for _, rt := range rts {
-		isMain = false
-		// Associations might not exist. Boolean flag will trigger append in any
-		// case
-		for _, a := range rt.Associations {
-			if a.Main != nil && *a.Main {
-				isMain = true
-				break
-			}
-		}
-		if !isMain {
-			filteredRts = append(filteredRts, rt)
+func isMainRouteTable(rtb *ec2.RouteTable) bool {
+	for _, a := range rtb.Associations {
+		if a.Main != nil && *a.Main {
+			return true
 		}
 	}
-	return filteredRts
+	return false
 }
 
 // EC2SecurityGroupIngressRuleDeleter represents a collection of AWS EC2 security group ingress rules
 type EC2SecurityGroupIngressRuleDeleter struct {
-	Client         ec2iface.EC2API
+	Client         EC2Client
 	ResourceType   arn.ResourceType
 	SecurityGroups []*ec2.SecurityGroup
 }
@@ -1342,11 +1512,11 @@ func (rd *EC2SecurityGroupIngressRuleDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2SecurityGroupIngressRuleDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2SecurityGroupIngressRuleDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // DeleteResources deletes EC2 security group ingress rules from AWS
@@ -1395,7 +1565,7 @@ func (rd *EC2SecurityGroupIngressRuleDeleter) DeleteResources(cfg *DeleteConfig)
 
 // EC2SecurityGroupEgressRuleDeleter represents a collection of AWS EC2 security group egress rules
 type EC2SecurityGroupEgressRuleDeleter struct {
-	Client         ec2iface.EC2API
+	Client         EC2Client
 	ResourceType   arn.ResourceType
 	SecurityGroups []*ec2.SecurityGroup
 }
@@ -1409,11 +1579,11 @@ func (rd *EC2SecurityGroupEgressRuleDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2SecurityGroupEgressRuleDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2SecurityGroupEgressRuleDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // DeleteResources deletes EC2 security group egress rules from AWS
@@ -1461,7 +1631,7 @@ func (rd *EC2SecurityGroupEgressRuleDeleter) DeleteResources(cfg *DeleteConfig) 
 
 // EC2SecurityGroupDeleter represents a collection of AWS EC2 security groups
 type EC2SecurityGroupDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -1471,11 +1641,11 @@ func (rd *EC2SecurityGroupDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2SecurityGroupDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2SecurityGroupDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 security group names to ResourceNames
@@ -1547,36 +1717,54 @@ func (rd *EC2SecurityGroupDeleter) RequestEC2SecurityGroups() ([]*ec2.SecurityGr
 		return nil, nil
 	}
 
+	size, chunk := len(rd.ResourceNames), 200
+	sgs := make([]*ec2.SecurityGroup, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		sgs, err = rd.GetClient().requestEC2SecurityGroups(sgFilterKey, rd.ResourceNames[i:stop], sgs)
+		if err != nil {
+			return sgs, err
+		}
+	}
+
+	return sgs, nil
+}
+
+// Requesting security groups using filters prevents API errors caused by
+// requesting non-existent security groups
+func (c *EC2Client) requestEC2SecurityGroups(filterKey string, chunk arn.ResourceNames, sgs []*ec2.SecurityGroup) ([]*ec2.SecurityGroup, error) {
 	params := &ec2.DescribeSecurityGroupsInput{
-		GroupIds: rd.ResourceNames.AWSStringSlice(),
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
 	}
 
 	ctx := aws.BackgroundContext()
-	resp, err := rd.GetClient().DescribeSecurityGroupsWithContext(ctx, params)
+	resp, err := c.DescribeSecurityGroupsWithContext(ctx, params)
 	if err != nil {
 		fmt.Printf("{\"error\": \"%s\"}\n", err)
-		return nil, err
+		return sgs, err
 	}
 
-	return filterDefaultSecurityGroups(resp.SecurityGroups), nil
-}
-
-const defaultGroupName = "default"
-
-// Default security groups cannot be deleted, so remove them from response elements
-func filterDefaultSecurityGroups(sgs []*ec2.SecurityGroup) []*ec2.SecurityGroup {
-	filteredSGs := make([]*ec2.SecurityGroup, 0)
-	for _, sg := range sgs {
-		if sg.GroupName != nil && *sg.GroupName != defaultGroupName {
-			filteredSGs = append(filteredSGs, sg)
+	for _, sg := range resp.SecurityGroups {
+		if !isDefaultSecurityGroup(sg) {
+			sgs = append(sgs, sg)
 		}
 	}
-	return filteredSGs
+
+	return sgs, nil
+}
+
+// Default security groups cannot be deleted, so remove them from response elements
+func isDefaultSecurityGroup(sg *ec2.SecurityGroup) bool {
+	return sg.GroupName != nil && *sg.GroupName == defaultSecurityGroupName
 }
 
 // EC2SubnetDeleter represents a collection of AWS EC2 subnets
 type EC2SubnetDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -1586,11 +1774,11 @@ func (rd *EC2SubnetDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2SubnetDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2SubnetDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 subnet names to ResourceNames
@@ -1648,33 +1836,53 @@ func (rd *EC2SubnetDeleter) RequestEC2Subnets() ([]*ec2.Subnet, error) {
 		return nil, nil
 	}
 
+	size, chunk := len(rd.ResourceNames), 200
+	subnets := make([]*ec2.Subnet, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		subnets, err = rd.GetClient().requestEC2Subnets(subnetFilterKey, rd.ResourceNames[i:stop], subnets)
+		if err != nil {
+			return subnets, err
+		}
+	}
+
+	return subnets, nil
+}
+
+// Requesting subnets using filters prevents API errors caused by requesting
+// non-existent subnets
+func (c *EC2Client) requestEC2Subnets(filterKey string, chunk arn.ResourceNames, subnets []*ec2.Subnet) ([]*ec2.Subnet, error) {
 	params := &ec2.DescribeSubnetsInput{
-		SubnetIds: rd.ResourceNames.AWSStringSlice(),
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
 	}
 
 	ctx := aws.BackgroundContext()
-	resp, err := rd.GetClient().DescribeSubnetsWithContext(ctx, params)
+	resp, err := c.DescribeSubnetsWithContext(ctx, params)
 	if err != nil {
 		fmt.Printf("{\"error\": \"%s\"}\n", err)
-		return nil, err
+		return subnets, err
 	}
 
-	return filterDefaultSubnets(resp.Subnets), nil
-}
-
-func filterDefaultSubnets(sns []*ec2.Subnet) []*ec2.Subnet {
-	filteredSns := make([]*ec2.Subnet, 0)
-	for _, sn := range sns {
-		if sn.DefaultForAz != nil && !*sn.DefaultForAz {
-			filteredSns = append(filteredSns, sn)
+	for _, subnet := range resp.Subnets {
+		if !isDefaultSubnet(subnet) {
+			subnets = append(subnets, subnet)
 		}
 	}
-	return filteredSns
+
+	return subnets, nil
+}
+
+func isDefaultSubnet(sn *ec2.Subnet) bool {
+	return sn.DefaultForAz != nil && *sn.DefaultForAz
 }
 
 // EC2VPCCIDRBlockAssociationDeleter represents a collection of AWS EC2 VPC CIDR block associations
 type EC2VPCCIDRBlockAssociationDeleter struct {
-	Client              ec2iface.EC2API
+	Client              EC2Client
 	ResourceType        arn.ResourceType
 	VPCName             arn.ResourceName
 	VPCAssociationNames arn.ResourceNames
@@ -1685,11 +1893,11 @@ func (rd *EC2VPCCIDRBlockAssociationDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2VPCCIDRBlockAssociationDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2VPCCIDRBlockAssociationDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 VPC CIDR block association names to VPCAssociationNames
@@ -1735,7 +1943,7 @@ func (rd *EC2VPCCIDRBlockAssociationDeleter) DeleteResources(cfg *DeleteConfig) 
 
 // EC2VPCDeleter represents a collection of AWS EC2 VPC's
 type EC2VPCDeleter struct {
-	Client        ec2iface.EC2API
+	Client        EC2Client
 	ResourceType  arn.ResourceType
 	ResourceNames arn.ResourceNames
 }
@@ -1745,11 +1953,11 @@ func (rd *EC2VPCDeleter) String() string {
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
-func (rd *EC2VPCDeleter) GetClient() ec2iface.EC2API {
-	if rd.Client == nil {
-		rd.Client = ec2.New(setUpAWSSession())
+func (rd *EC2VPCDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
 	}
-	return rd.Client
+	return &rd.Client
 }
 
 // AddResourceNames adds EC2 VPC names to ResourceNames
@@ -1818,28 +2026,48 @@ func (rd *EC2VPCDeleter) RequestEC2VPCs() ([]*ec2.Vpc, error) {
 		return nil, nil
 	}
 
+	size, chunk := len(rd.ResourceNames), 200
+	vpcs := make([]*ec2.Vpc, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		vpcs, err = rd.GetClient().requestEC2VPCs(vpcFilterKey, rd.ResourceNames[i:stop], vpcs)
+		if err != nil {
+			return vpcs, err
+		}
+	}
+
+	return vpcs, nil
+}
+
+// Requesting vpc's using filters prevents API errors caused by requesting
+// non-existent vpc's
+func (c *EC2Client) requestEC2VPCs(filterKey string, chunk arn.ResourceNames, vpcs []*ec2.Vpc) ([]*ec2.Vpc, error) {
 	params := &ec2.DescribeVpcsInput{
-		VpcIds: rd.ResourceNames.AWSStringSlice(),
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
 	}
 
 	ctx := aws.BackgroundContext()
-	resp, err := rd.GetClient().DescribeVpcsWithContext(ctx, params)
+	resp, err := c.DescribeVpcsWithContext(ctx, params)
 	if err != nil {
 		fmt.Printf("{\"error\": \"%s\"}\n", err)
-		return nil, err
+		return vpcs, err
 	}
 
-	return filterDefaultVPCs(resp.Vpcs), nil
-}
-
-func filterDefaultVPCs(vpcs []*ec2.Vpc) []*ec2.Vpc {
-	filteredVPCs := make([]*ec2.Vpc, 0)
-	for _, vpc := range vpcs {
-		if vpc.IsDefault != nil && !*vpc.IsDefault {
-			filteredVPCs = append(filteredVPCs, vpc)
+	for _, vpc := range resp.Vpcs {
+		if !isDefaultVPC(vpc) {
+			vpcs = append(vpcs, vpc)
 		}
 	}
-	return filteredVPCs
+
+	return vpcs, nil
+}
+
+func isDefaultVPC(vpc *ec2.Vpc) bool {
+	return vpc.IsDefault != nil && *vpc.IsDefault
 }
 
 // RequestEC2InstancesFromVPCs requests EC2 instance reservations from vpc names from the AWS API
@@ -1848,43 +2076,19 @@ func (rd *EC2VPCDeleter) RequestEC2InstancesFromVPCs() ([]*ec2.Instance, error) 
 		return nil, nil
 	}
 
-	var params *ec2.DescribeInstancesInput
-	size := len(rd.ResourceNames)
-	reservations := make([]*ec2.Reservation, 0)
+	size, chunk := len(rd.ResourceNames), 200
+	instances := make([]*ec2.Instance, 0)
+	var err error
 	// Can only filter in batches of 200
-	for i := 0; i < size; i += 200 {
-		stop := i + 200
-		if size-stop < 0 {
-			stop = i + size%200
-		}
-
-		params = &ec2.DescribeInstancesInput{
-			Filters: []*ec2.Filter{
-				{Name: aws.String("vpc-id"), Values: rd.ResourceNames[i:stop].AWSStringSlice()},
-			},
-		}
-
-		for {
-			ctx := aws.BackgroundContext()
-			resp, err := rd.GetClient().DescribeInstancesWithContext(ctx, params)
-			if err != nil {
-				fmt.Printf("{\"error\": \"%s\"}\n", err)
-				return nil, err
-			}
-
-			for _, r := range resp.Reservations {
-				reservations = append(reservations, r)
-			}
-
-			if resp.NextToken == nil || *resp.NextToken == "" {
-				break
-			}
-
-			params.NextToken = resp.NextToken
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		instances, err = rd.GetClient().requestEC2Instances(vpcFilterKey, rd.ResourceNames[i:stop], instances)
+		if err != nil {
+			return instances, err
 		}
 	}
 
-	return filterTerminatingInstances(reservations), nil
+	return instances, nil
 }
 
 // RequestEC2InternetGatewaysFromVPCs requests EC2 internet gateways by vpc names from the AWS API
@@ -1893,31 +2097,15 @@ func (rd *EC2VPCDeleter) RequestEC2InternetGatewaysFromVPCs() ([]*ec2.InternetGa
 		return nil, nil
 	}
 
-	var params *ec2.DescribeInternetGatewaysInput
-	size := len(rd.ResourceNames)
+	size, chunk := len(rd.ResourceNames), 200
 	igws := make([]*ec2.InternetGateway, 0)
+	var err error
 	// Can only filter in batches of 200
-	for i := 0; i < size; i += 200 {
-		stop := i + 200
-		if size-stop < 0 {
-			stop = i + size%200
-		}
-
-		params = &ec2.DescribeInternetGatewaysInput{
-			Filters: []*ec2.Filter{
-				{Name: aws.String("attachment.vpc-id"), Values: rd.ResourceNames[i:stop].AWSStringSlice()},
-			},
-		}
-
-		ctx := aws.BackgroundContext()
-		resp, err := rd.GetClient().DescribeInternetGatewaysWithContext(ctx, params)
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		igws, err = rd.GetClient().requestEC2InternetGateways(vpcAttachmentFilterKey, rd.ResourceNames[i:stop], igws)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
-		}
-
-		for _, igw := range resp.InternetGateways {
-			igws = append(igws, igw)
+			return igws, err
 		}
 	}
 
@@ -1930,41 +2118,15 @@ func (rd *EC2VPCDeleter) RequestEC2NatGatewaysFromVPCs() ([]*ec2.NatGateway, err
 		return nil, nil
 	}
 
-	var params *ec2.DescribeNatGatewaysInput
-	size := len(rd.ResourceNames)
+	size, chunk := len(rd.ResourceNames), 200
 	ngws := make([]*ec2.NatGateway, 0)
+	var err error
 	// Can only filter in batches of 200
-	for i := 0; i < size; i += 200 {
-		stop := i + 200
-		if size-stop < 0 {
-			stop = i + size%200
-		}
-
-		params = &ec2.DescribeNatGatewaysInput{
-			Filter: []*ec2.Filter{
-				{Name: aws.String("vpc-id"), Values: rd.ResourceNames[i:stop].AWSStringSlice()},
-			},
-		}
-
-		for {
-			ctx := aws.BackgroundContext()
-			resp, err := rd.GetClient().DescribeNatGatewaysWithContext(ctx, params)
-			if err != nil {
-				fmt.Printf("{\"error\": \"%s\"}\n", err)
-				return nil, err
-			}
-
-			for _, ngw := range resp.NatGateways {
-				if ngw.State != nil && *ngw.State != "deleting" && *ngw.State != "deleted" {
-					ngws = append(ngws, ngw)
-				}
-			}
-
-			if resp.NextToken == nil || *resp.NextToken == "" {
-				break
-			}
-
-			params.NextToken = resp.NextToken
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		ngws, err = rd.GetClient().requestEC2NatGateways(vpcFilterKey, rd.ResourceNames[i:stop], ngws)
+		if err != nil {
+			return ngws, err
 		}
 	}
 
@@ -1977,109 +2139,62 @@ func (rd *EC2VPCDeleter) RequestEC2NetworkInterfacesFromVPCs() ([]*ec2.NetworkIn
 		return nil, nil
 	}
 
-	var params *ec2.DescribeNetworkInterfacesInput
-	size := len(rd.ResourceNames)
+	size, chunk := len(rd.ResourceNames), 200
 	enis := make([]*ec2.NetworkInterface, 0)
+	var err error
 	// Can only filter in batches of 200
-	for i := 0; i < size; i += 200 {
-		stop := i + 200
-		if size-stop < 0 {
-			stop = i + size%200
-		}
-
-		params = &ec2.DescribeNetworkInterfacesInput{
-			Filters: []*ec2.Filter{
-				{Name: aws.String("vpc-id"), Values: rd.ResourceNames[i:stop].AWSStringSlice()},
-			},
-		}
-
-		ctx := aws.BackgroundContext()
-		resp, err := rd.GetClient().DescribeNetworkInterfacesWithContext(ctx, params)
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		enis, err = rd.GetClient().requestEC2NetworkInterfaces(vpcFilterKey, rd.ResourceNames[i:stop], enis)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
-		}
-
-		for _, eni := range resp.NetworkInterfaces {
-			enis = append(enis, eni)
+			return enis, err
 		}
 	}
 
 	return enis, nil
 }
 
-// RequestEC2RouteTablesFromVPCs requests EC2 subnet-routetable associations by vpc names from the AWS API
+// RequestEC2RouteTablesFromVPCs requests EC2 route tables by vpc names from the AWS API
 func (rd *EC2VPCDeleter) RequestEC2RouteTablesFromVPCs() ([]*ec2.RouteTable, error) {
 	if len(rd.ResourceNames) == 0 {
 		return nil, nil
 	}
 
-	var params *ec2.DescribeRouteTablesInput
-	size := len(rd.ResourceNames)
+	size, chunk := len(rd.ResourceNames), 200
 	rtbs := make([]*ec2.RouteTable, 0)
+	var err error
 	// Can only filter in batches of 200
-	for i := 0; i < size; i += 200 {
-		stop := i + 200
-		if size-stop < 0 {
-			stop = i + size%200
-		}
-
-		params = &ec2.DescribeRouteTablesInput{
-			Filters: []*ec2.Filter{
-				{Name: aws.String("vpc-id"), Values: rd.ResourceNames[i:stop].AWSStringSlice()},
-			},
-		}
-
-		ctx := aws.BackgroundContext()
-		resp, err := rd.GetClient().DescribeRouteTablesWithContext(ctx, params)
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		rtbs, err = rd.GetClient().requestEC2RouteTables(vpcFilterKey, rd.ResourceNames[i:stop], rtbs)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
-		}
-
-		for _, rtb := range resp.RouteTables {
-			rtbs = append(rtbs, rtb)
+			return rtbs, err
 		}
 	}
 
-	return filterMainRouteTables(rtbs), nil
+	return rtbs, nil
 }
 
-// RequestEC2SecurityGroupsFromVPCs requests EC2 security groups by vpc names from the AWS API
+// RequestEC2SecurityGroupsFromVPCs requests EC2 security groups by vpc names
+// from the AWS API
 func (rd *EC2VPCDeleter) RequestEC2SecurityGroupsFromVPCs() ([]*ec2.SecurityGroup, error) {
 	if len(rd.ResourceNames) == 0 {
 		return nil, nil
 	}
 
-	var params *ec2.DescribeSecurityGroupsInput
-	size := len(rd.ResourceNames)
+	size, chunk := len(rd.ResourceNames), 200
 	sgs := make([]*ec2.SecurityGroup, 0)
+	var err error
 	// Can only filter in batches of 200
-	for i := 0; i < size; i += 200 {
-		stop := i + 200
-		if size-stop < 0 {
-			stop = i + size%200
-		}
-
-		params = &ec2.DescribeSecurityGroupsInput{
-			Filters: []*ec2.Filter{
-				{Name: aws.String("vpc-id"), Values: rd.ResourceNames[i:stop].AWSStringSlice()},
-			},
-		}
-
-		ctx := aws.BackgroundContext()
-		resp, err := rd.GetClient().DescribeSecurityGroupsWithContext(ctx, params)
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		sgs, err = rd.GetClient().requestEC2SecurityGroups(vpcFilterKey, rd.ResourceNames[i:stop], sgs)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
-		}
-
-		for _, sg := range resp.SecurityGroups {
-			sgs = append(sgs, sg)
+			return sgs, err
 		}
 	}
 
-	return filterDefaultSecurityGroups(sgs), nil
+	return sgs, nil
 }
 
 // RequestEC2SubnetsFromVPCs requests EC2 subnets by vpc names from the AWS API
@@ -2088,33 +2203,17 @@ func (rd *EC2VPCDeleter) RequestEC2SubnetsFromVPCs() ([]*ec2.Subnet, error) {
 		return nil, nil
 	}
 
-	var params *ec2.DescribeSubnetsInput
-	size := len(rd.ResourceNames)
+	size, chunk := len(rd.ResourceNames), 200
 	subnets := make([]*ec2.Subnet, 0)
+	var err error
 	// Can only filter in batches of 200
-	for i := 0; i < size; i += 200 {
-		stop := i + 200
-		if size-stop < 0 {
-			stop = i + size%200
-		}
-
-		params = &ec2.DescribeSubnetsInput{
-			Filters: []*ec2.Filter{
-				{Name: aws.String("vpc-id"), Values: rd.ResourceNames[i:stop].AWSStringSlice()},
-			},
-		}
-
-		ctx := aws.BackgroundContext()
-		resp, err := rd.GetClient().DescribeSubnetsWithContext(ctx, params)
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		subnets, err = rd.GetClient().requestEC2Subnets(vpcFilterKey, rd.ResourceNames[i:stop], subnets)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
-		}
-
-		for _, subnet := range resp.Subnets {
-			subnets = append(subnets, subnet)
+			return subnets, err
 		}
 	}
 
-	return filterDefaultSubnets(subnets), nil
+	return subnets, nil
 }

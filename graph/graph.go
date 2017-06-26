@@ -149,7 +149,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 	case arn.EC2InstanceRType:
 		instanceDel := depMap[rt].(*deleter.EC2InstanceDeleter)
 		// Get IAM instance profiles
-		iprs, err := instanceDel.RequestIAMInstanceProfilesByInstances()
+		iprs, err := instanceDel.RequestIAMInstanceProfilesFromInstances()
 		if err != nil || len(iprs) == 0 {
 			break
 		}
