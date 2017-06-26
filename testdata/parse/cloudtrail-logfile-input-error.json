@@ -1,0 +1,37 @@
+{
+  "Records": [{
+    "eventVersion": "1.05",
+    "userIdentity": {
+      "type": "Root",
+      "principalId": "123456789101",
+      "arn": "arn:aws:iam::123456789101:root",
+      "accountId": "123456789101",
+      "userName": "coreostectonic",
+      "invokedBy": "elasticloadbalancing.amazonaws.com"
+    },
+    "eventTime": "2017-06-01T00:04:14Z",
+    "eventSource": "ec2.amazonaws.com",
+    "eventName": "CreateNetworkInterface",
+    "awsRegion": "us-west-2",
+    "sourceIPAddress": "12.34.56.78",
+    "userAgent": "elasticloadbalancing.amazonaws.com",
+    "errorCode": "Client.InvalidSecurityGroupID.NotFound",
+    "errorMessage": "The securityGroup ID 'sg-2e266855' does not exist",
+    "requestParameters": {
+      "subnetId": "subnet-df85a3b8",
+      "description": "ELB tf-aws-pr-810-1-console",
+      "groupSet": {
+        "items": [{
+          "groupId": "sg-2e266855"
+        }]
+      },
+      "privateIpAddressesSet": {},
+      "ipv6AddressCount": 0
+    },
+    "responseElements": null,
+    "requestID": "62d67c6b-d2e7-440b-8259-b67737aa359a",
+    "eventID": "example-9859-4394-bea2-60e9c6c4a329",
+    "eventType": "AwsApiCall",
+    "recipientAccountId": "123456789101"
+  }]
+}

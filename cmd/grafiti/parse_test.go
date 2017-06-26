@@ -13,12 +13,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudtrail"
 	"github.com/spf13/viper"
 )
 
+type mockCloudTrailAPIEvents struct {
+	Events []*cloudtrail.Event `json:"Records"`
+}
+
 // Globals that multiple tests will use
-var cloudTrailEvents CloudTrailLogFile
+var (
+	cloudTrailAPIEvents     mockCloudTrailAPIEvents
+	cloudTrailLogFileEvents CloudTrailLogFile
+)
 
 func TestMain(m *testing.M) {
 	wd, _ := os.Getwd()
@@ -32,16 +40,29 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	// Init CloudTrail test data
-	ctFileName := dataDir + "/parse/cloudtrail-test-data-input.json"
-	ctf, cerr := ioutil.ReadFile(ctFileName)
+	// Init CloudTrail API test data
+	ctAPIInputFile := dataDir + "/parse/cloudtrail-api-input.json"
+	ctAPIInputBytes, cerr := ioutil.ReadFile(ctAPIInputFile)
 	if cerr != nil {
-		fmt.Printf("Error opening %s: %s", ctFileName, cerr)
+		fmt.Printf("Error opening %s: %s", ctAPIInputFile, cerr)
 		os.Exit(1)
 	}
 
-	if cuerr := json.Unmarshal(ctf, &cloudTrailEvents); cuerr != nil {
-		fmt.Println("Error marshalling cloudtrail events:", cuerr.Error())
+	if err := json.Unmarshal(ctAPIInputBytes, &cloudTrailAPIEvents); err != nil {
+		fmt.Println("Error marshalling cloudtrail API events:", err.Error())
+		os.Exit(1)
+	}
+
+	// Init CloudTrail logfile test data
+	ctLogFileInputFile := dataDir + "/parse/cloudtrail-logfile-input.json"
+	ctLogFileInputBytes, cerr := ioutil.ReadFile(ctLogFileInputFile)
+	if cerr != nil {
+		fmt.Printf("Error opening %s: %s", ctLogFileInputFile, cerr)
+		os.Exit(1)
+	}
+
+	if err := json.Unmarshal(ctLogFileInputBytes, &cloudTrailLogFileEvents); err != nil {
+		fmt.Println("Error marshalling cloudtrail logfile events:", err.Error())
 		os.Exit(1)
 	}
 
@@ -110,6 +131,49 @@ func TestCalcTimeWindowFromTimeStamp(t *testing.T) {
 	}
 }
 
+func TestParseCloudTrailEvent(t *testing.T) {
+	wd, _ := os.Getwd()
+
+	cases := []struct {
+		InputPatterns []string
+		ExpectedFile  string
+	}{
+		{[]string{}, wd + "/../../testdata/parse/parsed-logfile-output.json"},
+		{[]string{
+			"{CreatedBy: .userIdentity.arn}",
+			"{TaggedAt: \"2017-05-31\"}",
+			"{ExpiresAt: (1497253282) | strftime(\"%Y-%m-%d\")}",
+		}, wd + "/../../testdata/parse/parsed-logfile-output-tagged.json"},
+	}
+
+	var event []byte
+	for i, c := range cases {
+		viper.Set("grafiti.tagPatterns", c.InputPatterns)
+
+		// Get desired output of parseRawCloudTrailEvent from file
+		want, err := ioutil.ReadFile(c.ExpectedFile)
+		if err != nil {
+			fmt.Println("Failed to open", c.ExpectedFile)
+			t.FailNow()
+		}
+
+		var gotStr string
+		for _, eventData := range cloudTrailLogFileEvents.Events {
+			event, err = eventData.MarshalJSON()
+			if err != nil {
+				continue
+			}
+
+			gotStr += parseRawCloudTrailEvent(string(event)) + "\n"
+		}
+
+		// NOTE: non-deterministic pass. jq eval will occasionally fail for some reason.
+		if string(want) != gotStr {
+			t.Errorf("printCloudTrailEvent case %d failed\nwanted\n%s\n\ngot\n%s\n", i+1, string(want), gotStr)
+		}
+	}
+}
+
 // Set stdout to pipe and capture printed output of a Print event
 func captureStdOut(f func(interface{}), v interface{}) string {
 	oldStdOut := os.Stdout
@@ -142,34 +206,34 @@ func TestPrintCloudTrailEvents(t *testing.T) {
 		InputPatterns []string
 		ExpectedFile  string
 	}{
-		{[]string{}, wd + "/../../testdata/parse/cloudtrail-test-data-output.json"},
+		{[]string{}, wd + "/../../testdata/parse/parsed-api-output.json"},
 		{[]string{
 			"{CreatedBy: .userIdentity.arn}",
 			"{TaggedAt: \"2017-05-31\"}",
 			"{ExpiresAt: (1497253282) | strftime(\"%Y-%m-%d\")}",
-		}, wd + "/../../testdata/parse/cloudtrail-test-data-output-tagged.json"},
+		}, wd + "/../../testdata/parse/parsed-api-output-tagged.json"},
 	}
 
 	var ctJSON string
-	for _, c := range cases {
+	for i, c := range cases {
 		viper.Set("grafiti.tagPatterns", c.InputPatterns)
 
 		f := func(v interface{}) {
 			printEvents(v.([]*cloudtrail.Event))
 		}
 
-		ctJSON = captureStdOut(f, cloudTrailEvents.Events)
+		ctJSON = captureStdOut(f, cloudTrailAPIEvents.Events)
 
 		// Get desired output of printCloudTrailEvent from file
-		want, oerr := ioutil.ReadFile(c.ExpectedFile)
-		if oerr != nil {
+		want, err := ioutil.ReadFile(c.ExpectedFile)
+		if err != nil {
 			fmt.Println("Failed to open", c.ExpectedFile)
-			t.Fail()
+			t.FailNow()
 		}
 
 		// NOTE: non-deterministic pass. jq eval will occasionally fail for some reason.
 		if string(want) != ctJSON {
-			t.Errorf("printCloudTrailEvent failed\nwanted\n%s\n\ngot\n%s\n", string(want), ctJSON)
+			t.Errorf("printCloudTrailEvent case %d failed\nwanted\n%s\n\ngot\n%s\n", i+1, string(want), ctJSON)
 		}
 	}
 }
@@ -189,8 +253,8 @@ func TestGetTags(t *testing.T) {
 		"ExpiresAt": "2017-06-12",
 	}
 
-	for _, e := range cloudTrailEvents.Events {
-		te := getTags(e)
+	for _, e := range cloudTrailAPIEvents.Events {
+		te := getTags(aws.StringValue(e.CloudTrailEvent))
 		if te != nil && !reflect.DeepEqual(te, mockTags) {
 			t.Errorf("getTags failed\nwanted:\n%s,\n\ngot:\n%s\n\n", mockTags, te)
 		}
@@ -233,11 +297,9 @@ func TestMatchFilter(t *testing.T) {
 		},
 	}
 
-	var bo []byte
 	for i, c := range cases {
 		viper.Set("grafiti.filterPatterns", c.InputFilters)
-		bo = []byte(c.InputObject)
-		if matchFilter(&bo) != c.ExpectedMatch {
+		if matchFilter([]byte(c.InputObject)) != c.ExpectedMatch {
 			t.Errorf("matchFilter case %d failed\nFilter did not match output:\n%s\n", i+1, c.InputObject)
 		}
 	}
