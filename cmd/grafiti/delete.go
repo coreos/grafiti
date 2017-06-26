@@ -262,9 +262,10 @@ func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.R
 			return
 		}
 
-		if resp.Tags == nil {
-			break
+		if len(resp.Tags) == 0 {
+			return
 		}
+
 		for _, t := range resp.Tags {
 			asgNames = append(asgNames, arn.ResourceName(*t.ResourceId))
 		}
@@ -447,7 +448,9 @@ func deleteARNs(ARNs arn.ResourceARNs) error {
 			return nil
 		}
 		defer f.Close()
-		printLogFileReport(bufio.NewReader(f))
+		fmt.Println(logHead)
+		deleter.PrintLogFileReport(bufio.NewReader(f), formatReportLogEntry)
+		fmt.Println(logTail)
 	}
 
 	return nil
@@ -498,54 +501,17 @@ const logTail = `=================================================`
 
 const logHead = logTail + "\n== Log Report: Failed Resource Deletion Events ==\n" + logTail
 
-// Prints a report of all resources that failed to delete
-func printLogFileReport(reader io.Reader) {
-	dec := json.NewDecoder(reader)
-
-	fmt.Println(logHead)
-
-	for {
-		e, isEOF, err := decodeLogEntry(dec)
-		if err != nil {
-			fmt.Println("Error decoding log entry:", err.Error())
-			break
-		}
-		if isEOF {
-			break
-		}
-		if e == nil {
-			continue
-		}
-
-		fmt.Println(formatLogEntry(e))
-	}
-
-	fmt.Println(logTail)
-	return
-}
-
-func decodeLogEntry(decoder *json.Decoder) (*deleter.LogEntry, bool, error) {
-	var decoded deleter.LogEntry
-	if err := decoder.Decode(&decoded); err != nil {
-		if err == io.EOF {
-			return &decoded, true, nil
-		}
-		return nil, false, err
-	}
-	return &decoded, false, nil
-}
-
-func formatLogEntry(e *deleter.LogEntry) (m string) {
-	m = fmt.Sprintf("ResourceType: %s, ResourceName: %s", e.ResourceType, e.ResourceName)
+func formatReportLogEntry(e *deleter.LogEntry) (m string) {
+	m = fmt.Sprintf("Failed to delete %s %s", e.ResourceType, e.ResourceName)
 
 	switch {
 	case e.ParentResourceName != "":
-		m = fmt.Sprintf("%s, ParentResourceType: %s, ParentResourceName: %s", m, e.ParentResourceType, e.ParentResourceName)
+		m = fmt.Sprintf("%s from %s %s", m, e.ParentResourceType, e.ParentResourceName)
 		fallthrough
 	case e.AWSErrorCode != "" && e.AWSErrorMsg != "":
-		m = fmt.Sprintf("%s\n\tAWSErrorCode: %s, AWSErrorMessage: %s", m, e.AWSErrorCode, e.AWSErrorMsg)
+		m = fmt.Sprintf("%s (%s: %s)", m, e.AWSErrorCode, e.AWSErrorMsg)
 	case e.ErrMsg != "":
-		m = fmt.Sprintf("%s\n\tError: %s", m, e.ErrMsg)
+		m = fmt.Sprintf("%s (%s)", m, e.ErrMsg)
 	}
 
 	return

@@ -157,7 +157,9 @@ func tag(reader io.Reader) error {
 	dec := json.NewDecoder(reader)
 
 	ARNBuckets := NewARNSetBucket()
-	otherResBuckets := make(map[arn.ResourceType]arn.ResourceNames)
+	// Non-RGTA resources are tagged one:many::resource:tag, so an inverted ARNSet
+	// mapped by arn.ResourceType handles such resources nicely
+	otherResBuckets := make(map[arn.ResourceType]map[arn.ResourceName]Tags)
 
 	for {
 		t, isEOF, err := decodeInput(dec)
@@ -168,14 +170,18 @@ func tag(reader io.Reader) error {
 			continue
 		}
 
-		// AutoScaling and Route53 resources have their own tagging API's
+		// Check map that holds all RGTA-unsupported resource types and bucket
+		// accordingly
 		tm := t.TaggingMetadata
-		if _, ok := arn.RGTAUnsupportedResourceTypes[tm.ResourceType]; ok {
-			if _, rok := otherResBuckets[tm.ResourceType]; !rok {
-				otherResBuckets[tm.ResourceType] = append(otherResBuckets[tm.ResourceType], tm.ResourceName)
+		if tm.ResourceType != "" && tm.ResourceName != "" && tm.ResourceARN != "" {
+			if _, ok := arn.RGTAUnsupportedResourceTypes[tm.ResourceType]; ok {
+				if _, ok := otherResBuckets[tm.ResourceType]; !ok {
+					otherResBuckets[tm.ResourceType] = make(map[arn.ResourceName]Tags)
+				}
+				otherResBuckets[tm.ResourceType][tm.ResourceName] = t.Tags
+			} else {
+				ARNBuckets.AddARNToBuckets(tm.ResourceARN, t.Tags)
 			}
-		} else {
-			ARNBuckets.AddARNToBuckets(tm.ResourceARN, t.Tags)
 		}
 
 		for tag, bucket := range ARNBuckets {
@@ -187,9 +193,11 @@ func tag(reader io.Reader) error {
 			}
 		}
 
-		if len(otherResBuckets[tm.ResourceType]) == 20 || (isEOF && len(otherResBuckets[tm.ResourceType]) > 0) {
-			tagUnsupportedResourceType(tm.ResourceType, otherResBuckets[tm.ResourceType], t.Tags)
-			delete(otherResBuckets, tm.ResourceType)
+		for rt, bucket := range otherResBuckets {
+			if len(bucket) == 20 || (isEOF && len(bucket) > 0) {
+				tagUnsupportedResourceType(rt, bucket)
+				delete(otherResBuckets, rt)
+			}
 		}
 
 		if isEOF {
@@ -200,11 +208,7 @@ func tag(reader io.Reader) error {
 	return nil
 }
 
-func tagUnsupportedResourceType(rt arn.ResourceType, rns arn.ResourceNames, tags Tags) {
-	if len(rns) == 0 {
-		return
-	}
-
+func tagUnsupportedResourceType(rt arn.ResourceType, rnMap map[arn.ResourceName]Tags) {
 	sess := session.Must(session.NewSession(
 		&aws.Config{
 			Region: aws.String(viper.GetString("grafiti.region")),
@@ -213,11 +217,11 @@ func tagUnsupportedResourceType(rt arn.ResourceType, rns arn.ResourceNames, tags
 
 	switch arn.NamespaceForResource(rt) {
 	case arn.AutoScalingNamespace:
-		for _, n := range rns {
+		for n, tags := range rnMap {
 			tagAutoScalingResource(autoscaling.New(sess), rt, n, tags)
 		}
 	case arn.Route53Namespace:
-		for _, n := range rns {
+		for n, tags := range rnMap {
 			tagRoute53Resource(route53.New(sess), rt, n, tags)
 		}
 	}

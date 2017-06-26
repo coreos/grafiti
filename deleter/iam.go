@@ -2,12 +2,10 @@ package deleter
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
 	"github.com/coreos/grafiti/arn"
@@ -59,17 +57,16 @@ func (rd *IAMInstanceProfileDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	fmtStr := "Deleted IAM InstanceProfile"
-	if cfg.DryRun {
-		for _, n := range rd.ResourceNames {
-			fmt.Println(drStr, fmtStr, n)
-		}
-		return nil
-	}
 
 	var params *iam.DeleteInstanceProfileInput
-	for _, n := range rd.ResourceNames {
+	for _, ipr := range iprs {
+		if cfg.DryRun {
+			fmt.Println(drStr, fmtStr, *ipr.InstanceProfileName)
+			continue
+		}
+
 		params = &iam.DeleteInstanceProfileInput{
-			InstanceProfileName: n.AWSString(),
+			InstanceProfileName: ipr.InstanceProfileName,
 		}
 
 		// Prevent throttling
@@ -78,15 +75,16 @@ func (rd *IAMInstanceProfileDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteInstanceProfileWithContext(ctx, params)
 		if err != nil {
-			cfg.logDeleteError(arn.IAMInstanceProfileRType, n, err)
+			cfg.logDeleteError(arn.IAMInstanceProfileRType, arn.ResourceName(*ipr.InstanceProfileName), err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, n)
+		fmt.Println(fmtStr, *ipr.InstanceProfileName)
 	}
+
 	return nil
 }
 
@@ -95,16 +93,14 @@ func (rd *IAMInstanceProfileDeleter) deleteIAMRolesFromInstanceProfiles(cfg *Del
 		return nil
 	}
 
-	if cfg.DryRun {
-		for _, ipr := range iprs {
-			fmt.Println(drStr, "Removed Role from IAM InstanceProfile", *ipr.InstanceProfileName)
-		}
-		return nil
-	}
-
 	var params *iam.RemoveRoleFromInstanceProfileInput
 	for _, ipr := range iprs {
 		for _, rl := range ipr.Roles {
+			if cfg.DryRun {
+				fmt.Printf("%s Removed Role %s from IAM InstanceProfile %s\n", drStr, *rl.RoleName, *ipr.InstanceProfileName)
+				continue
+			}
+
 			params = &iam.RemoveRoleFromInstanceProfileInput{
 				InstanceProfileName: ipr.InstanceProfileName,
 				RoleName:            rl.RoleName,
@@ -177,63 +173,6 @@ func (rd *IAMInstanceProfileDeleter) RequestIAMInstanceProfiles() ([]*iam.Instan
 	return iprs, nil
 }
 
-// RequestIAMInstanceProfilesFromLaunchConfigurations retrieves instance profiles from
-// launch configuration names
-func (rd *IAMInstanceProfileDeleter) RequestIAMInstanceProfilesFromLaunchConfigurations(lcs []*autoscaling.LaunchConfiguration) ([]*iam.InstanceProfile, error) {
-	if len(lcs) == 0 {
-		return nil, nil
-	}
-
-	// We cannot request instance profiles by their ID's so we must search
-	// iteratively with a map
-	want := map[string]struct{}{}
-	var iprName string
-	for _, lc := range lcs {
-		if lc.IamInstanceProfile == nil {
-			continue
-		}
-
-		// The docs say that IAMInstanceProfile can be either an ARN or name; if an
-		// ARN, parse out name
-		iprName = *lc.IamInstanceProfile
-		if strings.HasPrefix(*lc.IamInstanceProfile, "arn:") {
-			iprSplit := strings.Split(*lc.IamInstanceProfile, "instance-profile/")
-			if len(iprSplit) != 2 || iprSplit[1] == "" {
-				continue
-			}
-			iprName = iprSplit[1]
-		}
-		if _, ok := want[iprName]; !ok {
-			want[iprName] = struct{}{}
-		}
-	}
-
-	iprs := make([]*iam.InstanceProfile, 0)
-	params := &iam.ListInstanceProfilesInput{}
-
-	for {
-		ctx := aws.BackgroundContext()
-		resp, err := rd.GetClient().ListInstanceProfilesWithContext(ctx, params)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, ipr := range resp.InstanceProfiles {
-			if _, ok := want[*ipr.InstanceProfileName]; ok {
-				iprs = append(iprs, ipr)
-			}
-		}
-
-		if resp.IsTruncated == nil || !*resp.IsTruncated {
-			break
-		}
-
-		params.Marker = resp.Marker
-	}
-
-	return iprs, nil
-}
-
 // IAMRoleDeleter represents an AWS IAM role
 type IAMRoleDeleter struct {
 	Client        iamiface.IAMAPI
@@ -264,23 +203,22 @@ func (rd *IAMRoleDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nil
 	}
 
-	fmtStr := "Deleted IAM Role"
-	if cfg.DryRun {
-		for _, n := range rd.ResourceNames {
-			fmt.Println(drStr, fmtStr, n)
-		}
-		return nil
+	rls, rerr := rd.RequestIAMRoles()
+	if rerr != nil && !cfg.IgnoreErrors {
+		return rerr
 	}
+
+	fmtStr := "Deleted IAM Role"
 
 	var (
 		params *iam.DeleteRoleInput
 		rpd    *IAMRolePolicyDeleter
 	)
-	for _, n := range rd.ResourceNames {
+	for _, rl := range rls {
 		// Delete role policies
-		rpd = &IAMRolePolicyDeleter{RoleName: n}
+		rpd = &IAMRolePolicyDeleter{RoleName: arn.ResourceName(*rl.RoleName)}
 		pls, rerr := rpd.RequestIAMRolePoliciesFromRoles()
-		if rerr != nil || len(pls) == 0 {
+		if rerr != nil && !cfg.IgnoreErrors {
 			continue
 		}
 		rpd.PolicyNames = pls
@@ -289,9 +227,14 @@ func (rd *IAMRoleDeleter) DeleteResources(cfg *DeleteConfig) error {
 			continue
 		}
 
+		if cfg.DryRun {
+			fmt.Println(drStr, fmtStr, *rl.RoleName)
+			continue
+		}
+
 		// Delete roles
 		params = &iam.DeleteRoleInput{
-			RoleName: n.AWSString(),
+			RoleName: rl.RoleName,
 		}
 
 		// Prevent throttling
@@ -300,14 +243,14 @@ func (rd *IAMRoleDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteRoleWithContext(ctx, params)
 		if err != nil {
-			cfg.logDeleteError(arn.IAMRoleRType, n, err)
+			cfg.logDeleteError(arn.IAMRoleRType, arn.ResourceName(*rl.RoleName), err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, n)
+		fmt.Println(fmtStr, *rl.RoleName)
 	}
 
 	return nil
@@ -327,7 +270,7 @@ func (rd *IAMRoleDeleter) RequestIAMRoles() ([]*iam.Role, error) {
 		}
 	}
 
-	var params *iam.ListRolesInput
+	params := new(iam.ListRolesInput)
 	rls := make([]*iam.Role, 0)
 	for {
 		ctx := aws.BackgroundContext()
@@ -384,15 +327,14 @@ func (rd *IAMRolePolicyDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	fmtStr := "Deleted IAM RolePolicy"
-	if cfg.DryRun {
-		for _, n := range rd.PolicyNames {
-			fmt.Printf("%s %s %s for IAM Role %s\n", drStr, fmtStr, n, rd.RoleName)
-		}
-		return nil
-	}
 
 	var params *iam.DeleteRolePolicyInput
 	for _, pn := range rd.PolicyNames {
+		if cfg.DryRun {
+			fmt.Printf("%s %s %s for IAM Role %s\n", drStr, fmtStr, pn, rd.RoleName)
+			continue
+		}
+
 		params = &iam.DeleteRolePolicyInput{
 			RoleName:   rd.RoleName.AWSString(),
 			PolicyName: pn.AWSString(),

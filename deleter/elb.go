@@ -46,15 +46,14 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) DeleteResources(cfg *DeleteCo
 	}
 
 	fmtStr := "Deleted ElasticLoadBalancer"
-	if cfg.DryRun {
-		for _, lb := range lbs {
-			fmt.Println(drStr, fmtStr, *lb.LoadBalancerName)
-		}
-		return nil
-	}
 
 	var params *elb.DeleteLoadBalancerInput
 	for _, lb := range lbs {
+		if cfg.DryRun {
+			fmt.Println(drStr, fmtStr, *lb.LoadBalancerName)
+			continue
+		}
+
 		params = &elb.DeleteLoadBalancerInput{
 			LoadBalancerName: lb.LoadBalancerName,
 		}
@@ -86,16 +85,12 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) RequestElasticLoadBalancers()
 		return nil, nil
 	}
 
-	if rd.Client == nil {
-		rd.Client = elb.New(setUpAWSSession())
-	}
-
 	params := &elb.DescribeLoadBalancersInput{
 		LoadBalancerNames: rd.ResourceNames.AWSStringSlice(),
 	}
 
 	ctx := aws.BackgroundContext()
-	resp, err := rd.Client.DescribeLoadBalancersWithContext(ctx, params)
+	resp, err := rd.GetClient().DescribeLoadBalancersWithContext(ctx, params)
 	if err != nil {
 		return nil, err
 	}

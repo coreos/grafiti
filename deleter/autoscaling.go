@@ -2,11 +2,13 @@ package deleter
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
+	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/coreos/grafiti/arn"
 )
 
@@ -41,15 +43,14 @@ func (rd *AutoScalingGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	fmtStr := "Deleted AutoScalingGroup"
-	if cfg.DryRun {
-		for _, n := range rd.ResourceNames {
-			fmt.Println(drStr, fmtStr, n)
-		}
-		return nil
-	}
 
 	var params *autoscaling.DeleteAutoScalingGroupInput
 	for _, n := range rd.ResourceNames {
+		if cfg.DryRun {
+			fmt.Println(drStr, fmtStr, n)
+			continue
+		}
+
 		params = &autoscaling.DeleteAutoScalingGroupInput{
 			AutoScalingGroupName: n.AWSString(),
 			ForceDelete:          aws.Bool(true),
@@ -139,15 +140,14 @@ func (rd *AutoScalingLaunchConfigurationDeleter) DeleteResources(cfg *DeleteConf
 	}
 
 	fmtStr := "Deleted LaunchConfiguration"
-	if cfg.DryRun {
-		for _, n := range rd.ResourceNames {
-			fmt.Println(drStr, fmtStr, n)
-		}
-		return nil
-	}
 
 	var params *autoscaling.DeleteLaunchConfigurationInput
 	for _, n := range rd.ResourceNames {
+		if cfg.DryRun {
+			fmt.Println(drStr, fmtStr, n)
+			continue
+		}
+
 		params = &autoscaling.DeleteLaunchConfigurationInput{
 			LaunchConfigurationName: n.AWSString(),
 		}
@@ -202,4 +202,67 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestAutoScalingLaunchConfigu
 	}
 
 	return lcs, nil
+}
+
+// RequestIAMInstanceProfilesFromLaunchConfigurations retrieves instance profiles from
+// launch configuration names
+func (rd *AutoScalingLaunchConfigurationDeleter) RequestIAMInstanceProfilesFromLaunchConfigurations() ([]*iam.InstanceProfile, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	lcs, rerr := rd.RequestAutoScalingLaunchConfigurations()
+	if rerr != nil {
+		return nil, rerr
+	}
+
+	// We cannot request instance profiles by their ID's so we must search
+	// iteratively with a map
+	want := map[string]struct{}{}
+	var iprName string
+	for _, lc := range lcs {
+		if lc.IamInstanceProfile == nil {
+			continue
+		}
+
+		// The docs say that IAMInstanceProfile can be either an ARN or name; if an
+		// ARN, parse out name
+		iprName = *lc.IamInstanceProfile
+		if strings.HasPrefix(*lc.IamInstanceProfile, "arn:") {
+			iprSplit := strings.Split(*lc.IamInstanceProfile, "instance-profile/")
+			if len(iprSplit) != 2 || iprSplit[1] == "" {
+				continue
+			}
+			iprName = iprSplit[1]
+		}
+		if _, ok := want[iprName]; !ok {
+			want[iprName] = struct{}{}
+		}
+	}
+
+	svc := iam.New(setUpAWSSession())
+
+	iprs := make([]*iam.InstanceProfile, 0)
+	params := new(iam.ListInstanceProfilesInput)
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := svc.ListInstanceProfilesWithContext(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, ipr := range resp.InstanceProfiles {
+			if _, ok := want[*ipr.InstanceProfileName]; ok {
+				iprs = append(iprs, ipr)
+			}
+		}
+
+		if resp.IsTruncated == nil || !*resp.IsTruncated {
+			break
+		}
+
+		params.Marker = resp.Marker
+	}
+
+	return iprs, nil
 }
