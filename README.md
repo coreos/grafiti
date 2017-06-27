@@ -2,11 +2,12 @@
 
 Grafiti is a tool for parsing, tagging, and deleting AWS resources.
 
-Using a CloudTrail trail, resource CRUD events can be `grafiti parse`'d for resource identifying
-information. This parsed data can be fed into `grafiti tag` and tagged using the AWS resource group tagging
-API. Tagged resources are retrieved using the same API during `grafiti delete`, and deleted
-using resource type-specific service API's. Each sub-command can be used in a sequential pipe,
-or individually.
+* Using a [CloudTrail](https://aws.amazon.com/cloudtrail/) trail, resource CRUD events can be parsed using `grafiti` for identifying resource information.
+* Parsed data can optionally be fed through `grafiti filter --ignore-file <tag-file>`, which filters out all resources tagged with tags in `<tag-file>` from parsed data.
+* Parsed data can be fed into `grafiti tag` and tagged using the AWS resource group tagging API.
+* Tagged resources are retrieved using the same API during `grafiti delete`, and deleted using resource type-specific service API's.
+
+Each sub-command can be used in a sequential pipe, or individually.
 
 ## Motivating Example
 
@@ -24,13 +25,22 @@ Retrieve and install grafiti (the binary will be in `$GOPATH/bin`):
 go get github.com/coreos/grafiti/cmd/grafiti
 ```
 
+Alternatively, if `$GOPATH/src/github.com/coreos/grafiti` is already present, simply install it:
+```
+go install github.com/coreos/grafiti/cmd/grafiti
+```
+or use the Makefile (requires `make`):
+```
+make install
+```
+
 ## `jq` installation
-`jq` is a CLI JSON parsing tool that `grafiti` uses internally to evaluate config file expressions, and must
-be installed before running `grafiti`. You can find download instructions [here](https://stedolan.github.io/jq/download/).
+`jq` is a CLI JSON parsing tool that `grafiti` uses internally to evaluate config file expressions, and must be installed before running `grafiti`. You can find download instructions [here](https://stedolan.github.io/jq/download/).
 
 ## Grafiti commands
 
-* `grafiti parse` - Parses CloudTrail data and outputs useful information (to be consumed by `grafiti tag`)
+* `grafiti parse` - Parses CloudTrail data and outputs useful information (to be consumed by `grafiti tag` or `grafiti filter`)
+* `grafiti filter` - Filters `grafiti parse` output by removing resources with defined tags (to be consumed by `grafiti tag`)
 * `grafiti tag` - Tags resources in AWS based on tagging rules defined in your `config.toml` file
 * `grafiti delete` - Deletes resources in AWS based on tags
 
@@ -42,22 +52,25 @@ Usage:
 
 Available Commands:
   delete      Delete resources in AWS
+  filter      Filter AWS resources by tag
   help        Help about any command
-  parse       parse and output resources by reading CloudTrail logs
-  tag         tag resources in AWS
+  parse       Parse and output resources by reading CloudTrail logs
+  tag         Tag resources in AWS
 
 Flags:
   -c, --config string   Config file (default is $HOME/.grafiti.toml)
       --debug           Enable debug logging.
       --dry-run         Output changes to stdout instead of AWS.
   -e, --ignore-errors   Continue processing even when there are API errors.
+
+Use "grafiti [command] --help" for more information about a command.
 ```
 
 # Usage
 
 ## Configure aws credentials
 
-  In order to use grafiti, you will need to configure your machine to talk to aws with a `~/.aws/credentials` file.
+  In order to use `grafiti`, you will need to configure your machine to talk to AWS with a `~/.aws/credentials` [file](http://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html).
 
 ```
  [default]
@@ -65,7 +78,7 @@ Flags:
  aws_secret_access_key = MY-SECRET-KEY
 ```
 
- Alternatively, you can set the following environment variables:
+ Alternatively, you can set the following [environment variables](http://docs.aws.amazon.com/cli/latest/userguide/cli-environment.html):
 
 ```
  AWS_ACCESS_KEY_ID=AKID1234567890
@@ -79,32 +92,32 @@ Grafiti takes a config file which configures it's basic function.
 ```toml
 [grafiti]
 resourceTypes = ["AWS::EC2::Instance"]
-hours = -8
+endHour = 0
+startHour = -8
+endTimeStamp = "20170614T010101Z"
+startTimeStamp = "20170613T010101Z"
 region = "us-east-1"
 includeEvent = false
 tagPatterns = [
-  "{CreatedBy: .userIdentity.arn}",
+  "{CreatedBy: .userIdentity.arn}"
 ]
 filterPatterns = [
-  ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
+  ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\""
 ]
 ```
 
  * `resourceTypes` - Specifies a list of resources to query for. These can be any values the CloudTrail API accepts.
- * `hours` - Specifies how far back to query CloudTrail, in hours.
+ * `endHour`,`startHour` - Specifies the range of hours (beginning at `startHour`, ending at `endHour`) to query events from CloudTrail.
+ * `endTimeStamp`,`startTimeStamp` - Specifies the range between two exact times (beginning at `startTimeStamp`, ending at `endTimeStamp`) to query events from CloudTrail. These fields take ISO-8601 (no milliseconds) format.
+    * **Note**: Only one of `*Hour`, `*TimeStamp` pairs can be used. An error will occur if both are used.
  * `region` - The region to query
- * `includeEvent` - Setting `true` will include the raw CloudEvent in the tagging output (this is useful for finding
-attributes to filter on).
- * `tagPatterns` - should use `jq` syntax to generate `{tagKey: tagValue}` objects from output from `grafiti parse`. The
- results will be included in the `Tags` field of the tagging output.
+ * `includeEvent` - Setting `true` will include the raw CloudEvent in the tagging output (this is useful for finding attributes to filter on).
+ * `tagPatterns` - should use `jq` syntax to generate `{tagKey: tagValue}` objects from output from `grafiti parse`. The results will be included in the `Tags` field of the tagging output.
  * `filterPatterns` - will filter output of `grafiti parse` based on `jq` syntax matches.
 
 
 ### A note on AWS resource deletion order
-AWS resources have (potentially many) dependencies that must be explicitly detached/removed/deleted before
-deleting a top-level resource (ex. a VPC). Therefore a deletion order must be enforced. This order is universal
-for all AWS resources and is not use-case-specific, because deletion actions will only run if a resource with a
-specific tag, or one of it's dependencies, is detected.
+AWS resources have (potentially many) dependencies that must be explicitly detached/removed/deleted before deleting a top-level resource (ex. a VPC). Therefore a deletion order must be enforced. This order is universal for all AWS resources and is not use-case-specific, because deletion actions will only run if a resource with a specific tag, or one of it's dependencies, is detected.
 
 #### Order
 1. S3 Bucket
@@ -151,7 +164,8 @@ $ cat config.toml
 ```toml
 [grafiti]
 resourceTypes = ["AWS::EC2::Instance"]
-hours = -8
+endHour = 0
+startHour = -8
 region = "us-east-1"
 includeEvent = false
 tagPatterns = [
@@ -207,6 +221,30 @@ grafiti -c config.toml parse | jq '.Event.CloudTrailEvent' | sed -E 's/\\(.)/\1/
 grafiti  -c config.toml parse | jq '.Event.CloudTrailEvent' | sed -E 's/\\(.)/\1/g' | sed -e 's/^"//' -e 's/"$//' | jq '.userIdentity.arn'
 ```
 
+## Filtering
+
+`grafiti` can filter resources parsed from CloudTrail events by their tag using the `filter` sub-command. Specifically, the `--ignore-file`/`-i` option takes a file with TagFilters corresponding to resource tags; resources with these tags will be removed from`grafiti parse` output, and remaining resources can be filtered into `grafiti tag`.
+
+Filter input file (see `example-tags-input.json`) has the form:
+
+```json
+{
+	"TagFilters": [
+		{
+			"Key": "TagKey",
+			"Values": ["TagValue"]
+		}
+	]
+}
+```
+
+TagFilters have the same form as AWS TagFilter JSON. See the [docs for details](http://docs.aws.amazon.com/resourcegroupstagging/latest/APIReference/API_TagFilter.html). Of note is tag value chaining with AND and OR e.g. `"Values": ["Yes", "OR", "Maybe"]`
+
+Filtering can be done like so:
+```bash
+grafiti -c config.toml parse | grafiti -c config.toml filter -i example-tags-input.json | grafiti -c tag
+```
+
 ## Tagging
 
 Tagging input takes the form:
@@ -241,7 +279,8 @@ config.toml
 ```toml
 [grafiti]
 resourceTypes = ["AWS::EC2::Instance"]
-hours = -8
+endHour = 0
+startHour = -8
 region = "us-east-1"
 includeEvent = false
 tagPatterns = [
@@ -275,21 +314,20 @@ The above command will tag all matching resources with tags that look like:
 
 Grafiti supports deleting resources based on matching Tags.
 
-Delete input file (see `example-delete-tags.json`) has the form:
+Delete input file (see `example-tags-input.json`) has the form:
 
 ```json
 {
 	"TagFilters": [
 		{
-			"Key": "DeleteMe",
-			"Values": ["Yes"]
+			"Key": "TagKey",
+			"Values": ["TagValue"]
 		}
 	]
 }
 ```
-TagFilters have the same form as the AWS TagFilter resources, see the
-[docs for details](http://docs.aws.amazon.com/resourcegroupstagging/latest/APIReference/API_TagFilter.html).
-Of note is that values can be chained with AND and OR e.g. `"Values": ["Yes", "OR", "Maybe"]`
+
+As with `grafiti filter`'s input tag file, TagFilters have the same form as AWS TagFilter JSON. See the [docs for details](http://docs.aws.amazon.com/resourcegroupstagging/latest/APIReference/API_TagFilter.html). Of note is tag value chaining with AND and OR e.g. `"Values": ["Yes", "OR", "Maybe"]`
 
 From stdin:
 ```sh
@@ -301,9 +339,7 @@ grafiti -c config.toml delete -f example-delete-tags.json
 ```
 ### Error handling
 
-Additionally it is **highly recommended** that the `--ignore-errors` flag is used when deleting resources. Many top-level resources have
-dependencies that, if not first deleted, will cause API errors that interrupt deletion loops. `--ignore-errors` instead handles
-errors gracefully by continuing deletion loops and printing error messages to stdout in JSON format:
+Additionally it is **highly recommended** that the `--ignore-errors` flag is used when deleting resources. Many top-level resources have dependencies that, if not first deleted, will cause API errors that interrupt deletion loops. `--ignore-errors` instead handles errors gracefully by continuing deletion loops and printing error messages to stdout in JSON format:
 
 ```json
 {
@@ -313,8 +349,6 @@ errors gracefully by continuing deletion loops and printing error messages to st
 
 ### Deleting dependencies
 
-By default, `grafiti delete` will not trace relationships between resources and add them to the deletion graph.
-Passing the `--all-deps` flag will trace these relationships and add all found dependencies to the deletion graph.
+By default, `grafiti delete` will not trace relationships between resources and add them to the deletion graph. Passing the `--all-deps` flag will trace these relationships and add all found dependencies to the deletion graph.
 
-For example, if a tagged VPC has a user-created (non-default) subnet that is not tagged, running `grafiti delete`
-will not delete the subnet, and in all likelihood will not delete the VPC due to dependency issues imposed by AWS.
+For example, if a tagged VPC has a user-created (non-default) subnet that is not tagged, running `grafiti delete` will not delete the subnet, and in all likelihood will not delete the VPC due to dependency issues imposed by AWS.
