@@ -76,18 +76,16 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		}
 
 		// Get EC2 instances
-		ress, _ := vpcDel.RequestEC2InstanceReservationsFromVPCs()
+		instances, _ := vpcDel.RequestEC2InstancesFromVPCs()
 		if _, ok := depMap[arn.EC2InstanceRType]; !ok {
 			depMap[arn.EC2InstanceRType] = deleter.InitResourceDeleter(arn.EC2InstanceRType)
 		}
-		for _, res := range ress {
-			for _, ins := range res.Instances {
-				fmt.Println("EC2InstanceRType:", *ins.InstanceId)
-				depMap[arn.EC2InstanceRType].AddResourceNames(arn.ResourceName(*ins.InstanceId))
-			}
+		for _, instance := range instances {
+			fmt.Println("EC2InstanceRType:", *instance.InstanceId)
+			depMap[arn.EC2InstanceRType].AddResourceNames(arn.ResourceName(*instance.InstanceId))
 		}
 
-		// Get EC2 internet gateways's
+		// Get EC2 internet gateways
 		igws, _ := vpcDel.RequestEC2InternetGatewaysFromVPCs()
 		if _, ok := depMap[arn.EC2InternetGatewayRType]; !ok {
 			depMap[arn.EC2InternetGatewayRType] = deleter.InitResourceDeleter(arn.EC2InternetGatewayRType)
@@ -97,7 +95,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.EC2InternetGatewayRType].AddResourceNames(arn.ResourceName(*igw.InternetGatewayId))
 		}
 
-		// Get EC2 NAT gateways's
+		// Get EC2 NAT gateways
 		ngws, _ := vpcDel.RequestEC2NatGatewaysFromVPCs()
 		if _, ok := depMap[arn.EC2NatGatewayRType]; !ok {
 			depMap[arn.EC2NatGatewayRType] = deleter.InitResourceDeleter(arn.EC2NatGatewayRType)
@@ -149,6 +147,28 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 	case arn.EC2SubnetRType:
 		// Get Network ACL's
 	case arn.EC2InstanceRType:
+		instanceDel := depMap[rt].(*deleter.EC2InstanceDeleter)
+		// Get IAM instance profiles
+		iprs, err := instanceDel.RequestIAMInstanceProfilesFromInstances()
+		if err != nil || len(iprs) == 0 {
+			break
+		}
+
+		if _, ok := depMap[arn.IAMInstanceProfileRType]; !ok {
+			depMap[arn.IAMInstanceProfileRType] = deleter.InitResourceDeleter(arn.IAMInstanceProfileRType)
+		}
+		if _, ok := depMap[arn.IAMRoleRType]; !ok {
+			depMap[arn.IAMRoleRType] = deleter.InitResourceDeleter(arn.IAMRoleRType)
+		}
+		for _, ipr := range iprs {
+			fmt.Println("IAMInstanceProfileRType:", *ipr.InstanceProfileName)
+			depMap[arn.IAMInstanceProfileRType].AddResourceNames(arn.ResourceName(*ipr.InstanceProfileName))
+			// Get IAM roles
+			for _, rl := range ipr.Roles {
+				fmt.Println("IAMRoleRType:", *rl.RoleName)
+				depMap[arn.IAMRoleRType].AddResourceNames(arn.ResourceName(*rl.RoleName))
+			}
+		}
 		// Get EBS Volumes
 	case arn.EC2NetworkInterfaceRType:
 		// Get EIP Addresses
@@ -222,11 +242,6 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		}
 	case arn.AutoScalingLaunchConfigurationRType:
 		lcDel := depMap[rt].(*deleter.AutoScalingLaunchConfigurationDeleter)
-		lcs, err := lcDel.RequestAutoScalingLaunchConfigurations()
-		if err != nil || len(lcs) == 0 {
-			break
-		}
-
 		// Get IAM instance profiles
 		iprs, err := lcDel.RequestIAMInstanceProfilesFromLaunchConfigurations()
 		if err != nil || len(iprs) == 0 {

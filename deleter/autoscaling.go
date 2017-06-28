@@ -83,21 +83,20 @@ func (rd *AutoScalingGroupDeleter) RequestAutoScalingGroups() ([]*autoscaling.Gr
 		return nil, nil
 	}
 
+	asgs := make([]*autoscaling.Group, 0)
 	params := &autoscaling.DescribeAutoScalingGroupsInput{
 		AutoScalingGroupNames: rd.ResourceNames.AWSStringSlice(),
 	}
-	asgs := make([]*autoscaling.Group, 0)
 
 	for {
 		ctx := aws.BackgroundContext()
 		resp, err := rd.GetClient().DescribeAutoScalingGroupsWithContext(ctx, params)
 		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
 			return nil, err
 		}
 
-		for _, asg := range resp.AutoScalingGroups {
-			asgs = append(asgs, asg)
-		}
+		asgs = append(asgs, resp.AutoScalingGroups...)
 
 		if resp.NextToken == nil || *resp.NextToken == "" {
 			break
@@ -178,21 +177,37 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestAutoScalingLaunchConfigu
 		return nil, nil
 	}
 
-	params := &autoscaling.DescribeLaunchConfigurationsInput{
-		LaunchConfigurationNames: rd.ResourceNames.AWSStringSlice(),
-	}
+	size, chunk := len(rd.ResourceNames), 20
 	lcs := make([]*autoscaling.LaunchConfiguration, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		lcs, err = rd.requestAutoScalingLaunchConfigurations(rd.ResourceNames[i:stop], lcs)
+		if err != nil {
+			return lcs, err
+		}
+	}
+
+	return lcs, nil
+}
+
+// Requesting internet gateways using filters prevents API errors caused by
+// requesting non-existent internet gateways
+func (rd *AutoScalingLaunchConfigurationDeleter) requestAutoScalingLaunchConfigurations(chunk arn.ResourceNames, lcs []*autoscaling.LaunchConfiguration) ([]*autoscaling.LaunchConfiguration, error) {
+	params := &autoscaling.DescribeLaunchConfigurationsInput{
+		LaunchConfigurationNames: chunk.AWSStringSlice(),
+	}
 
 	for {
 		ctx := aws.BackgroundContext()
 		resp, err := rd.GetClient().DescribeLaunchConfigurationsWithContext(ctx, params)
 		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
 			return nil, err
 		}
 
-		for _, lc := range resp.LaunchConfigurations {
-			lcs = append(lcs, lc)
-		}
+		lcs = append(lcs, resp.LaunchConfigurations...)
 
 		if resp.NextToken == nil || *resp.NextToken == "" {
 			break
@@ -218,6 +233,34 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestIAMInstanceProfilesFromL
 
 	// We cannot request instance profiles by their ID's so we must search
 	// iteratively with a map
+	want, iprs := createInstanceProfileMap(lcs), make([]*iam.InstanceProfile, 0)
+	params := new(iam.ListInstanceProfilesInput)
+	svc := iam.New(setUpAWSSession())
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := svc.ListInstanceProfilesWithContext(ctx, params)
+		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
+			return nil, err
+		}
+
+		for _, ipr := range resp.InstanceProfiles {
+			if _, ok := want[*ipr.InstanceProfileName]; ok {
+				iprs = append(iprs, ipr)
+			}
+		}
+
+		if resp.IsTruncated == nil || !*resp.IsTruncated {
+			break
+		}
+
+		params.Marker = resp.Marker
+	}
+
+	return iprs, nil
+}
+
+func createInstanceProfileMap(lcs []*autoscaling.LaunchConfiguration) map[string]struct{} {
 	want := map[string]struct{}{}
 	var iprName string
 	for _, lc := range lcs {
@@ -240,29 +283,5 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestIAMInstanceProfilesFromL
 		}
 	}
 
-	svc := iam.New(setUpAWSSession())
-
-	iprs := make([]*iam.InstanceProfile, 0)
-	params := new(iam.ListInstanceProfilesInput)
-	for {
-		ctx := aws.BackgroundContext()
-		resp, err := svc.ListInstanceProfilesWithContext(ctx, params)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, ipr := range resp.InstanceProfiles {
-			if _, ok := want[*ipr.InstanceProfileName]; ok {
-				iprs = append(iprs, ipr)
-			}
-		}
-
-		if resp.IsTruncated == nil || !*resp.IsTruncated {
-			break
-		}
-
-		params.Marker = resp.Marker
-	}
-
-	return iprs, nil
+	return want
 }

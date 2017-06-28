@@ -138,22 +138,15 @@ func (rd *IAMInstanceProfileDeleter) RequestIAMInstanceProfiles() ([]*iam.Instan
 
 	// We cannot request a filtered list of instance profiles, so we must
 	// iterate through all returned profiles and select the ones we want.
-	want := map[arn.ResourceName]struct{}{}
-	for _, n := range rd.ResourceNames {
-		if _, ok := want[n]; !ok {
-			want[n] = struct{}{}
-		}
-	}
-
+	want, iprs := createResourceNameMap(rd.ResourceNames), make([]*iam.InstanceProfile, 0)
 	params := &iam.ListInstanceProfilesInput{
 		MaxItems: aws.Int64(100),
 	}
-
-	iprs := make([]*iam.InstanceProfile, 0)
 	for {
 		ctx := aws.BackgroundContext()
 		resp, err := rd.GetClient().ListInstanceProfilesWithContext(ctx, params)
 		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
 			return nil, err
 		}
 
@@ -171,6 +164,16 @@ func (rd *IAMInstanceProfileDeleter) RequestIAMInstanceProfiles() ([]*iam.Instan
 
 	}
 	return iprs, nil
+}
+
+func createResourceNameMap(names arn.ResourceNames) map[arn.ResourceName]struct{} {
+	want := map[arn.ResourceName]struct{}{}
+	for _, n := range names {
+		if _, ok := want[n]; !ok {
+			want[n] = struct{}{}
+		}
+	}
+	return want
 }
 
 // IAMRoleDeleter represents an AWS IAM role
@@ -263,19 +266,13 @@ func (rd *IAMRoleDeleter) RequestIAMRoles() ([]*iam.Role, error) {
 	}
 
 	// No filtering fields in ListRolesInput, must be done iteratively
-	want := map[arn.ResourceName]struct{}{}
-	for _, n := range rd.ResourceNames {
-		if _, ok := want[n]; !ok {
-			want[n] = struct{}{}
-		}
-	}
-
+	want, rls := createResourceNameMap(rd.ResourceNames), make([]*iam.Role, 0)
 	params := new(iam.ListRolesInput)
-	rls := make([]*iam.Role, 0)
 	for {
 		ctx := aws.BackgroundContext()
 		resp, err := rd.GetClient().ListRolesWithContext(ctx, params)
 		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
 			return nil, err
 		}
 
@@ -369,16 +366,18 @@ func (rd *IAMRolePolicyDeleter) RequestIAMRolePoliciesFromRoles() (arn.ResourceN
 		return nil, nil
 	}
 
+	pls := make(arn.ResourceNames, 0)
 	params := &iam.ListRolePoliciesInput{
 		MaxItems: aws.Int64(100),
 		RoleName: rd.RoleName.AWSString(),
 	}
-	pls := make(arn.ResourceNames, 0)
+
 	for {
 		ctx := aws.BackgroundContext()
-		resp, lerr := rd.GetClient().ListRolePoliciesWithContext(ctx, params)
-		if lerr != nil {
-			return nil, lerr
+		resp, err := rd.GetClient().ListRolePoliciesWithContext(ctx, params)
+		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
+			return nil, err
 		}
 
 		for _, rp := range resp.PolicyNames {

@@ -85,15 +85,45 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) RequestElasticLoadBalancers()
 		return nil, nil
 	}
 
+	size, chunk := len(rd.ResourceNames), 20
+	elbs := make([]*elb.LoadBalancerDescription, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		elbs, err = rd.requestElasticLoadBalancers(rd.ResourceNames[i:stop], elbs)
+		if err != nil {
+			return elbs, err
+		}
+	}
+
+	return elbs, nil
+}
+
+// Requesting elastic load balancers using filters prevents API errors caused by
+// requesting non-existent elastic load balancers
+func (rd *ElasticLoadBalancingLoadBalancerDeleter) requestElasticLoadBalancers(chunk arn.ResourceNames, elbs []*elb.LoadBalancerDescription) ([]*elb.LoadBalancerDescription, error) {
 	params := &elb.DescribeLoadBalancersInput{
-		LoadBalancerNames: rd.ResourceNames.AWSStringSlice(),
+		LoadBalancerNames: chunk.AWSStringSlice(),
+		PageSize:          aws.Int64(50),
 	}
 
-	ctx := aws.BackgroundContext()
-	resp, err := rd.GetClient().DescribeLoadBalancersWithContext(ctx, params)
-	if err != nil {
-		return nil, err
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := rd.GetClient().DescribeLoadBalancersWithContext(ctx, params)
+		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
+			return nil, err
+		}
+
+		elbs = append(elbs, resp.LoadBalancerDescriptions...)
+
+		if resp.NextMarker == nil || *resp.NextMarker == "" {
+			break
+		}
+
+		params.Marker = resp.NextMarker
 	}
 
-	return resp.LoadBalancerDescriptions, nil
+	return elbs, nil
 }

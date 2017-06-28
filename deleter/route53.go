@@ -12,6 +12,12 @@ import (
 	"github.com/coreos/grafiti/arn"
 )
 
+const (
+	hostedZonePrefix = "/hostedzone/"
+	recordSetNSType  = "NS"
+	recordSetSOAType = "SOA"
+)
+
 // Route53HostedZoneDeleter represents an AWS route53 hosted zone
 type Route53HostedZoneDeleter struct {
 	Client        route53iface.Route53API
@@ -95,14 +101,24 @@ func (rd *Route53HostedZoneDeleter) DeletePrivateRoute53HostedZones(cfg *DeleteC
 	return rd.DeleteResources(cfg)
 }
 
+// SplitHostedZoneID splits a hosted zones' AWS ID, which might be prefixed with
+// "/hostedzone/", into the actual ID (the suffix)
+func SplitHostedZoneID(hzID string) arn.ResourceName {
+	if strings.HasPrefix(hzID, hostedZonePrefix) {
+		hzSplit := strings.Split(hzID, hostedZonePrefix)
+		if len(hzSplit) < 2 {
+			return ""
+		}
+		return arn.ResourceName(hzSplit[1])
+	}
+	return arn.ResourceName(hzID)
+}
+
 func filterPrivateHostedZones(hzs []*route53.HostedZone) arn.ResourceNames {
 	privateHZs := make(arn.ResourceNames, 0)
 	for _, hz := range hzs {
 		if hz.Config.PrivateZone != nil && *hz.Config.PrivateZone {
-			hzSplit := strings.Split(*hz.Id, "/hostedzone/")
-			if len(hzSplit) == 2 {
-				privateHZs = append(privateHZs, arn.ResourceName(hzSplit[1]))
-			}
+			privateHZs = append(privateHZs, SplitHostedZoneID(*hz.Id))
 		}
 	}
 	return privateHZs
@@ -149,12 +165,11 @@ func (rd *Route53HostedZoneDeleter) RequestAllRoute53HostedZones() ([]*route53.H
 		ctx := aws.BackgroundContext()
 		resp, err := rd.GetClient().ListHostedZonesWithContext(ctx, params)
 		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
 			return nil, err
 		}
 
-		for _, hz := range resp.HostedZones {
-			hzs = append(hzs, hz)
-		}
+		hzs = append(hzs, resp.HostedZones...)
 
 		if resp.IsTruncated == nil || !*resp.IsTruncated {
 			break
@@ -276,12 +291,12 @@ func (rd *Route53ResourceRecordSetDeleter) RequestRoute53ResourceRecordSets() (m
 			ctx := aws.BackgroundContext()
 			resp, err := rd.GetClient().ListResourceRecordSetsWithContext(ctx, params)
 			if err != nil {
+				fmt.Printf("{\"error\": \"%s\"}\n", err)
 				return nil, err
 			}
 
 			for _, rrs := range resp.ResourceRecordSets {
-				// Cannot delete NS/SOA type record sets
-				if rrs.Type != nil && *rrs.Type != "NS" && *rrs.Type != "SOA" {
+				if !isTypeNSorSOA(aws.StringValue(rrs.Type)) {
 					rrsMap[hz] = append(rrsMap[hz], rrs)
 				}
 			}
@@ -297,4 +312,9 @@ func (rd *Route53ResourceRecordSetDeleter) RequestRoute53ResourceRecordSets() (m
 	}
 
 	return rrsMap, nil
+}
+
+// Cannot delete NS/SOA type record sets
+func isTypeNSorSOA(t string) bool {
+	return t == recordSetNSType || t == recordSetSOAType
 }

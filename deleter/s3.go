@@ -79,23 +79,22 @@ func (rd *S3ObjectDeleter) DeleteResources(cfg *DeleteConfig) error {
 	return nil
 }
 
-// RequestS3ObjectsByBucket requests S3 objects by bucket name from the AWS API
-func (rd *S3ObjectDeleter) RequestS3ObjectsByBucket() ([]*s3.Object, error) {
+// RequestS3ObjectsFromBucket requests S3 objects by bucket name from the AWS API
+func (rd *S3ObjectDeleter) RequestS3ObjectsFromBucket() ([]*s3.Object, error) {
+	objs := make([]*s3.Object, 0)
 	params := &s3.ListObjectsV2Input{
 		Bucket: rd.BucketName.AWSString(),
 	}
-	objs := make([]*s3.Object, 0)
 
 	for {
 		ctx := aws.BackgroundContext()
 		resp, err := rd.GetClient().ListObjectsV2WithContext(ctx, params)
 		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
 			return nil, err
 		}
 
-		for _, o := range resp.Contents {
-			objs = append(objs, o)
-		}
+		objs = append(objs, resp.Contents...)
 
 		if resp.IsTruncated == nil || !*resp.IsTruncated {
 			break
@@ -146,7 +145,7 @@ func (rd *S3BucketDeleter) DeleteResources(cfg *DeleteConfig) error {
 	for _, n := range rd.ResourceNames {
 		// Delete all objects in bucket
 		objDel = &S3ObjectDeleter{BucketName: n}
-		objs, oerr := objDel.RequestS3ObjectsByBucket()
+		objs, oerr := objDel.RequestS3ObjectsFromBucket()
 		if oerr != nil {
 			continue
 		}
