@@ -165,10 +165,6 @@ func InitResourceDeleter(t arn.ResourceType) ResourceDeleter {
 		return &EC2ElasticIPAllocationDeleter{ResourceType: t}
 	case arn.EC2EIPAssociationRType:
 		return &EC2ElasticIPAssocationDeleter{ResourceType: t}
-	case arn.EC2NetworkInterfaceRType:
-		return &EC2NetworkInterfaceDeleter{ResourceType: t}
-	case arn.EC2NetworkInterfaceAttachmentRType:
-		return &EC2NetworkInterfaceAttachmentDeleter{ResourceType: t}
 	case arn.EC2InstanceRType:
 		return &EC2InstanceDeleter{ResourceType: t}
 	case arn.EC2InternetGatewayAttachmentRType:
@@ -177,6 +173,12 @@ func InitResourceDeleter(t arn.ResourceType) ResourceDeleter {
 		return &EC2InternetGatewayDeleter{ResourceType: t}
 	case arn.EC2NatGatewayRType:
 		return &EC2NatGatewayDeleter{ResourceType: t}
+	case arn.EC2NetworkACLRType:
+		return &EC2NetworkACLDeleter{ResourceType: t}
+	case arn.EC2NetworkInterfaceRType:
+		return &EC2NetworkInterfaceDeleter{ResourceType: t}
+	case arn.EC2NetworkInterfaceAttachmentRType:
+		return &EC2NetworkInterfaceAttachmentDeleter{ResourceType: t}
 	case arn.EC2RouteTableAssociationRType:
 		return &EC2RouteTableAssociationDeleter{ResourceType: t}
 	case arn.EC2RouteTableRType:
@@ -189,6 +191,10 @@ func InitResourceDeleter(t arn.ResourceType) ResourceDeleter {
 		return &EC2VPCCIDRBlockAssociationDeleter{ResourceType: t}
 	case arn.EC2VPCRType:
 		return &EC2VPCDeleter{ResourceType: t}
+	case arn.EC2VPNGatewayRType:
+		return &EC2VPNGatewayDeleter{ResourceType: t}
+	case arn.EC2VPNConnectionRType:
+		return &EC2VPNConnectionDeleter{ResourceType: t}
 	case arn.ElasticLoadBalancingLoadBalancerRType:
 		return &ElasticLoadBalancingLoadBalancerDeleter{ResourceType: t}
 	case arn.IAMInstanceProfileRType:
