@@ -35,15 +35,35 @@ import (
 
 var inputFile string
 
+// Holds data that identifies a raw CloudTrail event: gjson.Result search path
+// for resource name, and resource type
+type rawEventIdentity struct {
+	ResourceType     string
+	ResourceNamePath string
+}
+
+// Maps CloudTrail eventName to a rawEventIdentity
+var rawEventMap = map[string]rawEventIdentity{
+	"RunInstances":           {arn.EC2InstanceRType, "responseElements.instancesSet.items.0.instanceId"},
+	"CreateBucket":           {arn.S3BucketRType, "requestParameters.bucketName"},
+	"CreateAutoScalingGroup": {arn.AutoScalingGroupRType, "requestParameters.autoScalingGroupName"},
+	"CreateVpc":              {arn.EC2VPCRType, "responseElements.vpc.vpcId"},
+	"CreateSubnet":           {arn.EC2SubnetRType, "responseElements.subnet.subnetId"},
+	"CreateLoadBalancer":     {arn.ElasticLoadBalancingLoadBalancerRType, "requestParameters.loadBalancerName"},
+	"CreateInternetGateway":  {arn.EC2InternetGatewayRType, "responseElements.internetGateway.internetGatewayId"},
+	"CreateSecurityGroup":    {arn.EC2SecurityGroupRType, "responseElements.groupId"},
+	"CreateNetworkInterface": {arn.EC2NetworkInterfaceRType, "responseElements.networkInterface.networkInterfaceId"},
+}
+
 func init() {
 	RootCmd.AddCommand(parseCmd)
-	parseCmd.PersistentFlags().StringVarP(&inputFile, "input-file", "f", "", "CloudTrail Log input file.")
+	parseCmd.PersistentFlags().StringVarP(&inputFile, "input-file", "f", "", "CloudTrail log file of raw CloudTrail events.")
 }
 
 var parseCmd = &cobra.Command{
 	Use:   "parse",
 	Short: "Parse and output resources by reading CloudTrail logs",
-	Long:  "Parse a CloudTrail Log and output resources. By default, talks to the configured aws account and reads directly from CloudTrail.",
+	Long:  "Parse a CloudTrail Log and output resources. By default, grafiti talks to the configured AWS account and reads directly from the CloudTrail API.",
 	RunE:  runParseCommand,
 }
 
@@ -51,6 +71,7 @@ func runParseCommand(cmd *cobra.Command, args []string) error {
 	if inputFile != "" {
 		return parseFromFile(inputFile)
 	}
+
 	sess := session.Must(session.NewSession(
 		&aws.Config{
 			Region: aws.String(viper.GetString("grafiti.region")),
@@ -59,13 +80,14 @@ func runParseCommand(cmd *cobra.Command, args []string) error {
 	if err := parseFromCloudTrail(cloudtrail.New(sess)); err != nil {
 		return err
 	}
+
 	return nil
 }
 
-// CloudTrailLogFile holds the array of Records returned in a CloudTrail API
-// response
+// CloudTrailLogFile holds the array of Record strings in a S3 CloudTrail log
+// archive.
 type CloudTrailLogFile struct {
-	Events []*cloudtrail.Event `json:"Records"`
+	Events []json.RawMessage `json:"Records"`
 }
 
 func parseFromFile(logFileName string) error {
@@ -76,12 +98,35 @@ func parseFromFile(logFileName string) error {
 	}
 
 	var logFile CloudTrailLogFile
-	if err := json.Unmarshal(raw, &logFile); err != nil {
+	if err = json.Unmarshal(raw, &logFile); err != nil {
 		return err
 	}
-	printEvents(logFile.Events)
+
+	var event []byte
+	for _, eventData := range logFile.Events {
+		event, err = eventData.MarshalJSON()
+		if err != nil {
+			continue
+		}
+
+		fmt.Println(parseRawCloudTrailEvent(string(event)))
+	}
 
 	return nil
+}
+
+func parseRawCloudTrailEvent(event string) string {
+	parsedEvent := gjson.Parse(event)
+	eventName := parsedEvent.Get("eventName")
+	eventIdentity, ok := rawEventMap[eventName.String()]
+	if !ok {
+		return ""
+	}
+
+	rn := arn.ResourceName(parsedEvent.Get(eventIdentity.ResourceNamePath).String())
+	rt := arn.ResourceType(eventIdentity.ResourceType)
+
+	return parseDataFromEvent(rt, rn, parsedEvent, nil)
 }
 
 // NotTaggedFilter holds the resource types of all resources not tagged
@@ -212,42 +257,53 @@ func printEvents(events []*cloudtrail.Event) {
 }
 
 func printEvent(event *cloudtrail.Event, parsedEvent gjson.Result) {
-	includeEvent := viper.GetBool("grafiti.includeEvent")
 	for _, r := range event.Resources {
-		if r.ResourceName == nil || r.ResourceType == nil {
+		nameStr, typeStr := aws.StringValue(r.ResourceName), aws.StringValue(r.ResourceType)
+
+		if nameStr == "" || typeStr == "" {
 			continue
 		}
 
-		rt, rn := arn.ResourceType(*r.ResourceType), arn.ResourceName(*r.ResourceName)
-		ARN := arn.MapResourceTypeToARN(rt, rn, parsedEvent)
-		if ARN == "" {
-			continue
+		rt, rn := arn.ResourceType(typeStr), arn.ResourceName(nameStr)
+		tmString := parseDataFromEvent(rt, rn, parsedEvent, event)
+		if tmString != "" {
+			fmt.Println(tmString)
 		}
-
-		tags := getTags(event)
-		output := getOutput(includeEvent, event, tags, &TaggingMetadata{
-			ResourceName: rn,
-			ResourceType: rt,
-			ResourceARN:  ARN,
-			CreatorARN:   arn.ResourceARN(parsedEvent.Get("userIdentity.arn").Str),
-			CreatorName:  arn.ResourceName(parsedEvent.Get("userIdentity.userName").Str),
-		})
-
-		oj, err := json.Marshal(output)
-		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-		}
-		if jsonMatch := matchFilter(&oj); !jsonMatch {
-			continue
-		}
-
-		fmt.Println(string(oj))
 	}
 }
 
-func matchFilter(output *[]byte) bool {
+func parseDataFromEvent(rt arn.ResourceType, rn arn.ResourceName, parsedEvent gjson.Result, event *cloudtrail.Event) string {
+	includeEvent := viper.GetBool("grafiti.includeEvent")
+	ARN := arn.MapResourceTypeToARN(rt, rn, parsedEvent)
+	if ARN == "" {
+		return ""
+	}
+
+	tags := getTags(parsedEvent.String())
+	tm := &TaggingMetadata{
+		ResourceName: rn,
+		ResourceType: rt,
+		ResourceARN:  ARN,
+		CreatorARN:   arn.ResourceARN(parsedEvent.Get("userIdentity.arn").String()),
+		CreatorName:  arn.ResourceName(parsedEvent.Get("userIdentity.userName").String()),
+	}
+
+	output := getOutput(includeEvent, tags, tm, event)
+
+	oj, err := json.Marshal(output)
+	if err != nil {
+		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+	}
+	if jsonMatch := matchFilter(oj); jsonMatch {
+		return string(oj)
+	}
+
+	return ""
+}
+
+func matchFilter(output []byte) bool {
 	for _, f := range viper.GetStringSlice("grafiti.filterPatterns") {
-		results, err := jq.Eval(string(*output), f)
+		results, err := jq.Eval(string(output), f)
 		if err != nil || len(results) == 0 {
 			return false
 		}
@@ -260,7 +316,7 @@ func matchFilter(output *[]byte) bool {
 	return true
 }
 
-func getTags(event *cloudtrail.Event) map[string]string {
+func getTags(rawEvent string) map[string]string {
 	tagPatterns := viper.GetStringSlice("grafiti.tagPatterns")
 	if len(tagPatterns) == 0 {
 		return map[string]string{}
@@ -268,7 +324,7 @@ func getTags(event *cloudtrail.Event) map[string]string {
 
 	allTags := make(map[string]string)
 	for _, p := range tagPatterns {
-		results, err := jq.Eval(*event.CloudTrailEvent, p)
+		results, err := jq.Eval(rawEvent, p)
 		if err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 			return nil
@@ -297,8 +353,8 @@ func getTags(event *cloudtrail.Event) map[string]string {
 	return allTags
 }
 
-func getOutput(includeEvent bool, event *cloudtrail.Event, tags map[string]string, taggingMetadata *TaggingMetadata) interface{} {
-	if includeEvent {
+func getOutput(includeEvent bool, tags map[string]string, taggingMetadata *TaggingMetadata, event *cloudtrail.Event) interface{} {
+	if includeEvent && event != nil {
 		return OutputWithEvent{
 			Event:           event,
 			TaggingMetadata: taggingMetadata,

@@ -1,0 +1,455 @@
+{
+  "Records": [{
+      "eventVersion": "1.05",
+      "userIdentity": {
+        "type": "Root",
+        "principalId": "123456789101",
+        "arn": "arn:aws:iam::123456789101:root",
+        "accountId": "123456789101",
+        "userName": "root-user",
+        "invokedBy": "autoscaling.amazonaws.com"
+      },
+      "eventTime": "2017-06-01T18:57:39Z",
+      "eventSource": "ec2.amazonaws.com",
+      "eventName": "RunInstances",
+      "awsRegion": "us-west-2",
+      "sourceIPAddress": "12.34.56.78",
+      "userAgent": "autoscaling.amazonaws.com",
+      "requestParameters": {
+        "instancesSet": {
+          "items": [{
+            "imageId": "ami-f4d4b694",
+            "minCount": 1,
+            "maxCount": 1,
+            "keyName": "jenkins"
+          }]
+        },
+        "userData": "<sensitiveDataRemoved>",
+        "instanceType": "m4.large",
+        "blockDeviceMapping": {
+          "items": [{
+            "deviceName": "/dev/xvda",
+            "ebs": {
+              "volumeSize": 30,
+              "deleteOnTermination": true,
+              "volumeType": "gp2"
+            }
+          }]
+        },
+        "availabilityZone": "us-west-2b",
+        "monitoring": {
+          "enabled": true
+        },
+        "disableApiTermination": false,
+        "clientToken": "example-8888-8888-888-12346fc02c93_subnet-540b2133_1",
+        "networkInterfaceSet": {
+          "items": [{
+            "deviceIndex": 0,
+            "subnetId": "subnet-540b2133",
+            "associatePublicIpAddress": true,
+            "groupSet": {
+              "items": [{
+                "groupId": "sg-f3fbd688"
+              }]
+            }
+          }]
+        },
+        "iamInstanceProfile": {
+          "arn": "arn:aws:iam::123456789101:instance-profile/aws-pr-947-master-profile"
+        }
+      },
+      "responseElements": {
+        "requestId": "example-50bf-4864-9ef8-eb113fa61c34",
+        "reservationId": "r-044dde66b520b0f9c",
+        "ownerId": "123456789101",
+        "groupSet": {},
+        "instancesSet": {
+          "items": [{
+            "instanceId": "i-0aad897efd1368e2c",
+            "imageId": "ami-f4d4b694",
+            "instanceState": {
+              "code": 0,
+              "name": "pending"
+            },
+            "privateDnsName": "ip-10-10-10-11.us-west-2.compute.internal",
+            "keyName": "jenkins",
+            "amiLaunchIndex": 0,
+            "productCodes": {},
+            "instanceType": "m4.large",
+            "launchTime": 1496343459000,
+            "placement": {
+              "availabilityZone": "us-west-2b",
+              "tenancy": "default"
+            },
+            "monitoring": {
+              "state": "pending"
+            },
+            "subnetId": "subnet-540b2133",
+            "vpcId": "vpc-e6bba581",
+            "privateIpAddress": "10.10.10.11",
+            "stateReason": {
+              "code": "pending",
+              "message": "pending"
+            },
+            "architecture": "x86_64",
+            "rootDeviceType": "ebs",
+            "rootDeviceName": "/dev/xvda",
+            "blockDeviceMapping": {},
+            "virtualizationType": "hvm",
+            "hypervisor": "xen",
+            "clientToken": "example-8888-8888-888-12346fc02c93_subnet-540b2133_1",
+            "groupSet": {
+              "items": [{
+                "groupId": "sg-f3fbd688",
+                "groupName": "terraform-007a7203e77f197397e7f91116"
+              }]
+            },
+            "sourceDestCheck": true,
+            "networkInterfaceSet": {
+              "items": [{
+                "networkInterfaceId": "eni-0c28fe26",
+                "subnetId": "subnet-540b2133",
+                "vpcId": "vpc-e6bba581",
+                "ownerId": "123456789101",
+                "status": "in-use",
+                "macAddress": "02:03:04:05:07:09",
+                "privateIpAddress": "10.10.10.11",
+                "privateDnsName": "ip-10-10-10-11.us-west-2.compute.internal",
+                "sourceDestCheck": true,
+                "groupSet": {
+                  "items": [{
+                    "groupId": "sg-f3fbd688",
+                    "groupName": "terraform-007a7203e77f197397e7f91116"
+                  }]
+                },
+                "attachment": {
+                  "attachmentId": "eni-attach-a23f7b4b",
+                  "deviceIndex": 0,
+                  "status": "attaching",
+                  "attachTime": 1496343459000,
+                  "deleteOnTermination": true
+                },
+                "privateIpAddressesSet": {
+                  "item": [{
+                    "privateIpAddress": "10.10.10.11",
+                    "privateDnsName": "ip-10-10-10-11.us-west-2.compute.internal",
+                    "primary": true
+                  }]
+                },
+                "ipv6AddressesSet": {},
+                "tagSet": {}
+              }]
+            },
+            "iamInstanceProfile": {
+              "arn": "arn:aws:iam::123456789101:instance-profile/aws-pr-947-master-profile",
+              "id": "EXAMPLEWG4RE6NWA4W4DW"
+            },
+            "ebsOptimized": false
+          }]
+        },
+        "requesterId": "123456789101"
+      },
+      "requestID": "example-50bf-4864-9ef8-eb113fa61c34",
+      "eventID": "example-aa89-40b6-91a2-7fc568b8928d",
+      "eventType": "AwsApiCall",
+      "recipientAccountId": "123456789101"
+    },
+    {
+      "eventVersion": "1.04",
+      "userIdentity": {
+        "type": "IAMUser",
+        "principalId": "EXAMPLEFW34KYSCWPHAXX",
+        "arn": "arn:aws:iam::123456789101:user/test-user",
+        "accountId": "123456789101",
+        "userName": "test-user"
+      },
+      "eventTime": "2017-06-01T14:39:35Z",
+      "eventSource": "s3.amazonaws.com",
+      "eventName": "CreateBucket",
+      "awsRegion": "us-west-2",
+      "sourceIPAddress": "12.34.56.78",
+      "userAgent": "[aws-sdk-go/1.8.25 (go1.8.1; linux; amd64) APN/1.0 HashiCorp/1.0 Terraform/0.9.6-dev]",
+      "requestParameters": {
+        "CreateBucketConfiguration": {
+          "LocationConstraint": "us-west-2"
+        },
+        "bucketName": "aaws-pr-751",
+        "x-amz-acl": ["private"]
+      },
+      "responseElements": null,
+      "requestID": "example",
+      "eventID": "example-bdf8-4cfb-9241-ae263f85c203",
+      "eventType": "AwsApiCall",
+      "recipientAccountId": "123456789101"
+    },
+    {
+      "eventVersion": "1.05",
+      "userIdentity": {
+        "type": "IAMUser",
+        "principalId": "EXAMPLEFW34KYSCWPHAXX",
+        "arn": "arn:aws:iam::123456789101:user/test-user",
+        "accountId": "123456789101",
+        "accessKeyId": "ABCDEFGHIJKLMNOPQRST",
+        "userName": "test-user"
+      },
+      "eventTime": "2017-06-01T14:39:35Z",
+      "eventSource": "ec2.amazonaws.com",
+      "eventName": "CreateVpc",
+      "awsRegion": "us-west-2",
+      "sourceIPAddress": "12.34.56.78",
+      "userAgent": "aws-sdk-go/1.8.25 (go1.8.1; linux; amd64) APN/1.0 HashiCorp/1.0 Terraform/0.9.6-dev",
+      "requestParameters": {
+        "cidrBlock": "10.0.0.0/16",
+        "instanceTenancy": "default",
+        "amazonProvidedIpv6CidrBlock": false
+      },
+      "responseElements": {
+        "requestId": "6977a699-fb05-49dd-b1aa-bfd26dfc96cc",
+        "vpc": {
+          "vpcId": "vpc-48fae42f",
+          "state": "pending",
+          "cidrBlock": "10.0.0.0/16",
+          "ipv6CidrBlockAssociationSet": {},
+          "dhcpOptionsId": "dopt-d18b7ab6",
+          "instanceTenancy": "default",
+          "tagSet": {},
+          "isDefault": false
+        }
+      },
+      "requestID": "example-fb05-49dd-b1aa-bfd26dfc96cc",
+      "eventID": "example-7187-4e00-af93-397d81a789d5",
+      "eventType": "AwsApiCall",
+      "recipientAccountId": "123456789101"
+    },
+    {
+      "eventVersion": "1.05",
+      "userIdentity": {
+        "type": "IAMUser",
+        "principalId": "EXAMPLEFW34KYSCWPHAXX",
+        "arn": "arn:aws:iam::123456789101:user/test-user",
+        "accountId": "123456789101",
+        "accessKeyId": "ABCDEFGHIJKLMNOPQRST",
+        "userName": "test-user"
+      },
+      "eventTime": "2017-06-01T14:39:37Z",
+      "eventSource": "ec2.amazonaws.com",
+      "eventName": "CreateSubnet",
+      "awsRegion": "us-west-2",
+      "sourceIPAddress": "12.34.56.78",
+      "userAgent": "aws-sdk-go/1.8.25 (go1.8.1; linux; amd64) APN/1.0 HashiCorp/1.0 Terraform/0.9.6-dev",
+      "requestParameters": {
+        "vpcId": "vpc-48fae42f",
+        "cidrBlock": "10.0.64.0/20",
+        "availabilityZone": "us-west-2b"
+      },
+      "responseElements": {
+        "subnet": {
+          "subnetId": "subnet-77466c10",
+          "state": "pending",
+          "vpcId": "vpc-48fae42f",
+          "cidrBlock": "10.0.64.0/20",
+          "ipv6CidrBlockAssociationSet": {},
+          "availableIpAddressCount": 4091,
+          "availabilityZone": "us-west-2b",
+          "defaultForAz": false,
+          "mapPublicIpOnLaunch": false,
+          "assignIpv6AddressOnCreation": false
+        }
+      },
+      "requestID": "example-2af2-4f06-8cfb-9b29ef8f7762",
+      "eventID": "example-1d29-43ff-930f-27b96b5d5d30",
+      "eventType": "AwsApiCall",
+      "recipientAccountId": "123456789101"
+    },
+    {
+      "eventVersion": "1.04",
+      "userIdentity": {
+        "type": "IAMUser",
+        "principalId": "EXAMPLEFW34KYSCWPHAXX",
+        "arn": "arn:aws:iam::123456789101:user/test-user",
+        "accountId": "123456789101",
+        "accessKeyId": "ABCDEFGHIJKLMNOPQRST",
+        "userName": "test-user"
+      },
+      "eventTime": "2017-06-01T14:39:53Z",
+      "eventSource": "elasticloadbalancing.amazonaws.com",
+      "eventName": "CreateLoadBalancer",
+      "awsRegion": "us-west-2",
+      "sourceIPAddress": "12.34.56.78",
+      "userAgent": "aws-sdk-go/1.8.25 (go1.8.1; linux; amd64) APN/1.0 HashiCorp/1.0 Terraform/0.9.6-dev",
+      "requestParameters": {
+        "subnets": [
+          "subnet-75b6f43c",
+          "subnet-3439ed6f",
+          "subnet-a34369c4"
+        ],
+        "securityGroups": [
+          "sg-439bb938"
+        ],
+        "loadBalancerName": "aws-pr-751-ext",
+        "tags": [{
+            "key": "clusterID",
+            "value": "example-555555-e3841-a8872-l33th4x0r"
+          },
+          {
+            "key": "kubernetes.io/cluster/aws-pr-751",
+            "value": "owned"
+          },
+          {
+            "key": "Name",
+            "value": "aws-pr-751-api-external"
+          }
+        ],
+        "listeners": [{
+            "sSLCertificateId": "",
+            "protocol": "tcp",
+            "loadBalancerPort": 443,
+            "instanceProtocol": "tcp",
+            "instancePort": 443
+          },
+          {
+            "sSLCertificateId": "",
+            "protocol": "tcp",
+            "loadBalancerPort": 22,
+            "instanceProtocol": "tcp",
+            "instancePort": 22
+          }
+        ]
+      },
+      "responseElements": {
+        "dNSName": "aws-pr-751-ext-448999999.us-west-2.elb.amazonaws.com"
+      },
+      "requestID": "example-46d8-11e7-9306-f514213821c9",
+      "eventID": "example-3010-471d-a3ee-76a325070da5",
+      "eventType": "AwsApiCall",
+      "apiVersion": "2012-06-01",
+      "recipientAccountId": "123456789101"
+    },
+    {
+      "eventVersion": "1.05",
+      "userIdentity": {
+        "type": "IAMUser",
+        "principalId": "EXAMPLEFW34KYSCWPHAXX",
+        "arn": "arn:aws:iam::123456789101:user/test-user",
+        "accountId": "123456789101",
+        "accessKeyId": "ABCDEFGHIJKLMNOPQRST",
+        "userName": "test-user"
+      },
+      "eventTime": "2017-06-01T14:39:37Z",
+      "eventSource": "ec2.amazonaws.com",
+      "eventName": "CreateInternetGateway",
+      "awsRegion": "us-west-2",
+      "sourceIPAddress": "12.34.56.78",
+      "userAgent": "aws-sdk-go/1.8.25 (go1.8.1; linux; amd64) APN/1.0 HashiCorp/1.0 Terraform/0.9.6-dev",
+      "requestParameters": null,
+      "responseElements": {
+        "internetGateway": {
+          "internetGatewayId": "igw-748c5d13",
+          "attachmentSet": {},
+          "tagSet": {}
+        }
+      },
+      "requestID": "example-2d99-4947-a106-53b380369046",
+      "eventID": "example-7d7c-49d2-80fb-2339fafdc65c",
+      "eventType": "AwsApiCall",
+      "recipientAccountId": "123456789101"
+    },
+    {
+      "eventVersion": "1.05",
+      "userIdentity": {
+        "type": "IAMUser",
+        "principalId": "EXAMPLEFW34KYSCWPHAXX",
+        "arn": "arn:aws:iam::123456789101:user/test-user",
+        "accountId": "123456789101",
+        "accessKeyId": "ABCDEFGHIJKLMNOPQRST",
+        "userName": "test-user"
+      },
+      "eventTime": "2017-06-01T14:39:38Z",
+      "eventSource": "ec2.amazonaws.com",
+      "eventName": "CreateSecurityGroup",
+      "awsRegion": "us-west-2",
+      "sourceIPAddress": "12.34.56.78",
+      "userAgent": "aws-sdk-go/1.8.25 (go1.8.1; linux; amd64) APN/1.0 HashiCorp/1.0 Terraform/0.9.6-dev",
+      "requestParameters": {
+        "groupName": "terraform-00e366b6754c17150509a0f325",
+        "groupDescription": "Managed by Terraform",
+        "vpcId": "vpc-48fae42f"
+      },
+      "responseElements": {
+        "_return": true,
+        "groupId": "sg-889bb9f3"
+      },
+      "requestID": "example-3837-46f7-a468-fa6b8a6bffb8",
+      "eventID": "example-b31e-493a-819c-8bf11d7f9f96",
+      "eventType": "AwsApiCall",
+      "recipientAccountId": "123456789101"
+    },
+    {
+      "eventVersion": "1.05",
+      "userIdentity": {
+        "type": "Root",
+        "principalId": "123456789101",
+        "arn": "arn:aws:iam::123456789101:root",
+        "accountId": "123456789101",
+        "userName": "root-user",
+        "invokedBy": "elasticloadbalancing.amazonaws.com"
+      },
+      "eventTime": "2017-06-01T19:40:43Z",
+      "eventSource": "ec2.amazonaws.com",
+      "eventName": "CreateNetworkInterface",
+      "awsRegion": "us-west-2",
+      "sourceIPAddress": "elasticloadbalancing.amazonaws.com",
+      "userAgent": "elasticloadbalancing.amazonaws.com",
+      "requestParameters": {
+        "subnetId": "subnet-10062c77",
+        "description": "ELB aws-pr-935-api-external",
+        "groupSet": {
+          "items": [{
+            "groupId": "sg-d3dcf1a8"
+          }]
+        },
+        "privateIpAddressesSet": {},
+        "ipv6AddressCount": 0
+      },
+      "responseElements": {
+        "networkInterface": {
+          "networkInterfaceId": "eni-d08b5afa",
+          "internalInterfaceId": "interface-d08b5afa",
+          "subnetId": "subnet-10062c77",
+          "vpcId": "vpc-0fb4aa68",
+          "availabilityZone": "us-west-2b",
+          "description": "ELB aws-pr-935-api-external",
+          "ownerId": "123456789101",
+          "requesterId": "123456789101",
+          "requesterManaged": true,
+          "status": "pending",
+          "macAddress": "02:03:04:05:06:07",
+          "privateIpAddress": "10.10.10.10",
+          "privateDnsName": "ip-10-10-10-10.us-west-2.compute.internal",
+          "sourceDestCheck": true,
+          "groupSet": {
+            "items": [{
+              "groupId": "sg-d3dcf1a8",
+              "groupName": "terraform-002760c8474c49462c103453eb"
+            }]
+          },
+          "attachableToInstanceBySet": {},
+          "associableWithElasticIpBySet": {},
+          "privateIpAddressesSet": {
+            "item": [{
+              "privateIpAddress": "10.10.10.10",
+              "privateDnsName": "ip-10-10-10-10.us-west-2.compute.internal",
+              "primary": true
+            }]
+          },
+          "ipv6AddressesSet": {},
+          "tagSet": {}
+        }
+      },
+      "requestID": "example-ab7c-4110-a656-b38c519638c2",
+      "eventID": "example-2fa8-4e0e-a737-49042cbe3727",
+      "eventType": "AwsApiCall",
+      "recipientAccountId": "123456789101"
+    }
+  ]
+}
