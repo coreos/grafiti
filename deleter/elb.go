@@ -2,7 +2,6 @@ package deleter
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/elb"
@@ -58,9 +57,6 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) DeleteResources(cfg *DeleteCo
 			LoadBalancerName: lb.LoadBalancerName,
 		}
 
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
-
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteLoadBalancerWithContext(ctx, params)
 		if err != nil {
@@ -74,8 +70,6 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) DeleteResources(cfg *DeleteCo
 		fmt.Println(fmtStr, *lb.LoadBalancerName)
 	}
 
-	// Wait for ELB's to delete
-	time.Sleep(time.Duration(1) * time.Minute)
 	return nil
 }
 

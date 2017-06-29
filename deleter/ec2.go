@@ -3,7 +3,6 @@ package deleter
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
@@ -82,9 +81,6 @@ func (rd *EC2CustomerGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 			CustomerGatewayId: cgw.CustomerGatewayId,
 			DryRun:            aws.Bool(cfg.DryRun),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteCustomerGatewayWithContext(ctx, params)
@@ -190,9 +186,6 @@ func (rd *EC2ElasticIPAllocationDeleter) DeleteResources(cfg *DeleteConfig) erro
 			DryRun:       aws.Bool(cfg.DryRun),
 		}
 
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
-
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().ReleaseAddressWithContext(ctx, params)
 		if err != nil {
@@ -251,9 +244,6 @@ func (rd *EC2ElasticIPAssocationDeleter) DeleteResources(cfg *DeleteConfig) erro
 			AssociationId: n.AWSString(),
 			DryRun:        aws.Bool(cfg.DryRun),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DisassociateAddressWithContext(ctx, params)
@@ -336,9 +326,6 @@ func (rd *EC2NetworkInterfaceDeleter) DeleteResources(cfg *DeleteConfig) error {
 			NetworkInterfaceId: eni.NetworkInterfaceId,
 			DryRun:             aws.Bool(cfg.DryRun),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteNetworkInterfaceWithContext(ctx, params)
@@ -484,9 +471,6 @@ func (rd *EC2NetworkInterfaceAttachmentDeleter) DeleteResources(cfg *DeleteConfi
 			DryRun:       aws.Bool(cfg.DryRun),
 		}
 
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
-
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DetachNetworkInterfaceWithContext(ctx, params)
 		if err != nil {
@@ -553,9 +537,6 @@ func (rd *EC2NetworkACLEntryDeleter) DeleteResources(cfg *DeleteConfig) error {
 			Egress:       entry.Egress,
 			DryRun:       aws.Bool(cfg.DryRun),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteNetworkAclEntryWithContext(ctx, params)
@@ -628,9 +609,6 @@ func (rd *EC2NetworkACLDeleter) DeleteResources(cfg *DeleteConfig) error {
 			NetworkAclId: acl.NetworkAclId,
 			DryRun:       aws.Bool(cfg.DryRun),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteNetworkAclWithContext(ctx, params)
@@ -956,9 +934,6 @@ func (rd *EC2InternetGatewayAttachmentDeleter) DeleteResources(cfg *DeleteConfig
 			VpcId:             an.AWSString(),
 		}
 
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
-
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DetachInternetGatewayWithContext(ctx, params)
 		if err != nil {
@@ -1039,9 +1014,6 @@ func (rd *EC2InternetGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 			InternetGatewayId: igw.InternetGatewayId,
 			DryRun:            aws.Bool(cfg.DryRun),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteInternetGatewayWithContext(ctx, params)
@@ -1153,9 +1125,6 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 			NatGatewayId: ngw.NatGatewayId,
 		}
 
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
-
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteNatGatewayWithContext(ctx, params)
 		if err != nil {
@@ -1169,8 +1138,6 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		fmt.Println(fmtStr, *ngw.NatGatewayId)
 	}
 
-	// Wait for NAT Gateways to delete
-	time.Sleep(time.Duration(1) * time.Minute)
 	return nil
 }
 
@@ -1271,9 +1238,6 @@ func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 			DryRun:               aws.Bool(cfg.DryRun),
 		}
 
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
-
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteRouteWithContext(ctx, params)
 		if err != nil {
@@ -1335,9 +1299,6 @@ func (rd *EC2RouteTableAssociationDeleter) DeleteResources(cfg *DeleteConfig) er
 			AssociationId: n.AWSString(),
 			DryRun:        aws.Bool(cfg.DryRun),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DisassociateRouteTableWithContext(ctx, params)
@@ -1415,9 +1376,6 @@ func (rd *EC2RouteTableDeleter) DeleteResources(cfg *DeleteConfig) error {
 			RouteTableId: rt.RouteTableId,
 			DryRun:       aws.Bool(cfg.DryRun),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteRouteTableWithContext(ctx, params)
@@ -1541,9 +1499,6 @@ func (rd *EC2SecurityGroupIngressRuleDeleter) DeleteResources(cfg *DeleteConfig)
 			DryRun:        aws.Bool(cfg.DryRun),
 		}
 
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
-
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().RevokeSecurityGroupIngressWithContext(ctx, params)
 		if err != nil {
@@ -1605,9 +1560,6 @@ func (rd *EC2SecurityGroupEgressRuleDeleter) DeleteResources(cfg *DeleteConfig) 
 			IpPermissions: sg.IpPermissionsEgress,
 			DryRun:        aws.Bool(cfg.DryRun),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().RevokeSecurityGroupEgressWithContext(ctx, params)
@@ -1687,9 +1639,6 @@ func (rd *EC2SecurityGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 			GroupId: sg.GroupId,
 			DryRun:  aws.Bool(cfg.DryRun),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteSecurityGroupWithContext(ctx, params)
@@ -1807,9 +1756,6 @@ func (rd *EC2SubnetDeleter) DeleteResources(cfg *DeleteConfig) error {
 			DryRun:   aws.Bool(cfg.DryRun),
 		}
 
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
-
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteSubnetWithContext(ctx, params)
 		if err != nil {
@@ -1922,9 +1868,6 @@ func (rd *EC2VPCCIDRBlockAssociationDeleter) DeleteResources(cfg *DeleteConfig) 
 			AssociationId: n.AWSString(),
 		}
 
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
-
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DisassociateVpcCidrBlockWithContext(ctx, params)
 		if err != nil {
@@ -1996,9 +1939,6 @@ func (rd *EC2VPCDeleter) DeleteResources(cfg *DeleteConfig) error {
 			VpcId:  vpc.VpcId,
 			DryRun: aws.Bool(cfg.DryRun),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteVpcWithContext(ctx, params)

@@ -3,7 +3,6 @@ package deleter
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
@@ -56,9 +55,6 @@ func (rd *AutoScalingGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 			ForceDelete:          aws.Bool(true),
 		}
 
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
-
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteAutoScalingGroupWithContext(ctx, params)
 		if err != nil {
@@ -72,7 +68,6 @@ func (rd *AutoScalingGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 		fmt.Println(fmtStr, n)
 	}
 
-	time.Sleep(time.Duration(30) * time.Second)
 	return nil
 }
 
@@ -150,9 +145,6 @@ func (rd *AutoScalingLaunchConfigurationDeleter) DeleteResources(cfg *DeleteConf
 		params = &autoscaling.DeleteLaunchConfigurationInput{
 			LaunchConfigurationName: n.AWSString(),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteLaunchConfigurationWithContext(ctx, params)

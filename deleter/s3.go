@@ -2,7 +2,6 @@ package deleter
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
@@ -165,9 +164,6 @@ func (rd *S3BucketDeleter) DeleteResources(cfg *DeleteConfig) error {
 		params = &s3.DeleteBucketInput{
 			Bucket: n.AWSString(),
 		}
-
-		// Prevent throttling
-		time.Sleep(cfg.BackoffTime)
 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteBucketWithContext(ctx, params)
