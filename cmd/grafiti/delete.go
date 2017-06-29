@@ -280,7 +280,10 @@ func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.R
 		params.NextToken = resp.NextToken
 	}
 
-	asgDel := deleter.AutoScalingGroupDeleter{ResourceNames: asgNames}
+	asgDel := deleter.AutoScalingGroupDeleter{
+		Client:        svc,
+		ResourceNames: asgNames,
+	}
 	asgs, aerr := asgDel.RequestAutoScalingGroups()
 	if aerr != nil {
 		return
