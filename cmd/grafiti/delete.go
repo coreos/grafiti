@@ -47,13 +47,13 @@ var (
 // DeleteOrder contains the REVERSE order of deletion for all resource types
 var DeleteOrder = arn.ResourceTypes{
 	arn.EC2VPCRType,
-	arn.EC2VPNGatewayRType,
+	arn.EC2VPNGatewayRType, // Deletes EC2 VPN Gateway Attachments
 	arn.EC2SecurityGroupRType,
-	arn.EC2RouteTableRType, // Deletes RouteTable Routes
+	arn.EC2RouteTableRType, // Deletes EC2 Route Table Routes
 	arn.EC2SubnetRType,
 	arn.EC2VolumeRType,
 	arn.EC2CustomerGatewayRType,
-	arn.EC2VPNConnectionRType,
+	arn.EC2VPNConnectionRType, // Deletes EC2 VPN Connection Routes
 	arn.EC2NetworkACLRType,
 	arn.EC2NetworkInterfaceRType,
 	arn.EC2InternetGatewayRType,
