@@ -90,7 +90,7 @@ func (rd *S3ObjectDeleter) RequestS3ObjectsFromBucket() ([]*s3.Object, error) {
 		resp, err := rd.GetClient().ListObjectsV2WithContext(ctx, params)
 		if err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
+			return objs, err
 		}
 
 		objs = append(objs, resp.Contents...)

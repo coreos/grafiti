@@ -46,9 +46,6 @@ func (rd *IAMInstanceProfileDeleter) DeleteResources(cfg *DeleteConfig) error {
 	if err != nil && !cfg.IgnoreErrors {
 		return err
 	}
-	if len(iprs) == 0 {
-		return nil
-	}
 
 	// Delete roles from instance profiles
 	if err := rd.deleteIAMRolesFromInstanceProfiles(cfg, iprs); err != nil {
@@ -140,7 +137,7 @@ func (rd *IAMInstanceProfileDeleter) RequestIAMInstanceProfiles() ([]*iam.Instan
 		resp, err := rd.GetClient().ListInstanceProfilesWithContext(ctx, params)
 		if err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
+			return iprs, err
 		}
 
 		for _, rp := range resp.InstanceProfiles {
@@ -213,11 +210,11 @@ func (rd *IAMRoleDeleter) DeleteResources(cfg *DeleteConfig) error {
 	for _, rl := range rls {
 		// Delete role policies
 		rpd = &IAMRolePolicyDeleter{RoleName: arn.ResourceName(*rl.RoleName)}
-		pls, rerr := rpd.RequestIAMRolePoliciesFromRoles()
+		policyNames, rerr := rpd.RequestIAMRolePoliciesFromRoles()
 		if rerr != nil && !cfg.IgnoreErrors {
 			continue
 		}
-		rpd.PolicyNames = pls
+		rpd.PolicyNames = policyNames
 
 		if err := rpd.DeleteResources(cfg); err != nil {
 			continue
@@ -263,7 +260,7 @@ func (rd *IAMRoleDeleter) RequestIAMRoles() ([]*iam.Role, error) {
 		resp, err := rd.GetClient().ListRolesWithContext(ctx, params)
 		if err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
+			return rls, err
 		}
 
 		for _, rl := range resp.Roles {
@@ -353,7 +350,7 @@ func (rd *IAMRolePolicyDeleter) RequestIAMRolePoliciesFromRoles() (arn.ResourceN
 		return nil, nil
 	}
 
-	pls := make(arn.ResourceNames, 0)
+	policyNames := make(arn.ResourceNames, 0)
 	params := &iam.ListRolePoliciesInput{
 		MaxItems: aws.Int64(100),
 		RoleName: rd.RoleName.AWSString(),
@@ -364,11 +361,11 @@ func (rd *IAMRolePolicyDeleter) RequestIAMRolePoliciesFromRoles() (arn.ResourceN
 		resp, err := rd.GetClient().ListRolePoliciesWithContext(ctx, params)
 		if err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
+			return policyNames, err
 		}
 
 		for _, rp := range resp.PolicyNames {
-			pls = append(pls, arn.ResourceName(*rp))
+			policyNames = append(policyNames, arn.ResourceName(*rp))
 		}
 
 		if resp.IsTruncated == nil || !*resp.IsTruncated {
@@ -378,5 +375,5 @@ func (rd *IAMRolePolicyDeleter) RequestIAMRolePoliciesFromRoles() (arn.ResourceN
 		params.Marker = resp.Marker
 	}
 
-	return pls, nil
+	return policyNames, nil
 }

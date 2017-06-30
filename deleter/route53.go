@@ -162,7 +162,7 @@ func (rd *Route53HostedZoneDeleter) RequestAllRoute53HostedZones() ([]*route53.H
 		resp, err := rd.GetClient().ListHostedZonesWithContext(ctx, params)
 		if err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
+			return hzs, err
 		}
 
 		hzs = append(hzs, resp.HostedZones...)
@@ -285,7 +285,7 @@ func (rd *Route53ResourceRecordSetDeleter) RequestRoute53ResourceRecordSets() (m
 			resp, err := rd.GetClient().ListResourceRecordSetsWithContext(ctx, params)
 			if err != nil {
 				fmt.Printf("{\"error\": \"%s\"}\n", err)
-				return nil, err
+				return rrsMap, err
 			}
 
 			for _, rrs := range resp.ResourceRecordSets {

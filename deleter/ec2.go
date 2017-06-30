@@ -827,7 +827,7 @@ func (c *EC2Client) requestEC2Instances(filterKey string, chunk arn.ResourceName
 		resp, err := c.DescribeInstancesWithContext(ctx, params)
 		if err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
+			return instances, err
 		}
 
 		for _, reservation := range resp.Reservations {
@@ -1194,7 +1194,7 @@ func (c *EC2Client) requestEC2NatGateways(filterKey string, chunk arn.ResourceNa
 		resp, err := c.DescribeNatGatewaysWithContext(ctx, params)
 		if err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
+			return ngws, err
 		}
 
 		for _, ngw := range resp.NatGateways {

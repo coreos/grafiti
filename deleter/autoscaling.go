@@ -88,7 +88,7 @@ func (rd *AutoScalingGroupDeleter) RequestAutoScalingGroups() ([]*autoscaling.Gr
 		resp, err := rd.GetClient().DescribeAutoScalingGroupsWithContext(ctx, params)
 		if err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
+			return asgs, err
 		}
 
 		asgs = append(asgs, resp.AutoScalingGroups...)
@@ -172,7 +172,7 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestAutoScalingLaunchConfigu
 	size, chunk := len(rd.ResourceNames), 20
 	lcs := make([]*autoscaling.LaunchConfiguration, 0)
 	var err error
-	// Can only filter in batches of 200
+	// Can only filter in batches of 20
 	for i := 0; i < size; i += chunk {
 		stop := CalcChunk(i, size, chunk)
 		lcs, err = rd.requestAutoScalingLaunchConfigurations(rd.ResourceNames[i:stop], lcs)
@@ -196,7 +196,7 @@ func (rd *AutoScalingLaunchConfigurationDeleter) requestAutoScalingLaunchConfigu
 		resp, err := rd.GetClient().DescribeLaunchConfigurationsWithContext(ctx, params)
 		if err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
+			return lcs, err
 		}
 
 		lcs = append(lcs, resp.LaunchConfigurations...)
@@ -233,7 +233,7 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestIAMInstanceProfilesFromL
 		resp, err := svc.ListInstanceProfilesWithContext(ctx, params)
 		if err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
+			return iprs, err
 		}
 
 		for _, ipr := range resp.InstanceProfiles {

@@ -82,7 +82,7 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) RequestElasticLoadBalancers()
 	size, chunk := len(rd.ResourceNames), 20
 	elbs := make([]*elb.LoadBalancerDescription, 0)
 	var err error
-	// Can only filter in batches of 200
+	// Can only filter in batches of 20
 	for i := 0; i < size; i += chunk {
 		stop := CalcChunk(i, size, chunk)
 		elbs, err = rd.requestElasticLoadBalancers(rd.ResourceNames[i:stop], elbs)
@@ -107,7 +107,7 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) requestElasticLoadBalancers(c
 		resp, err := rd.GetClient().DescribeLoadBalancersWithContext(ctx, params)
 		if err != nil {
 			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return nil, err
+			return elbs, err
 		}
 
 		elbs = append(elbs, resp.LoadBalancerDescriptions...)
