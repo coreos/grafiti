@@ -184,7 +184,7 @@ func parseFromCloudTrail(svc cloudtrailiface.CloudTrailAPI) error {
 		return nil
 	}
 
-	// Create LookupEvents for all grafiti.resourceTypes. If none are specified,
+	// Create LookupEvents for all resourceTypes. If none are specified,
 	// look up all events for all resourceTypes
 	rts := viper.GetStringSlice("resourceTypes")
 	var attrs []*cloudtrail.LookupAttribute

@@ -18,10 +18,11 @@ import (
 const drStr = "(dry-run)"
 
 func setUpAWSSession() *session.Session {
+	maxRetries := viper.GetInt("maxNumRequestRetries")
 	return session.Must(session.NewSession(
 		&aws.Config{
 			Region:  aws.String(viper.GetString("region")),
-			Retryer: retryer.DeleteRetryer{NumMaxRetries: 11},
+			Retryer: retryer.DeleteRetryer{NumMaxRetries: maxRetries},
 		},
 	))
 }

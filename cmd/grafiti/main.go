@@ -77,6 +77,8 @@ func initConfig() {
 
 	// Default bucket ejection time: 10 minutes in seconds
 	viper.SetDefault("bucketEjectLimitSeconds", 300)
+	// Default number of delete request retries
+	viper.SetDefault("maxNumRequestRetries", 8)
 
 	// If a config file is found, read in its data
 	if err := viper.ReadInConfig(); err == nil {
