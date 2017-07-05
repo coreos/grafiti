@@ -15,6 +15,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 
 	"github.com/Sirupsen/logrus"
@@ -28,6 +29,16 @@ var (
 	dryRun       bool
 	ignoreErrors bool
 )
+
+// grafiti-specific environment variables will begin with GRF_
+var envVarMap = map[string]string{
+	"AWS_REGION":          "region",
+	"GRF_START_HOUR":      "startHour",
+	"GRF_END_HOUR":        "endHour",
+	"GRF_START_TIMESTAMP": "startTimeStamp",
+	"GRF_END_TIMESTAMP":   "endTimeStamp",
+	"GRF_INCLUDE_EVENT":   "includeEvent",
+}
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
@@ -51,18 +62,34 @@ func init() {
 func initConfig() {
 	if cfgFile != "" { // enable ability to specify config file via flag
 		viper.SetConfigFile(cfgFile)
+	} else {
+		viper.AddConfigPath("$HOME")    // adding home directory as first search path
+		viper.SetConfigName(".grafiti") // name of config file (without extension)
+	}
+
+	// Use env variables as defaults
+	for ev, path := range envVarMap {
+		val := os.Getenv(ev)
+		if val != "" {
+			viper.SetDefault(path, val)
+		}
 	}
 
 	// Default bucket ejection time: 10 minutes in seconds
-	viper.SetDefault("grafiti.bucketEjectLimitSeconds", 300)
+	viper.SetDefault("bucketEjectLimitSeconds", 300)
 
-	viper.SetConfigName(".grafiti") // name of config file (without extension)
-	viper.AddConfigPath("$HOME")    // adding home directory as first search path
-	viper.AutomaticEnv()            // read in environment variables that match
-
-	// If a config file is found, read it in.
+	// If a config file is found, read in its data
 	if err := viper.ReadInConfig(); err == nil {
 		logrus.Info("Using config file: ", viper.ConfigFileUsed())
+		return
+	}
+
+	// No config file found so configure grafiti with a dummy config file (Reader)
+	// and environment variables
+	viper.SetConfigType("toml")
+	if err := viper.ReadConfig(bytes.NewBuffer([]byte(""))); err == nil {
+		logrus.Info("Using environment variables to configure grafiti.")
+		return
 	}
 
 }

@@ -124,7 +124,7 @@ func deleteFromTags(reader io.Reader) error {
 
 	svc := rgta.New(session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(viper.GetString("grafiti.region")),
+			Region: aws.String(viper.GetString("region")),
 		},
 	)))
 
@@ -169,7 +169,7 @@ func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.
 	}
 
 	// If available, get all resourceTypes from config file
-	rts := viper.GetStringSlice("grafiti.resourceTypes")
+	rts := viper.GetStringSlice("resourceTypes")
 	if len(rts) != 0 {
 		frts := make([]*string, 0, len(rts))
 		for _, t := range rts {
@@ -214,7 +214,7 @@ func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.
 func getARNsForUnsupportedResource(rt arn.ResourceType, tags []*rgta.TagFilter, arnList arn.ResourceARNs) arn.ResourceARNs {
 	sess := session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(viper.GetString("grafiti.region")),
+			Region: aws.String(viper.GetString("region")),
 		},
 	))
 

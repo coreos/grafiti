@@ -357,7 +357,7 @@ func getAutoScalingGroup(rn ResourceName) (*autoscaling.Group, error) {
 
 	svc := autoscaling.New(session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(viper.GetString("grafiti.region")),
+			Region: aws.String(viper.GetString("region")),
 		},
 	)))
 	params := &autoscaling.DescribeAutoScalingGroupsInput{

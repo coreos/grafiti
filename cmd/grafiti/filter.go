@@ -48,7 +48,7 @@ func runFilterCommand(cmd *cobra.Command, args []string) error {
 
 	svc := rgta.New(session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(viper.GetString("grafiti.region")),
+			Region: aws.String(viper.GetString("region")),
 		},
 	)))
 

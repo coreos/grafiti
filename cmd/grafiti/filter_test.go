@@ -56,8 +56,8 @@ func TestFilter(t *testing.T) {
 	wd, _ := os.Getwd()
 	dataDir := wd + "/../../testdata"
 
-	viper.Set("grafiti.tagPatterns", []string{})
-	viper.Set("grafiti.resourceTypes", []string{})
+	viper.Set("tagPatterns", []string{})
+	viper.Set("resourceTypes", []string{})
 
 	cases := []struct {
 		InputFilePath    string
