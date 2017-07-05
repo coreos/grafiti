@@ -62,20 +62,18 @@ func TestFilter(t *testing.T) {
 	cases := []struct {
 		InputFilePath    string
 		InputTagFilePath string
-		InputSVC         *mockRGTAGetResources
+		InputResp        rgta.GetResourcesOutput
 		ExpectedFilePath string
 	}{
 		{
 			InputFilePath:    dataDir + "/filter/input-filter.json",
 			InputTagFilePath: dataDir + "/filter/input-ignore-tags.json",
-			InputSVC: &mockRGTAGetResources{
-				Resp: rgta.GetResourcesOutput{
-					ResourceTagMappingList: []*rgta.ResourceTagMapping{
-						{
-							ResourceARN: aws.String("arn:aws:ec2:us-west-2:123456789101:instance/i-0e846a0fc3863dddd"),
-						}, {
-							ResourceARN: aws.String("arn:aws:autoscaling:us-west-2:123456789101:autoScalingGroup:big-long-string:autoScalingGroupName/demo-master-1"),
-						},
+			InputResp: rgta.GetResourcesOutput{
+				ResourceTagMappingList: []*rgta.ResourceTagMapping{
+					{
+						ResourceARN: aws.String("arn:aws:ec2:us-west-2:123456789101:instance/i-0e846a0fc3863dddd"),
+					}, {
+						ResourceARN: aws.String("arn:aws:s3:::bucket/s3-bucket-name-1"),
 					},
 				},
 			},
@@ -86,6 +84,10 @@ func TestFilter(t *testing.T) {
 	var wi bytes.Buffer
 
 	for i, c := range cases {
+		svc := &mockRGTAGetResources{
+			Resp: c.InputResp,
+		}
+
 		// Parse input data
 		ifb, ierr := ioutil.ReadFile(c.InputFilePath)
 		if ierr != nil {
@@ -101,7 +103,7 @@ func TestFilter(t *testing.T) {
 			t.FailNow()
 		}
 
-		filteredOutput := captureFilterStdOut(filter, c.InputSVC, &wi, tf)
+		filteredOutput := captureFilterStdOut(filter, svc, &wi, tf)
 		filteredOutput = strings.Trim(filteredOutput, "\n")
 
 		ob, rerr := ioutil.ReadFile(c.ExpectedFilePath)
