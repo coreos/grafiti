@@ -7,7 +7,7 @@ COPY . ${GRAFITI_ABS_PATH}/
 
 # Install grafiti, build utils, and jq
 RUN set -eux \
-    && apk add --no-cache jq make glide \
+    && apk add --no-cache jq make glide bash \
     && apk add --no-cache --virtual .build-deps git \
     && cd ${GRAFITI_ABS_PATH} \
     && make install \

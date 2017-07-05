@@ -14,43 +14,38 @@ def quay_creds = [
   )
 ]
 
-pipeline {
-  agent none
-  environment {
-    GRAFITI_IMAGE = 'quay.io/coreos/grafiti'
+node('worker && ec2') {
+
+  def builder_image = "quay.io/coreos/grafiti"
+
+  stage('Build') {
+    checkout scm
+    sh """#!/bin/bash -ex
+    docker build -t "$builder_image" .
+    """
   }
-  stages {
-    stage('Build & Test') {
-      steps {
-        node('worker && ec2') {
-          withCredentials(creds) {
-            checkout scm
-            sh """#!/bin/bash -ex
-            docker build -t "$GRAFITI_IMAGE" .
-            docker run --rm \
-          	 -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-           	 -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-             "$GRAFITI_IMAGE" ash -c 'cd \$GRAFITI_ABS_PATH && make test'
-            """
-          }
-        }
+  stage('Test') {
+    environment {
+      GO_PROJECT = '/go/src/github.com/coreos/grafiti'
+    }
+    withCredentials(creds) {
+      withDockerContainer(builder_image) {
+        sh """#!/bin/bash -ex
+        cd $GO_PROJECT
+        make test
+        """
       }
     }
-    stage('Push') {
-      when {
-        branch 'master'
-      }
-      steps {
-        node('worker && ec2') {
-          withCredentials(quay_creds) {
-            sh """#!/bin/bash -ex
-            docker login -u="$QUAY_USERNAME" -p="$QUAY_PASSWORD" quay.io
-            docker build -t "$GRAFITI_IMAGE" .
-            docker push "$GRAFITI_IMAGE"
-            """
-          }
-        }
-      }
+  }
+  stage('Push') {
+    when {
+      branch 'master'
+    }
+    withCredentials(quay_creds) {
+      sh """#!/bin/bash -ex
+      docker login -u="$QUAY_USERNAME" -p="$QUAY_PASSWORD" quay.io
+      docker push "$builder_image"
+      """
     }
   }
 }
