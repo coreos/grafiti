@@ -222,6 +222,13 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 		params  *route53.ChangeResourceRecordSetsInput
 	)
 	for hz, rrss := range rrsMap {
+		if cfg.DryRun {
+			for _, rrs := range rrss {
+				fmt.Printf("%s %s %s (HZ %s)\n", drStr, fmtStr, *rrs.Name, hz)
+			}
+			continue
+		}
+
 		changes = make([]*route53.Change, 0, len(rrss))
 		for _, rrs := range rrss {
 			if cfg.DryRun {

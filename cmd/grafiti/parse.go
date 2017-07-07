@@ -44,15 +44,22 @@ type rawEventIdentity struct {
 
 // Maps CloudTrail eventName to a rawEventIdentity
 var rawEventMap = map[string]rawEventIdentity{
-	"RunInstances":           {arn.EC2InstanceRType, "responseElements.instancesSet.items.0.instanceId"},
-	"CreateBucket":           {arn.S3BucketRType, "requestParameters.bucketName"},
 	"CreateAutoScalingGroup": {arn.AutoScalingGroupRType, "requestParameters.autoScalingGroupName"},
-	"CreateVpc":              {arn.EC2VPCRType, "responseElements.vpc.vpcId"},
-	"CreateSubnet":           {arn.EC2SubnetRType, "responseElements.subnet.subnetId"},
-	"CreateLoadBalancer":     {arn.ElasticLoadBalancingLoadBalancerRType, "requestParameters.loadBalancerName"},
+	"CreateBucket":           {arn.S3BucketRType, "requestParameters.bucketName"},
+	"CreateCustomerGateway":  {arn.EC2CustomerGatewayRType, "responseElements.customerGateway.customerGatewayId"},
+	"CreateHostedZone":       {arn.Route53HostedZoneRType, "responseElements.hostedZone.id"},
 	"CreateInternetGateway":  {arn.EC2InternetGatewayRType, "responseElements.internetGateway.internetGatewayId"},
-	"CreateSecurityGroup":    {arn.EC2SecurityGroupRType, "responseElements.groupId"},
+	"CreateLoadBalancer":     {arn.ElasticLoadBalancingLoadBalancerRType, "requestParameters.loadBalancerName"},
+	"CreateNetworkAcl":       {arn.EC2NetworkACLRType, "responseElements.networkAcl.networkAclId"},
 	"CreateNetworkInterface": {arn.EC2NetworkInterfaceRType, "responseElements.networkInterface.networkInterfaceId"},
+	"CreateRouteTable":       {arn.EC2RouteTableRType, "responseElements.routeTable.routeTableId"},
+	"CreateSecurityGroup":    {arn.EC2SecurityGroupRType, "responseElements.groupId"},
+	"CreateSubnet":           {arn.EC2SubnetRType, "responseElements.subnet.subnetId"},
+	"CreateVolume":           {arn.EC2VolumeRType, "responseElements.volumeId"},
+	"CreateVpc":              {arn.EC2VPCRType, "responseElements.vpc.vpcId"},
+	"CreateVpnConnection":    {arn.EC2VPNConnectionRType, "responseElements.vpnConnection.vpnConnectionId"},
+	"CreateVpnGateway":       {arn.EC2VPNGatewayRType, "responseElements.vpnGateway.vpnGatewayId"},
+	"RunInstances":           {arn.EC2InstanceRType, "responseElements.instancesSet.items.0.instanceId"},
 }
 
 func init() {
@@ -68,6 +75,16 @@ var parseCmd = &cobra.Command{
 }
 
 func runParseCommand(cmd *cobra.Command, args []string) error {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		fmt.Println("Error opening Stdin:", err)
+		os.Exit(1)
+	}
+
+	if (fi.Mode() & os.ModeCharDevice) == 0 {
+		return parseFromStdin()
+	}
+
 	if inputFile != "" {
 		return parseFromFile(inputFile)
 	}
@@ -90,6 +107,42 @@ type CloudTrailLogFile struct {
 	Events []json.RawMessage `json:"Records"`
 }
 
+func parseBytes(raw []byte) error {
+	var logFile CloudTrailLogFile
+	if err := json.Unmarshal(raw, &logFile); err != nil {
+		return err
+	}
+
+	var (
+		event    []byte
+		eventStr string
+		err      error
+	)
+	for _, eventData := range logFile.Events {
+		event, err = eventData.MarshalJSON()
+		if err != nil {
+			continue
+		}
+
+		eventStr = parseRawCloudTrailEvent(string(event))
+		if eventStr != "" {
+			fmt.Println(eventStr)
+		}
+	}
+
+	return nil
+}
+
+func parseFromStdin() error {
+	raw, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+
+	return parseBytes(raw)
+}
+
 func parseFromFile(logFileName string) error {
 	raw, err := ioutil.ReadFile(logFileName)
 	if err != nil {
@@ -97,22 +150,7 @@ func parseFromFile(logFileName string) error {
 		os.Exit(1)
 	}
 
-	var logFile CloudTrailLogFile
-	if err = json.Unmarshal(raw, &logFile); err != nil {
-		return err
-	}
-
-	var event []byte
-	for _, eventData := range logFile.Events {
-		event, err = eventData.MarshalJSON()
-		if err != nil {
-			continue
-		}
-
-		fmt.Println(parseRawCloudTrailEvent(string(event)))
-	}
-
-	return nil
+	return parseBytes(raw)
 }
 
 func parseRawCloudTrailEvent(event string) string {
