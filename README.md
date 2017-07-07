@@ -1,5 +1,7 @@
 # Grafiti
 
+[![Build Status](https://jenkins-tectonic-installer.prod.coreos.systems/job/grafiti/badge/icon)](https://jenkins-tectonic-installer.prod.coreos.systems/job/grafiti)
+
 Grafiti is a tool for parsing, tagging, and deleting AWS resources.
 
 * Using a [CloudTrail](https://aws.amazon.com/cloudtrail/) trail, resource CRUD events can be parsed using `grafiti` for identifying resource information.
@@ -18,7 +20,11 @@ Every day, we can query the resource tagging API for resources that will expire 
 Every day, we also query for resources that have expired, and delete them.
 
 # Installation
-Ensure you have [Golang](https://golang.org/dl/) 1.7+ and `jq` (see below) installed and your `GOPATH` set correctly.
+Ensure you have the following installed:
+
+* [Golang](https://golang.org/dl/) 1.7+
+* `jq` (see below)
+* The [glide](https://glide.sh/) package manager
 
 Retrieve and install grafiti (the binary will be in `$GOPATH/bin`):
 ```
@@ -35,7 +41,9 @@ make install
 ```
 
 ## `jq` installation
-`jq` is a CLI JSON parsing tool that `grafiti` uses internally to evaluate config file expressions, and must be installed before running `grafiti`. You can find download instructions [here](https://stedolan.github.io/jq/download/).
+`jq` is a CLI JSON parsing tool that `grafiti` uses internally to evaluate config file expressions, and must be installed before running `grafiti`. This program is quite useful for parsing `grafiti` input/output as well. You can find download instructions [here](https://stedolan.github.io/jq/download/).
+
+# Usage
 
 ## Grafiti commands
 
@@ -66,8 +74,6 @@ Flags:
 Use "grafiti [command] --help" for more information about a command.
 ```
 
-# Usage
-
 ## Configure aws credentials
 
   In order to use `grafiti`, you will need to configure your machine to talk to AWS with a `~/.aws/credentials` [file](http://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html).
@@ -94,8 +100,8 @@ Grafiti takes a config file which configures it's basic function.
 resourceTypes = ["AWS::EC2::Instance"]
 endHour = 0
 startHour = -8
-endTimeStamp = "20170614T010101Z"
-startTimeStamp = "20170613T010101Z"
+endTimeStamp = "2017-06-14T01:01:01Z"
+startTimeStamp = "2017-06-13T01:01:01Z"
 region = "us-east-1"
 includeEvent = false
 tagPatterns = [
@@ -106,11 +112,11 @@ filterPatterns = [
 ]
 ```
 
- * `resourceTypes` - Specifies a list of resources to query for. These can be any values the CloudTrail API accepts.
+ * `resourceTypes` - Specifies a list of resource types to query for. These can be any values the CloudTrail [API](http://docs.aws.amazon.com/awscloudtrail/latest/userguide/view-cloudtrail-events-supported-resource-types.html), or CloudTrail [log files](http://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-supported-services.html) if you're parsing files from a CloudTrail S3 bucket, accept.
  * `endHour`,`startHour` - Specifies the range of hours (beginning at `startHour`, ending at `endHour`) to query events from CloudTrail.
- * `endTimeStamp`,`startTimeStamp` - Specifies the range between two exact times (beginning at `startTimeStamp`, ending at `endTimeStamp`) to query events from CloudTrail. These fields take ISO-8601 (no milliseconds) format.
-    * **Note**: Only one of `*Hour`, `*TimeStamp` pairs can be used. An error will occur if both are used.
- * `region` - The region to query
+ * `endTimeStamp`,`startTimeStamp` - Specifies the range between two exact times (beginning at `startTimeStamp`, ending at `endTimeStamp`) to query events from CloudTrail. These fields take RFC-3339 (no milliseconds) format.
+    * **Note**: Only one of `*Hour`, `*TimeStamp` pairs can be used. An error will be thrown if both are used.
+ * `region` - The AWS region to query.
  * `includeEvent` - Setting `true` will include the raw CloudEvent in the tagging output (this is useful for finding attributes to filter on).
  * `tagPatterns` - should use `jq` syntax to generate `{tagKey: tagValue}` objects from output from `grafiti parse`. The results will be included in the `Tags` field of the tagging output.
  * `filterPatterns` - will filter output of `grafiti parse` based on `jq` syntax matches.
@@ -141,15 +147,19 @@ AWS resources have (potentially many) dependencies that must be explicitly detac
 17. EC2 NetworkInterface
 18. EC2 NetworkACL
     1. EC2 NetworkACL Entry
-19. EC2 CustomerGateway
-20. EBS Volume
-21. EC2 Subnet
-22. EC2 RouteTable
+19. EC2 VPN Connection
+    1. EC2 VPN Connection Route
+20. EC2 CustomerGateway
+21. EBS Volume
+22. EC2 Subnet
+23. EC2 RouteTable
     1. EC2 RouteTable Route
-23. EC2 SecurityGroup
+24. EC2 SecurityGroup
     1. EC2 SecurityGroup Ingress Rule
     2. EC2 SecurityGroup Egress Rule
-24. EC2 VPC
+25. EC2 VPN Gateway
+    1. EC2 VPN Gateway Attachment
+26. EC2 VPC
     1. EC2 VPC CIDRBlock
 
 # Examples
@@ -238,7 +248,7 @@ Filter input file (see `example-tags-input.json`) has the form:
 }
 ```
 
-TagFilters have the same form as AWS TagFilter JSON. See the [docs for details](http://docs.aws.amazon.com/resourcegroupstagging/latest/APIReference/API_TagFilter.html). Of note is tag value chaining with AND and OR e.g. `"Values": ["Yes", "OR", "Maybe"]`
+TagFilters have the same form as the AWS Resource Group Tagging API `TagFilter`. See the [docs for details](http://docs.aws.amazon.com/resourcegroupstagging/latest/APIReference/API_TagFilter.html). Of note is tag value chaining with AND and OR e.g. `"Values": ["Yes", "OR", "Maybe"]`
 
 Filtering can be done like so:
 ```bash

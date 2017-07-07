@@ -9,4 +9,7 @@ install:
 test:
 	go test -v $(shell glide novendor)
 
-.PHONY: all install test
+lint:
+	go fmt $(shell glide novendor)
+
+.PHONY: all install test lint
