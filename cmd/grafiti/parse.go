@@ -15,8 +15,11 @@
 package main
 
 import (
+	"bufio"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"time"
@@ -64,7 +67,7 @@ var rawEventMap = map[string]rawEventIdentity{
 
 func init() {
 	RootCmd.AddCommand(parseCmd)
-	parseCmd.PersistentFlags().StringVarP(&inputFile, "input-file", "f", "", "CloudTrail log file of raw CloudTrail events.")
+	parseCmd.PersistentFlags().StringVarP(&inputFile, "input-file", "f", "", "CloudTrail log file of raw CloudTrail events. Supports gzip-compressed files.")
 }
 
 var parseCmd = &cobra.Command{
@@ -136,7 +139,7 @@ func parseBytes(raw []byte) error {
 func parseFromStdin() error {
 	raw, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
-		fmt.Println(err.Error())
+		fmt.Println("Error reading from stdin:", err)
 		os.Exit(1)
 	}
 
@@ -144,13 +147,44 @@ func parseFromStdin() error {
 }
 
 func parseFromFile(logFileName string) error {
-	raw, err := ioutil.ReadFile(logFileName)
+	f, err := os.Open(logFileName)
 	if err != nil {
-		fmt.Println(err.Error())
+		fmt.Printf("Error opening file %s: %s\n", logFileName, err)
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	br := bufio.NewReader(f)
+
+	var r io.Reader
+	r = br
+	if isGzipFile(br) {
+		r, err = gzip.NewReader(br)
+		if err != nil {
+			fmt.Println("Error creating gzip archive reader:", err)
+			os.Exit(1)
+		}
+		defer r.(*gzip.Reader).Close()
+	}
+
+	raw, err := ioutil.ReadAll(r)
+	if err != nil {
+		fmt.Println("Error reading json file:", err)
 		os.Exit(1)
 	}
 
 	return parseBytes(raw)
+}
+
+// Check for gzip magic number, 0x1f8b, in the files' first 2 bytes
+func isGzipFile(tr *bufio.Reader) bool {
+	tb, err := tr.Peek(2)
+	if err != nil {
+		fmt.Println("Error peeking file:", err)
+		os.Exit(1)
+	}
+
+	return tb[0] == 31 && tb[1] == 139
 }
 
 func parseRawCloudTrailEvent(event string) string {
