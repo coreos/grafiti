@@ -658,6 +658,8 @@ func MapARNToRTypeAndRName(arnStr ResourceARN) (ResourceType, ResourceName) {
 			return EC2SecurityGroupRType, arnToID("security-group/", sfx)
 		case strings.HasPrefix(sfx, "subnet/"):
 			return EC2SubnetRType, arnToID("subnet/", sfx)
+		case strings.HasPrefix(sfx, "volume/"):
+			return EC2VolumeRType, arnToID("volume/", sfx)
 		case strings.HasPrefix(sfx, "vpc/"):
 			return EC2VPCRType, arnToID("vpc/", sfx)
 		case strings.HasPrefix(sfx, "vpn-connection/"):

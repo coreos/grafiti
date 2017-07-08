@@ -35,14 +35,13 @@ node('worker && ec2') {
     }
   }
   stage('Push') {
-    when {
-      branch 'master'
-    }
-    withCredentials(quay_creds) {
-      sh """#!/bin/bash -ex
-      docker login -u="$QUAY_USERNAME" -p="$QUAY_PASSWORD" quay.io
-      docker push "$builder_image"
-      """
+    if (env.BRANCH_NAME == 'master') {
+      withCredentials(quay_creds) {
+        sh """#!/bin/bash -ex
+        docker login -u="$QUAY_USERNAME" -p="$QUAY_PASSWORD" quay.io
+        docker push "$builder_image"
+        """
+      }
     }
   }
 }

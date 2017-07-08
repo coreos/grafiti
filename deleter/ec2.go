@@ -40,6 +40,7 @@ const (
 	rtbFilterKey           = "route-table-id"
 	sgFilterKey            = "group-id"
 	subnetFilterKey        = "subnet-id"
+	volFilterKey           = "volume-id"
 	vpcFilterKey           = "vpc-id"
 	vpcAttachmentFilterKey = "attachment.vpc-id"
 	vconnFilterKey         = "vpn-connection-id"
@@ -1907,6 +1908,136 @@ func (rd *EC2VPCCIDRBlockAssociationDeleter) DeleteResources(cfg *DeleteConfig) 
 	return nil
 }
 
+// EC2VolumeDeleter represents a collection of AWS EC2 volumes
+type EC2VolumeDeleter struct {
+	Client        EC2Client
+	ResourceType  arn.ResourceType
+	ResourceNames arn.ResourceNames
+}
+
+func (rd *EC2VolumeDeleter) String() string {
+	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+}
+
+// GetClient returns an AWS Client, and initalizes one if one has not been
+func (rd *EC2VolumeDeleter) GetClient() *EC2Client {
+	if rd.Client == (EC2Client{}) {
+		rd.Client = EC2Client{ec2.New(setUpAWSSession())}
+	}
+	return &rd.Client
+}
+
+// AddResourceNames adds EC2 volume names to ResourceNames
+func (rd *EC2VolumeDeleter) AddResourceNames(ns ...arn.ResourceName) {
+	rd.ResourceNames = append(rd.ResourceNames, ns...)
+}
+
+// DeleteResources deletes EC2 volumes from AWS
+func (rd *EC2VolumeDeleter) DeleteResources(cfg *DeleteConfig) error {
+	if len(rd.ResourceNames) == 0 {
+		return nil
+	}
+
+	vols, rerr := rd.RequestEC2Volumes()
+	if rerr != nil && !cfg.IgnoreErrors {
+		return rerr
+	}
+
+	fmtStr := "Deleted EC2 Volume"
+
+	var params *ec2.DeleteVolumeInput
+	for _, vol := range vols {
+		params = &ec2.DeleteVolumeInput{
+			VolumeId: vol.VolumeId,
+			DryRun:   aws.Bool(cfg.DryRun),
+		}
+
+		ctx := aws.BackgroundContext()
+		_, err := rd.GetClient().DeleteVolumeWithContext(ctx, params)
+		if err != nil {
+			if isDryRun(err) {
+				fmt.Println(drStr, fmtStr, *vol.VolumeId)
+				continue
+			}
+			cfg.logDeleteError(arn.EC2VolumeRType, arn.ResourceName(*vol.VolumeId), err)
+			if cfg.IgnoreErrors {
+				continue
+			}
+			return err
+		}
+
+		fmt.Println(fmtStr, *vol.VolumeId)
+	}
+
+	return nil
+}
+
+// RequestEC2Volumes requests EC2 volumes by volume names from the AWS API
+func (rd *EC2VolumeDeleter) RequestEC2Volumes() ([]*ec2.Volume, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	size, chunk := len(rd.ResourceNames), 200
+	vols := make([]*ec2.Volume, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		vols, err = rd.GetClient().requestEC2Volumes(volFilterKey, rd.ResourceNames[i:stop], vols)
+		if err != nil {
+			return vols, err
+		}
+	}
+
+	return vols, nil
+}
+
+// Requesting volumes using filters prevents API errors caused by requesting
+// non-existent volumes
+func (c *EC2Client) requestEC2Volumes(filterKey string, chunk arn.ResourceNames, vols []*ec2.Volume) ([]*ec2.Volume, error) {
+	params := &ec2.DescribeVolumesInput{
+		Filters: []*ec2.Filter{
+			{Name: aws.String(filterKey), Values: chunk.AWSStringSlice()},
+		},
+	}
+
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := c.DescribeVolumesWithContext(ctx, params)
+		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
+			return vols, err
+		}
+
+		for _, vol := range resp.Volumes {
+			if !isVolumeAttached(vol) {
+				vols = append(vols, vol)
+			}
+		}
+
+		if resp.NextToken == nil || *resp.NextToken == "" {
+			break
+		}
+
+		params.NextToken = resp.NextToken
+	}
+
+	return vols, nil
+}
+
+// Ignore attached volumes, as these cannot be deleted
+func isVolumeAttached(volume *ec2.Volume) bool {
+	var state string
+	for _, attachment := range volume.Attachments {
+		state = aws.StringValue(attachment.State)
+		if state == ec2.VolumeAttachmentStateAttached || state == ec2.VolumeAttachmentStateAttaching {
+			return true
+		}
+	}
+	return false
+}
+
 // EC2VPCDeleter represents a collection of AWS EC2 VPC's
 type EC2VPCDeleter struct {
 	Client        EC2Client
@@ -1938,9 +2069,9 @@ func (rd *EC2VPCDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	// Disassociate vpc cidr blocks
-	vpcs, verr := rd.RequestEC2VPCs()
-	if verr != nil && !cfg.IgnoreErrors {
-		return verr
+	vpcs, rerr := rd.RequestEC2VPCs()
+	if rerr != nil && !cfg.IgnoreErrors {
+		return rerr
 	}
 
 	for _, vpc := range vpcs {

@@ -187,6 +187,8 @@ func InitResourceDeleter(t arn.ResourceType) ResourceDeleter {
 		return &EC2SecurityGroupDeleter{ResourceType: t}
 	case arn.EC2SubnetRType:
 		return &EC2SubnetDeleter{ResourceType: t}
+	case arn.EC2VolumeRType:
+		return &EC2VolumeDeleter{ResourceType: t}
 	case arn.EC2VPCCIDRAssociationRType:
 		return &EC2VPCCIDRBlockAssociationDeleter{ResourceType: t}
 	case arn.EC2VPCRType:
