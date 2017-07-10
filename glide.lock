@@ -1,8 +1,8 @@
-hash: 25fe17c97073846b55776fa94eae39076d896d2834e92326afd31e6e0c1a1b80
-updated: 2017-04-26T10:22:37.801362764-04:00
+hash: 02a226c10bb37ccd95e7d2f6318817a57b4f838971a6bd69705b8f0aa5483519
+updated: 2017-07-10T16:01:52.056886261-07:00
 imports:
 - name: github.com/aws/aws-sdk-go
-  version: f6ea558f30e0a983d529b32c741e4caed17c7df0
+  version: 96358b8282b1a3aa66836d2f2fe66216cc419668
   subpackages:
   - aws
   - aws/awserr
@@ -20,46 +20,76 @@ imports:
   - aws/request
   - aws/session
   - aws/signer/v4
+  - internal/shareddefaults
   - private/protocol
+  - private/protocol/ec2query
   - private/protocol/json/jsonutil
   - private/protocol/jsonrpc
   - private/protocol/query
   - private/protocol/query/queryutil
   - private/protocol/rest
+  - private/protocol/restxml
   - private/protocol/xml/xmlutil
+  - service/autoscaling
+  - service/autoscaling/autoscalingiface
   - service/cloudtrail
+  - service/cloudtrail/cloudtrailiface
+  - service/ec2
+  - service/ec2/ec2iface
+  - service/elb
+  - service/elb/elbiface
+  - service/iam
+  - service/iam/iamiface
   - service/resourcegroupstaggingapi
+  - service/resourcegroupstaggingapi/resourcegroupstaggingapiiface
+  - service/route53
+  - service/route53/route53iface
+  - service/s3
+  - service/s3/s3iface
   - service/sts
-- name: github.com/BurntSushi/toml
-  version: bd2bdf7f18f849530ef7a1c29a4290217cab32a1
+- name: github.com/fsnotify/fsnotify
+  version: 4da3e2cfbabc9f751898f250b49f2439785783a1
 - name: github.com/go-ini/ini
-  version: e7fea39b01aea8d5671f6858f0532f56e8bff3a5
+  version: 3d73f4b845efdf9989fffd4b4e562727744a34ba
+- name: github.com/hashicorp/hcl
+  version: 392dba7d905ed5d04a5794ba89f558b27e2ba1ca
+  subpackages:
+  - hcl/ast
+  - hcl/parser
+  - hcl/scanner
+  - hcl/strconv
+  - hcl/token
+  - json/parser
+  - json/scanner
+  - json/token
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/jmespath/go-jmespath
   version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
-- name: github.com/kr/pretty
-  version: bc9499caa0f45ee5edb2f0209fbd61fbf3d9018f
-- name: github.com/kr/text
-  version: 6807e777504f54ad073ecef66747de158294b639
 - name: github.com/magiconair/properties
-  version: 624009598839a9432bd97bb75552389422357723
+  version: be5ece7dd465ab0765a9682137865547526d1dfb
 - name: github.com/mitchellh/mapstructure
-  version: 482a9fd5fa83e8c4e7817413b80f3eb8feec03ef
-- name: github.com/Sirupsen/logrus
-  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
+  version: d0303fe809921458f417bcf828397a65db30a7e4
+- name: github.com/pelletier/go-toml
+  version: 69d355db5304c0f7f809a2edc054553e7142f016
+- name: github.com/sirupsen/logrus
+  version: 7f976d3a76720c4c27af2ba716b85d2e0a7e38b1
+- name: github.com/spf13/afero
+  version: 9be650865eab0c12963d8753212f4f9c66cdcf12
+  subpackages:
+  - mem
 - name: github.com/spf13/cast
-  version: 4d07383ffe94b5e5a6fa3af9211374a4507a0184
+  version: acbeb36b902d72a7a4c18e8f3241075e7ab763e4
 - name: github.com/spf13/cobra
-  version: 7aeaa2cce6ae7e18d2a6ee597b60ee137e999bd9
+  version: 8c6fa02d2225de0f9bdcb7ca912556f68d172d8c
   subpackages:
   - pflag
 - name: github.com/spf13/jwalterweatherman
-  version: 3d60171a64319ef63c78bd45bd60e6eab1e75f8b
+  version: 0efa5202c04663c757d84f90f5219c1250baf94f
 - name: github.com/spf13/pflag
-  version: d16db1e50e33dff1b6cdf37596cef36742128670
+  version: e57e3eeb33f795204c1ca35f56c44f83227c6e66
 - name: github.com/spf13/viper
-  version: be5ff3e4840cf692388bde7a057595a474ef379e
+  version: c1de95864d73a5465492829d7cb2dd422b19ac96
 - name: github.com/threatgrid/jqpipe-go
   version: b5e15fb6d9f3f85353573236105b501a4ace0ccc
 - name: github.com/tidwall/gjson
@@ -67,9 +97,14 @@ imports:
 - name: github.com/tidwall/match
   version: 173748da739a410c5b0b813b956f89ff94730b4c
 - name: golang.org/x/sys
-  version: 30de6d19a3bd89a5f38ae4028e23aaa5582648af
+  version: abf9c25f54453410d0c6668e519582a9e1115027
   subpackages:
   - unix
+- name: golang.org/x/text
+  version: cfdf022e86b4ecfb646e1efbd7db175dd623a8fa
+  subpackages:
+  - transform
+  - unicode/norm
 - name: gopkg.in/yaml.v2
-  version: bef53efd0c76e49e6de55ead051f886bea7e9420
+  version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
 testImports: []

@@ -3,11 +3,11 @@ package deleter
 import (
 	"fmt"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/coreos/grafiti/arn"
+	"github.com/sirupsen/logrus"
 )
 
 // S3ObjectDeleter represents a collection of AWS S3 objects
