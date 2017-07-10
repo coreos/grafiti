@@ -20,7 +20,7 @@ const drStr = "(dry-run)"
 func setUpAWSSession() *session.Session {
 	return session.Must(session.NewSession(
 		&aws.Config{
-			Region:  aws.String(viper.GetString("grafiti.region")),
+			Region:  aws.String(viper.GetString("region")),
 			Retryer: retryer.DeleteRetryer{NumMaxRetries: 11},
 		},
 	))

@@ -91,7 +91,7 @@ func runParseCommand(cmd *cobra.Command, args []string) error {
 
 	sess := session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(viper.GetString("grafiti.region")),
+			Region: aws.String(viper.GetString("region")),
 		},
 	))
 	if err := parseFromCloudTrail(cloudtrail.New(sess)); err != nil {
@@ -175,10 +175,10 @@ type NotTaggedFilter struct {
 func parseFromCloudTrail(svc cloudtrailiface.CloudTrailAPI) error {
 	var start, end *time.Time
 	// Check if timestamps or hours exist
-	if viper.IsSet("grafiti.startTimeStamp") && viper.IsSet("grafiti.endTimeStamp") {
-		start, end = calcTimeWindowFromTimeStamp(viper.GetString("grafiti.startTimeStamp"), viper.GetString("grafiti.endTimeStamp"))
-	} else if viper.IsSet("grafiti.startHour") && viper.IsSet("grafiti.endHour") {
-		start, end = calcTimeWindowFromHourRange(viper.GetInt("grafiti.startHour"), viper.GetInt("grafiti.endHour"))
+	if viper.IsSet("startTimeStamp") && viper.IsSet("endTimeStamp") {
+		start, end = calcTimeWindowFromTimeStamp(viper.GetString("startTimeStamp"), viper.GetString("endTimeStamp"))
+	} else if viper.IsSet("startHour") && viper.IsSet("endHour") {
+		start, end = calcTimeWindowFromHourRange(viper.GetInt("startHour"), viper.GetInt("endHour"))
 	}
 	if start == nil || end == nil {
 		return nil
@@ -186,7 +186,7 @@ func parseFromCloudTrail(svc cloudtrailiface.CloudTrailAPI) error {
 
 	// Create LookupEvents for all grafiti.resourceTypes. If none are specified,
 	// look up all events for all resourceTypes
-	rts := viper.GetStringSlice("grafiti.resourceTypes")
+	rts := viper.GetStringSlice("resourceTypes")
 	var attrs []*cloudtrail.LookupAttribute
 	if len(rts) == 0 {
 		attrs = []*cloudtrail.LookupAttribute{nil}
@@ -311,7 +311,7 @@ func printEvent(event *cloudtrail.Event, parsedEvent gjson.Result) {
 }
 
 func parseDataFromEvent(rt arn.ResourceType, rn arn.ResourceName, parsedEvent gjson.Result, event *cloudtrail.Event) string {
-	includeEvent := viper.GetBool("grafiti.includeEvent")
+	includeEvent := viper.GetBool("includeEvent")
 	ARN := arn.MapResourceTypeToARN(rt, rn, parsedEvent)
 	if ARN == "" {
 		return ""
@@ -340,7 +340,7 @@ func parseDataFromEvent(rt arn.ResourceType, rn arn.ResourceName, parsedEvent gj
 }
 
 func matchFilter(output []byte) bool {
-	for _, f := range viper.GetStringSlice("grafiti.filterPatterns") {
+	for _, f := range viper.GetStringSlice("filterPatterns") {
 		results, err := jq.Eval(string(output), f)
 		if err != nil || len(results) == 0 {
 			return false
@@ -355,7 +355,7 @@ func matchFilter(output []byte) bool {
 }
 
 func getTags(rawEvent string) map[string]string {
-	tagPatterns := viper.GetStringSlice("grafiti.tagPatterns")
+	tagPatterns := viper.GetStringSlice("tagPatterns")
 	if len(tagPatterns) == 0 {
 		return map[string]string{}
 	}

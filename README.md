@@ -121,6 +121,18 @@ filterPatterns = [
  * `tagPatterns` - should use `jq` syntax to generate `{tagKey: tagValue}` objects from output from `grafiti parse`. The results will be included in the `Tags` field of the tagging output.
  * `filterPatterns` - will filter output of `grafiti parse` based on `jq` syntax matches.
 
+### Environment variables
+
+In addition to, or in lieu of, a config file, grafiti can be configured with the following environment variables:
+
+ * `AWS_REGION` corresponds to the `region` config file field.
+ * `GRF_START_HOUR` corresponds to the `startHour` config file field.
+ * `GRF_END_HOUR` corresponds to the `endHour` config file field.
+ * `GRF_START_TIMESTAMP` corresponds to the `startTimeStamp` config file field.
+ * `GRF_END_TIMESTAMP` corresponds to the `endTimeStamp` config file field.
+ * `GRF_INCLUDE_EVENT` corresponds to the `includeEvent` config file field.
+
+If one of the above variables is set, its' data will be used as a default value. That means that the only circumstance in which its' value will be used is when no corresponding config file field is set, and, by extension, no config file is provided. Setting these variables allows you to avoid using a config file.
 
 ### A note on AWS resource deletion order
 AWS resources have (potentially many) dependencies that must be explicitly detached/removed/deleted before deleting a top-level resource (ex. a VPC). Therefore a deletion order must be enforced. This order is universal for all AWS resources and is not use-case-specific, because deletion actions will only run if a resource with a specific tag, or one of it's dependencies, is detected.

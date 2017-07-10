@@ -148,7 +148,7 @@ func TestParseCloudTrailEvent(t *testing.T) {
 
 	var event []byte
 	for i, c := range cases {
-		viper.Set("grafiti.tagPatterns", c.InputPatterns)
+		viper.Set("tagPatterns", c.InputPatterns)
 
 		// Get desired output of parseRawCloudTrailEvent from file
 		want, err := ioutil.ReadFile(c.ExpectedFile)
@@ -216,7 +216,7 @@ func TestPrintCloudTrailEvents(t *testing.T) {
 
 	var ctJSON string
 	for i, c := range cases {
-		viper.Set("grafiti.tagPatterns", c.InputPatterns)
+		viper.Set("tagPatterns", c.InputPatterns)
 
 		f := func(v interface{}) {
 			printEvents(v.([]*cloudtrail.Event))
@@ -245,7 +245,7 @@ func TestGetTags(t *testing.T) {
 		"{ExpiresAt: (1497253282) | strftime(\"%Y-%m-%d\")}",
 	}
 
-	viper.Set("grafiti.tagPatterns", tags)
+	viper.Set("tagPatterns", tags)
 
 	mockTags := map[string]string{
 		"CreatedBy": "arn:aws:iam::123456789101:user/test-user",
@@ -298,7 +298,7 @@ func TestMatchFilter(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		viper.Set("grafiti.filterPatterns", c.InputFilters)
+		viper.Set("filterPatterns", c.InputFilters)
 		if matchFilter([]byte(c.InputObject)) != c.ExpectedMatch {
 			t.Errorf("matchFilter case %d failed\nFilter did not match output:\n%s\n", i+1, c.InputObject)
 		}

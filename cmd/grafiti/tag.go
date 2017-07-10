@@ -62,7 +62,7 @@ type TagInput struct {
 }
 
 func shouldEject(ejectSize, setSize int, createdAt time.Time) bool {
-	limitInt := viper.GetInt("grafiti.bucketEjectLimitSeconds")
+	limitInt := viper.GetInt("bucketEjectLimitSeconds")
 	limit := time.Duration(limitInt) * time.Second
 
 	ejectTime := time.Time(createdAt.Add(limit))
@@ -256,7 +256,7 @@ func tagFromStdIn() error {
 func tag(reader io.Reader) error {
 	svc := rgta.New(session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(viper.GetString("grafiti.region")),
+			Region: aws.String(viper.GetString("region")),
 		},
 	)))
 	dec := json.NewDecoder(reader)
@@ -315,7 +315,7 @@ func tag(reader io.Reader) error {
 func tagUnsupportedResourceType(rt arn.ResourceType, nameSet ResourceNameSet) error {
 	sess := session.Must(session.NewSession(
 		&aws.Config{
-			Region: aws.String(viper.GetString("grafiti.region")),
+			Region: aws.String(viper.GetString("region")),
 		},
 	))
 
