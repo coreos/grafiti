@@ -195,7 +195,6 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 				depMap[arn.IAMRoleRType].AddResourceNames(arn.ResourceName(*rl.RoleName))
 			}
 		}
-		// Get EBS Volumes
 	case arn.EC2NetworkInterfaceRType:
 		// Get EIP Addresses
 		adrDel := depMap[rt].(*deleter.EC2NetworkInterfaceDeleter)
