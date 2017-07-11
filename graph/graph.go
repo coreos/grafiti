@@ -38,28 +38,24 @@ var rounds = []arn.ResourceTypes{r0, r1, r2}
 
 // FillDependencyGraph creates a depGraph starting from an inital set of
 // resources found by tags
-func FillDependencyGraph(initDepMap map[arn.ResourceType]deleter.ResourceDeleter) map[arn.ResourceType]deleter.ResourceDeleter {
+func FillDependencyGraph(initDepMap map[arn.ResourceType]deleter.ResourceDeleter) {
 	if initDepMap == nil {
-		return nil
+		return
 	}
 
 	for _, round := range rounds {
 		for _, r := range round {
 			if _, ok := initDepMap[r]; ok {
-				initDepMap = traverseDependencyGraph(r, initDepMap)
+				traverseDependencyGraph(r, initDepMap)
 			}
 		}
 	}
 
-	return initDepMap
+	return
 }
 
 // traverseDependencyGraph traverses necesssary linkages of each resource
-func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]deleter.ResourceDeleter) map[arn.ResourceType]deleter.ResourceDeleter {
-	if _, ok := depMap[rt]; !ok {
-		return depMap
-	}
-
+func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]deleter.ResourceDeleter) {
 	switch rt {
 	case arn.EC2VPCRType:
 		vpcDel := depMap[rt].(*deleter.EC2VPCDeleter)
@@ -290,5 +286,5 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		}
 	}
 
-	return depMap
+	return
 }
