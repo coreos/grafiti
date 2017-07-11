@@ -3,11 +3,11 @@ package deleter
 import (
 	"fmt"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
 	"github.com/coreos/grafiti/arn"
+	"github.com/sirupsen/logrus"
 )
 
 // IAMInstanceProfileDeleter represents an AWS instance profile
