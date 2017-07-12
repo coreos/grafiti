@@ -17,7 +17,7 @@ def quay_creds = [
 node('worker && ec2') {
 
   checkout scm
-  
+
   def git_branch = env.BRANCH_NAME
   def git_commit = sh(returnStdout: true, script: "git rev-parse --short HEAD").trim()
   def builder_image = "quay.io/coreos/grafiti:${git_commit}"
@@ -41,7 +41,7 @@ node('worker && ec2') {
     if (git_branch == 'master') {
       withCredentials(quay_creds) {
         sh """#!/bin/bash -ex
-        docker login -u="$QUAY_USERNAME" -p="$QUAY_PASSWORD" quay.io
+        docker login -u="$QUAY_ROBOT_USERNAME" -p="$QUAY_ROBOT_SECRET" quay.io
         docker push "$builder_image"
         """
       }
