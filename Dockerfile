@@ -12,3 +12,8 @@ RUN set -eux \
     && cd ${GRAFITI_ABS_PATH} \
     && make install \
     && apk del .build-deps
+
+# Jenkins starts the docker image as uid 1000. `/go` needs to be writable for
+# this user. This gives permissions to all users to the `/go` folder like it is
+# done in the upstream golang docker image.
+RUN chmod 777 -R /go
