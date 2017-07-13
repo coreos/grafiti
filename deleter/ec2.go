@@ -3,8 +3,10 @@ package deleter
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/iam"
@@ -46,6 +48,15 @@ const (
 	vconnFilterKey         = "vpn-connection-id"
 	vgwFilterKey           = "vpn-gateway-id"
 )
+
+// Resources that do not exist in AWS will return a {Resource-Specific-Error}.NotFound
+// error code, which means it was already deleted
+const notFoundSfx = ".NotFound"
+
+func isResourceNotFound(err error) bool {
+	aerr, ok := err.(awserr.Error)
+	return ok && strings.HasSuffix(aerr.Code(), notFoundSfx)
+}
 
 // EC2Client aliases an EC2API so requestEC2* functions can be shared between
 // RequestEC2* functions
@@ -263,6 +274,9 @@ func (rd *EC2ElasticIPAssocationDeleter) DeleteResources(cfg *DeleteConfig) erro
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DisassociateAddressWithContext(ctx, params)
 		if err != nil {
+			if isResourceNotFound(err) {
+				continue
+			}
 			if isDryRun(err) {
 				fmt.Println(drStr, fmtStr, n)
 				continue
@@ -770,7 +784,7 @@ func (rd *EC2InstanceDeleter) DeleteResources(cfg *DeleteConfig) error {
 		for _, r := range resp.TerminatingInstances {
 			termInstances = append(termInstances, r.InstanceId)
 		}
-		rd.waitUntilTerminated(cfg, termInstances)
+		rd.waitUntilInstancesTerminated(cfg, termInstances)
 	}
 
 	for _, id := range instanceNames {
@@ -780,7 +794,7 @@ func (rd *EC2InstanceDeleter) DeleteResources(cfg *DeleteConfig) error {
 	return nil
 }
 
-func (rd *EC2InstanceDeleter) waitUntilTerminated(cfg *DeleteConfig, tis []*string) {
+func (rd *EC2InstanceDeleter) waitUntilInstancesTerminated(cfg *DeleteConfig, tis []*string) {
 	params := &ec2.DescribeInstancesInput{
 		InstanceIds: tis,
 	}
@@ -1154,10 +1168,104 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 			return err
 		}
 
+	}
+
+	if cfg.DryRun {
+		return nil
+	}
+
+	// If we don't wait until nat gateways are deleted, EIP disassociation/release
+	// and customer gateway disassociation/deletion will fail
+	fmt.Println("Waiting for EC2 NAT Gateways to delete...")
+	deletedNGWs, aliveNGWs, err := rd.waitUntilNatGatewaysDeleted(ngws)
+	if !cfg.IgnoreErrors {
+		fmt.Printf("{\"error\": \"%s\"}", err)
+	}
+	if len(aliveNGWs) != 0 {
+		for _, ngw := range aliveNGWs {
+			fmt.Printf("Could not delete EC2 Nat Gateway %s in 5 minutes (state \"%s\")\n", *ngw.NatGatewayId, *ngw.State)
+		}
+	}
+	for _, ngw := range deletedNGWs {
 		fmt.Println(fmtStr, *ngw.NatGatewayId)
 	}
 
 	return nil
+}
+
+func (rd *EC2NatGatewayDeleter) waitUntilNatGatewaysDeleted(ngws []*ec2.NatGateway) (deletedNGWs, aliveNGWs []*ec2.NatGateway, err error) {
+	// Set timeout to 5 minutes
+	timeout := time.Now().Add(time.Duration(300) * time.Second)
+
+	for {
+		// When no non-'deleted' nat gateways are returned, they have all been
+		// deleted. If timeout has been exceeded, return
+		deletedNGWs, aliveNGWs, err = rd.GetClient().filterDeletedNATGateways(ngws)
+		if err != nil || time.Now().After(timeout) || len(aliveNGWs) == 0 {
+			return
+		}
+
+		// Poll every 15 seconds
+		time.Sleep(time.Duration(15) * time.Second)
+	}
+}
+
+// Divide nat gateways by whether they have a 'deleted' state or not
+func (c *EC2Client) filterDeletedNATGateways(ngws []*ec2.NatGateway) ([]*ec2.NatGateway, []*ec2.NatGateway, error) {
+	// Query nat gateway state in chunks of at most 200 nat gateways, to avoid
+	// API errors
+	deletedNGWs, aliveNGWs := make([]*ec2.NatGateway, 0), make([]*ec2.NatGateway, 0)
+	for _, params := range createNATGatewayParamChunks(200, ngws) {
+		for {
+			ctx := aws.BackgroundContext()
+			resp, err := c.DescribeNatGatewaysWithContext(ctx, params)
+			if err != nil {
+				fmt.Printf("{\"error\": \"%s\"}\n", err)
+				return deletedNGWs, aliveNGWs, err
+			}
+
+			deletedNGWs, aliveNGWs = splitNATGatewaysByState(resp.NatGateways, deletedNGWs, aliveNGWs)
+
+			if resp.NextToken == nil || *resp.NextToken == "" {
+				break
+			}
+
+			params.NextToken = resp.NextToken
+		}
+	}
+
+	return deletedNGWs, aliveNGWs, nil
+}
+
+func splitNATGatewaysByState(ngws, deletedNGWs, aliveNGWs []*ec2.NatGateway) ([]*ec2.NatGateway, []*ec2.NatGateway) {
+	for _, ngw := range ngws {
+		if aws.StringValue(ngw.State) == deletedState {
+			deletedNGWs = append(deletedNGWs, ngw)
+		} else {
+			aliveNGWs = append(aliveNGWs, ngw)
+		}
+	}
+	return deletedNGWs, aliveNGWs
+}
+
+func createNATGatewayParamChunks(chunk int, ngws []*ec2.NatGateway) []*ec2.DescribeNatGatewaysInput {
+	size, chunkedParams := len(ngws), make([]*ec2.DescribeNatGatewaysInput, 0)
+	ngwIDs := make([]*string, 0)
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+
+		for _, ngw := range ngws[i:stop] {
+			ngwIDs = append(ngwIDs, ngw.NatGatewayId)
+		}
+
+		chunkedParams = append(chunkedParams, &ec2.DescribeNatGatewaysInput{
+			Filter: []*ec2.Filter{
+				{Name: aws.String(ngwFilterKey), Values: ngwIDs},
+			},
+		})
+	}
+
+	return chunkedParams
 }
 
 // RequestEC2NatGateways requests EC2 nat gateways by name from the AWS API
