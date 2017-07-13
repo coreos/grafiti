@@ -196,7 +196,7 @@ func (tr *mockTagResources) TagResources(in *rgta.TagResourcesInput) (*rgta.TagR
 
 func TestTagARNBucket(t *testing.T) {
 
-	caseTable := []struct {
+	cases := []struct {
 		Resp     rgta.TagResourcesOutput
 		TestARNs arn.ResourceARNs
 		TestTag  Tag
@@ -229,7 +229,7 @@ func TestTagARNBucket(t *testing.T) {
 		},
 	}
 
-	for _, c := range caseTable {
+	for _, c := range cases {
 		tr := &mockTagResources{
 			Resp: c.Resp,
 		}
@@ -278,7 +278,7 @@ func (tr *mockTagAutoScalingResources) CreateOrUpdateTagsWithContext(ctx aws.Con
 
 func TestTagAutoScalingResource(t *testing.T) {
 
-	caseTable := []struct {
+	cases := []struct {
 		Resp      autoscaling.CreateOrUpdateTagsOutput
 		InputName arn.ResourceName
 		InputTags Tags
@@ -300,17 +300,19 @@ func TestTagAutoScalingResource(t *testing.T) {
 	}
 
 	f := func(v interface{}, rt arn.ResourceType, rn arn.ResourceName, t Tags) {
-		tagAutoScalingResource(v.(autoscalingiface.AutoScalingAPI), rt, rn, t)
+		rns := make(ResourceNameSet)
+		rns[rn] = t
+		tagAutoScalingResources(v.(autoscalingiface.AutoScalingAPI), rt, rns)
 	}
 
-	for _, c := range caseTable {
+	for i, c := range cases {
 		tr := &mockTagAutoScalingResources{
 			Resp: c.Resp,
 		}
 
 		outString := captureRGTAUnsupportedStdOut(f, tr, arn.AutoScalingGroupRType, c.InputName, c.InputTags)
 		if outString != c.Expected {
-			t.Errorf("tagAutoScalingResource failed\nwanted\n%s\ngot\n%s", c.Expected, outString)
+			t.Errorf("tagAutoScalingResource case %d failed\nwanted\n%s\ngot\n%s", i+1, c.Expected, outString)
 		}
 	}
 }
@@ -327,7 +329,7 @@ func (tr *mockRoute53TagResources) ChangeTagsForResourceWithContext(ctx aws.Cont
 
 func TestTagRoute53Resource(t *testing.T) {
 
-	caseTable := []struct {
+	cases := []struct {
 		Resp      route53.ChangeTagsForResourceOutput
 		InputName arn.ResourceName
 		InputTags Tags
@@ -352,7 +354,7 @@ func TestTagRoute53Resource(t *testing.T) {
 		tagRoute53Resource(v.(route53iface.Route53API), rt, rn, t)
 	}
 
-	for _, c := range caseTable {
+	for _, c := range cases {
 		tr := &mockRoute53TagResources{
 			Resp: c.Resp,
 		}
