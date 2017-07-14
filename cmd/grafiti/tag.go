@@ -321,9 +321,7 @@ func tagUnsupportedResourceType(rt arn.ResourceType, nameSet ResourceNameSet) er
 
 	switch arn.NamespaceForResource(rt) {
 	case arn.AutoScalingNamespace:
-		for n, tags := range nameSet {
-			return tagAutoScalingResource(autoscaling.New(sess), rt, n, tags)
-		}
+		return tagAutoScalingResources(autoscaling.New(sess), rt, nameSet)
 	case arn.Route53Namespace:
 		for n, tags := range nameSet {
 			return tagRoute53Resource(route53.New(sess), rt, n, tags)
@@ -333,25 +331,41 @@ func tagUnsupportedResourceType(rt arn.ResourceType, nameSet ResourceNameSet) er
 	return nil
 }
 
-func tagAutoScalingResource(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, rn arn.ResourceName, tags Tags) error {
+func tagAutoScalingResources(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, nameSet ResourceNameSet) error {
 	// Only AutoScaling Groups support tagging
-	if rt != arn.AutoScalingGroupRType || rn == "" {
+	if rt != arn.AutoScalingGroupRType {
 		return nil
 	}
 
-	asTags := make([]*autoscaling.Tag, 0, len(tags))
-	for tk, tv := range tags {
-		asTags = append(asTags, &autoscaling.Tag{
-			Key:               aws.String(tk),
-			Value:             aws.String(tv),
-			ResourceType:      aws.String("auto-scaling-group"),
-			ResourceId:        rn.AWSString(),
-			PropagateAtLaunch: aws.Bool(true),
-		})
+	asgTags := make([]*autoscaling.Tag, 0)
+	for rn, tags := range nameSet {
+		if rn == "" {
+			continue
+		}
+		for tk, tv := range tags {
+			asgTags = append(asgTags, &autoscaling.Tag{
+				Key:               aws.String(tk),
+				Value:             aws.String(tv),
+				ResourceType:      aws.String("auto-scaling-group"),
+				ResourceId:        rn.AWSString(),
+				PropagateAtLaunch: aws.Bool(true),
+			})
+		}
+	}
+
+	if len(asgTags) == 0 {
+		return nil
 	}
 
 	params := &autoscaling.CreateOrUpdateTagsInput{
-		Tags: asTags,
+		Tags: asgTags,
+	}
+
+	pj, _ := json.Marshal(params)
+	fmt.Println(string(pj))
+
+	if dryRun {
+		return nil
 	}
 
 	ctx := aws.BackgroundContext()
@@ -359,9 +373,6 @@ func tagAutoScalingResource(svc autoscalingiface.AutoScalingAPI, rt arn.Resource
 		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 		return err
 	}
-
-	pj, _ := json.Marshal(params)
-	fmt.Println(string(pj))
 
 	return nil
 }
@@ -387,14 +398,18 @@ func tagRoute53Resource(svc route53iface.Route53API, rt arn.ResourceType, rn arn
 		ResourceType: aws.String("hostedzone"),
 	}
 
+	pj, _ := json.Marshal(params)
+	fmt.Println(string(pj))
+
+	if dryRun {
+		return nil
+	}
+
 	ctx := aws.BackgroundContext()
 	if _, err := svc.ChangeTagsForResourceWithContext(ctx, params); err != nil {
 		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
 		return err
 	}
-
-	pj, _ := json.Marshal(params)
-	fmt.Println(string(pj))
 
 	return nil
 }
@@ -411,6 +426,7 @@ func tagARNBucket(svc rgtaiface.ResourceGroupsTaggingAPIAPI, bucket arn.Resource
 	if dryRun {
 		return nil
 	}
+
 	// Rate limit error is returned if no pause between requests
 	time.Sleep(time.Duration(2) * time.Second)
 	if _, err := svc.TagResources(params); err != nil {
