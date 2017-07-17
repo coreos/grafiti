@@ -103,6 +103,7 @@ startHour = -8
 endTimeStamp = "2017-06-14T01:01:01Z"
 startTimeStamp = "2017-06-13T01:01:01Z"
 region = "us-east-1"
+maxNumRequestRetries = 11
 includeEvent = false
 tagPatterns = [
   "{CreatedBy: .userIdentity.arn}"
@@ -117,6 +118,7 @@ filterPatterns = [
  * `endTimeStamp`,`startTimeStamp` - Specifies the range between two exact times (beginning at `startTimeStamp`, ending at `endTimeStamp`) to query events from CloudTrail. These fields take RFC-3339 (no milliseconds) format.
     * **Note**: Only one of `*Hour`, `*TimeStamp` pairs can be used. An error will be thrown if both are used.
  * `region` - The AWS region to query.
+ * `maxNumRequestRetries` = The maximum number of retries the delete request retryer should attempt. Defaults to 8.
  * `includeEvent` - Setting `true` will include the raw CloudEvent in the tagging output (this is useful for finding attributes to filter on).
  * `tagPatterns` - should use `jq` syntax to generate `{tagKey: tagValue}` objects from output from `grafiti parse`. The results will be included in the `Tags` field of the tagging output.
  * `filterPatterns` - will filter output of `grafiti parse` based on `jq` syntax matches.
@@ -189,6 +191,7 @@ resourceTypes = ["AWS::EC2::Instance"]
 endHour = 0
 startHour = -8
 region = "us-east-1"
+maxNumRequestRetries = 11
 includeEvent = false
 tagPatterns = [
   "{CreatedBy: .userIdentity.arn}",
@@ -304,6 +307,7 @@ resourceTypes = ["AWS::EC2::Instance"]
 endHour = 0
 startHour = -8
 region = "us-east-1"
+maxNumRequestRetries = 11
 includeEvent = false
 tagPatterns = [
   "{CreatedBy: .userIdentity.arn}",
@@ -374,3 +378,7 @@ Additionally it is **highly recommended** that the `--ignore-errors` flag is use
 By default, `grafiti delete` will not trace relationships between resources and add them to the deletion graph. Passing the `--all-deps` flag will trace these relationships and add all found dependencies to the deletion graph.
 
 For example, if a tagged VPC has a user-created (non-default) subnet that is not tagged, running `grafiti delete` will not delete the subnet, and in all likelihood will not delete the VPC due to dependency issues imposed by AWS.
+
+### Deleted resources report
+
+The `--report` flag will enable `grafiti delete` to aggregate all failed resource deletions and pretty-print them after a run. Log records of failed deletions will be saved as JSON objects in a log file in your current directory. Logging functionality uses the [logrus](https://github.com/sirupsen/logrus) package, which allows you to both create and parse log entries. However, because grafiti log entries are verbose, the logrus log parser might not function as expected. We recommend using `jq` to parse log data.
