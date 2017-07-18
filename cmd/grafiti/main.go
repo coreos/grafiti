@@ -16,7 +16,9 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -60,6 +62,12 @@ func init() {
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
+	// Check for 'jq' in path
+	if path, err := exec.LookPath("jq"); err != nil || path == "" {
+		fmt.Println("Please install 'jq' before running grafiti.")
+		os.Exit(1)
+	}
+
 	if cfgFile != "" { // enable ability to specify config file via flag
 		viper.SetConfigFile(cfgFile)
 	} else {
