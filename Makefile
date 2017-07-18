@@ -1,10 +1,13 @@
 GRAFITI_REL_PATH ?= github.com/coreos/grafiti
 INSTALL_PATH = $(GRAFITI_REL_PATH)/cmd/grafiti
 
-all: install test
+all: build test
+
+build:
+	go build -a -o grafiti $(INSTALL_PATH)
 
 install:
-	go install -v $(INSTALL_PATH)
+	go install $(INSTALL_PATH)
 
 test:
 	go test -v $(shell glide novendor)
@@ -12,4 +15,7 @@ test:
 lint:
 	go fmt $(shell glide novendor)
 
-.PHONY: all install test lint
+clean:
+	go clean
+
+.PHONY: all install build test lint clean
