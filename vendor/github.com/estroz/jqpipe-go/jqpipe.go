@@ -1,10 +1,12 @@
 /*
-	Wraps the "jq" utility as a pipe.
 
-	This package makes it easy for Go programs to filter JSON data using
-	stedolan's "jq". This is used internally at ThreatGRID as a sort of
-	expedient map/reduce in its distributed data store and in its "expectjq"
-	test utility.
+Package jq wraps the "jq" utility as a pipe.
+
+This package makes it easy for Go programs to filter JSON data using
+stedolan's "jq". This is used internally at ThreatGRID as a sort of
+expedient map/reduce in its distributed data store and in its "expectjq"
+test utility.
+
 */
 package jq
 
@@ -35,7 +37,6 @@ func Eval(js string, expr string, opts ...string) ([]json.RawMessage, error) {
 			return ret, err
 		}
 	}
-	panic("unreachable") // for go 1.0
 }
 
 // New wraps a jq.Pipe around an existing io.Reader, applying a JQ expression
@@ -82,12 +83,6 @@ func (p *Pipe) Next() (json.RawMessage, error) {
 	}
 	p.stdout.Close()
 
-	// if we have a decoding error, jq is sick and we need to kill it with fire..
-	if err != io.EOF {
-		p.Close()
-		return nil, err
-	}
-
 	// terminate jq (if it hasn't died already)
 	p.jq.Process.Kill()
 	p.jq.Wait()
@@ -97,7 +92,13 @@ func (p *Pipe) Next() (json.RawMessage, error) {
 		return nil, errors.New(p.stderr.String())
 	}
 
-	if p.jq.ProcessState.Success() {
+	// if we have a decoding error, jq is sick and we need to kill it with fire..
+	if err != io.EOF {
+		p.Close()
+		return nil, err
+	}
+
+	if p.jq.ProcessState.Success() || err == io.EOF {
 		return nil, io.EOF
 	}
 
