@@ -6,6 +6,7 @@ startHour = -8
 region = "us-west-2"
 maxNumRequestRetries = 8
 includeEvent = false
+logS3BucketName = "grafiti-test-bucket"
 tagPatterns = [
   "{CreatedBy: .userIdentity.arn}",
   # "{CreatedAt: .eventTime}",

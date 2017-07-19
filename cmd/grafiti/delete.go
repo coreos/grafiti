@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"time"
 
@@ -30,9 +31,11 @@ import (
 	rgtaiface "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi/resourcegroupstaggingapiiface"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/route53/route53iface"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/coreos/grafiti/arn"
 	"github.com/coreos/grafiti/deleter"
 	"github.com/coreos/grafiti/graph"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -460,6 +463,13 @@ func deleteARNs(ARNs arn.ResourceARNs) error {
 		fmt.Println(logTail)
 	}
 
+	// Stash the log in an S3 bucket provided by the user. Dry run date won't
+	// be sent
+	bucketName := viper.GetString("logS3BucketName")
+	if bucketName != "" && !dryRun {
+		stashInS3Bucket(logFilePath, bucketName)
+	}
+
 	return nil
 }
 
@@ -526,5 +536,47 @@ func formatReportLogEntry(e *deleter.LogEntry) (m string) {
 		m = fmt.Sprintf("%s (%s)", m, e.ErrMsg)
 	}
 
+	return
+}
+
+// Stash a file in an S3 bucket
+func stashInS3Bucket(path, bucketName string) {
+	svc := s3.New(session.Must(session.NewSession(
+		&aws.Config{
+			Region: aws.String(viper.GetString("region")),
+		},
+	)))
+
+	f, err := os.Open(path)
+	if err != nil {
+		logrus.Errorln("Failed to open log file %s: %s\n", path, err)
+		return
+	}
+	defer f.Close()
+
+	params := &s3.PutObjectInput{
+		Body:   f,
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(path),
+	}
+
+	// File information
+	if fi, ierr := f.Stat(); ierr != nil {
+		params.ContentLength = aws.Int64(fi.Size())
+
+		buf := make([]byte, fi.Size())
+		f.Read(buf)
+		f.Seek(0, 0)
+
+		params.ContentType = aws.String(http.DetectContentType(buf))
+	}
+
+	ctx := aws.BackgroundContext()
+	if _, err = svc.PutObjectWithContext(ctx, params); err != nil {
+		logrus.Errorln(err)
+		return
+	}
+
+	logrus.Infoln("Log data sent to S3 bucket", bucketName)
 	return
 }
