@@ -46,7 +46,7 @@ func (rd *S3ObjectDeleter) DeleteResources(cfg *DeleteConfig) error {
 	fmtStr := "Deleted S3 Object"
 	if cfg.DryRun {
 		for _, o := range rd.ObjectIdentifiers {
-			fmt.Printf("%s %s %s from S3 Bucket %s\n", drStr, fmtStr, *o.Key, rd.BucketName)
+			fmt.Printf("%s %s %s from S3 Bucket %s\n", drStr, fmtStr, aws.StringValue(o.Key), rd.BucketName)
 		}
 		return nil
 	}
@@ -60,9 +60,9 @@ func (rd *S3ObjectDeleter) DeleteResources(cfg *DeleteConfig) error {
 	resp, err := rd.GetClient().DeleteObjectsWithContext(ctx, params)
 	if err != nil {
 		for _, o := range rd.ObjectIdentifiers {
-			cfg.logDeleteError(arn.S3ObjectRType, arn.ResourceName(*o.Key), err, logrus.Fields{
+			cfg.logRequestError(arn.S3ObjectRType, aws.StringValue(o.Key), err, logrus.Fields{
 				"parent_resource_type": arn.S3BucketRType,
-				"parent_resource_name": *o.Key,
+				"parent_resource_name": rd.BucketName,
 			})
 		}
 		if cfg.IgnoreErrors {
@@ -72,7 +72,12 @@ func (rd *S3ObjectDeleter) DeleteResources(cfg *DeleteConfig) error {
 	}
 
 	for _, o := range resp.Deleted {
-		fmt.Printf("%s %s from S3 Bucket %s\n", fmtStr, *o.Key, rd.BucketName)
+		keyStr := aws.StringValue(o.Key)
+		cfg.logRequestSuccess(arn.S3ObjectRType, keyStr, logrus.Fields{
+			"parent_resource_type": arn.S3BucketRType,
+			"parent_resource_name": rd.BucketName,
+		})
+		fmt.Printf("%s %s from S3 Bucket %s\n", fmtStr, keyStr, rd.BucketName)
 	}
 
 	return nil
@@ -156,6 +161,7 @@ func (rd *S3BucketDeleter) DeleteResources(cfg *DeleteConfig) error {
 			return err
 		}
 
+		// Then delete the bucket
 		if cfg.DryRun {
 			fmt.Println(drStr, fmtStr, n)
 			continue
@@ -168,13 +174,14 @@ func (rd *S3BucketDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteBucketWithContext(ctx, params)
 		if err != nil {
-			cfg.logDeleteError(arn.S3BucketRType, n, err)
+			cfg.logRequestError(arn.S3BucketRType, n, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
+		cfg.logRequestSuccess(arn.S3BucketRType, n)
 		fmt.Println(fmtStr, n)
 	}
 

@@ -431,7 +431,7 @@ func deleteARNs(ARNs arn.ResourceARNs) error {
 
 	// Create log filename
 	t := time.Now()
-	logFilePath := fmt.Sprintf("./delete-log-data-%d-%d-%d.log", t.Year(), t.Month(), t.Day())
+	logFilePath := fmt.Sprintf("./deleted-resources-%d%02d%02d_%02d%02d%02d.log", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second())
 
 	cfg := &deleter.DeleteConfig{
 		IgnoreErrors: ignoreErrors,
@@ -509,12 +509,17 @@ const logTail = `=================================================`
 const logHead = logTail + "\n== Log Report: Failed Resource Deletion Events ==\n" + logTail
 
 func formatReportLogEntry(e *deleter.LogEntry) (m string) {
+	if e.Error == nil {
+		return ""
+	}
+
 	m = fmt.Sprintf("Failed to delete %s %s", e.ResourceType, e.ResourceName)
 
-	switch {
-	case e.ParentResourceName != "":
+	if e.ParentResourceName != "" {
 		m = fmt.Sprintf("%s from %s %s", m, e.ParentResourceType, e.ParentResourceName)
-		fallthrough
+	}
+
+	switch {
 	case e.AWSErrorCode != "" && e.AWSErrorMsg != "":
 		m = fmt.Sprintf("%s (%s: %s)", m, e.AWSErrorCode, e.AWSErrorMsg)
 	case e.ErrMsg != "":

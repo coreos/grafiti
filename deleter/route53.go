@@ -49,18 +49,21 @@ func (rd *Route53HostedZoneDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nil
 	}
 
-	rrsDeleter := Route53ResourceRecordSetDeleter{ResourceNames: rd.ResourceNames}
-	if rerr := rrsDeleter.DeleteResources(cfg); rerr != nil {
-		return rerr
-	}
-
 	fmtStr := "Deleted Route53 HostedZone"
 
-	var params *route53.DeleteHostedZoneInput
+	var (
+		params     *route53.DeleteHostedZoneInput
+		rrsDeleter Route53ResourceRecordSetDeleter
+	)
 	for _, n := range rd.ResourceNames {
 		if cfg.DryRun {
 			fmt.Println(drStr, fmtStr, n)
 			continue
+		}
+
+		rrsDeleter = Route53ResourceRecordSetDeleter{HostedZoneID: n}
+		if rerr := rrsDeleter.DeleteResources(cfg); rerr != nil {
+			return rerr
 		}
 
 		params = &route53.DeleteHostedZoneInput{
@@ -70,13 +73,14 @@ func (rd *Route53HostedZoneDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteHostedZoneWithContext(ctx, params)
 		if err != nil {
-			cfg.logDeleteError(arn.Route53HostedZoneRType, n, err)
+			cfg.logRequestError(arn.Route53HostedZoneRType, n, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
+		cfg.logRequestSuccess(arn.Route53HostedZoneRType, n)
 		fmt.Println(fmtStr, n)
 	}
 	return nil
@@ -179,13 +183,18 @@ func (rd *Route53HostedZoneDeleter) RequestAllRoute53HostedZones() ([]*route53.H
 
 // Route53ResourceRecordSetDeleter represents an AWS route53 resource record set
 type Route53ResourceRecordSetDeleter struct {
-	Client        route53iface.Route53API
-	ResourceType  arn.ResourceType
-	ResourceNames arn.ResourceNames
+	Client             route53iface.Route53API
+	ResourceType       arn.ResourceType
+	HostedZoneID       arn.ResourceName
+	ResourceRecordSets []*route53.ResourceRecordSet
 }
 
 func (rd *Route53ResourceRecordSetDeleter) String() string {
-	return fmt.Sprintf(`{"Type": "%s", "Names": %v}`, rd.ResourceType, rd.ResourceNames)
+	rrsNames := make([]string, 0, len(rd.ResourceRecordSets))
+	for _, rrs := range rd.ResourceRecordSets {
+		rrsNames = append(rrsNames, aws.StringValue(rrs.Name))
+	}
+	return fmt.Sprintf(`{"Type": "%s", "HostedZoneID": "%s", "ResourceRecordSetNames": %v}`, rd.ResourceType, rd.HostedZoneID, rrsNames)
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
@@ -196,75 +205,61 @@ func (rd *Route53ResourceRecordSetDeleter) GetClient() route53iface.Route53API {
 	return rd.Client
 }
 
-// AddResourceNames adds route53 resource record set names to Names
-func (rd *Route53ResourceRecordSetDeleter) AddResourceNames(ns ...arn.ResourceName) {
-	rd.ResourceNames = append(rd.ResourceNames, ns...)
-}
-
 // DeleteResources deletes route53 resource record sets from AWS
 func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) error {
-	if len(rd.ResourceNames) == 0 {
+	if rd.HostedZoneID == "" {
 		return nil
 	}
 
-	rrsMap, rerr := rd.RequestRoute53ResourceRecordSets()
+	rrss, rerr := rd.RequestRoute53ResourceRecordSets()
 	if rerr != nil && !cfg.IgnoreErrors {
 		return rerr
 	}
-	if len(rrsMap) == 0 {
+	if len(rrss) == 0 {
 		return nil
 	}
 
 	fmtStr := "Deleted Route53 ResourceRecordSet"
 
-	var (
-		changes []*route53.Change
-		params  *route53.ChangeResourceRecordSetsInput
-	)
-	for hz, rrss := range rrsMap {
+	changes := make([]*route53.Change, 0, len(rrss))
+	for _, rrs := range rrss {
 		if cfg.DryRun {
-			for _, rrs := range rrss {
-				fmt.Printf("%s %s %s (HZ %s)\n", drStr, fmtStr, *rrs.Name, hz)
-			}
+			fmt.Printf("%s %s %s from HostedZone %s\n", drStr, fmtStr, *rrs.Name, rd.HostedZoneID)
 			continue
 		}
 
-		changes = make([]*route53.Change, 0, len(rrss))
-		for _, rrs := range rrss {
-			if cfg.DryRun {
-				fmt.Printf("%s %s %s (HZ %s)\n", drStr, fmtStr, *rrs.Name, hz)
-				continue
-			}
+		changes = append(changes, &route53.Change{
+			Action:            aws.String(route53.ChangeActionDelete),
+			ResourceRecordSet: rrs,
+		})
+	}
 
-			changes = append(changes, &route53.Change{
-				Action:            aws.String(route53.ChangeActionDelete),
-				ResourceRecordSet: rrs,
+	params := &route53.ChangeResourceRecordSetsInput{
+		ChangeBatch:  &route53.ChangeBatch{Changes: changes},
+		HostedZoneId: rd.HostedZoneID.AWSString(),
+	}
+
+	ctx := aws.BackgroundContext()
+	_, err := rd.GetClient().ChangeResourceRecordSetsWithContext(ctx, params)
+	if err != nil {
+		for _, rrs := range rrss {
+			cfg.logRequestError(arn.Route53ResourceRecordSetRType, *rrs.Name, err, logrus.Fields{
+				"parent_resource_type": arn.Route53HostedZoneRType,
+				"parent_resource_name": rd.HostedZoneID,
 			})
 		}
-
-		params = &route53.ChangeResourceRecordSetsInput{
-			ChangeBatch:  &route53.ChangeBatch{Changes: changes},
-			HostedZoneId: hz.AWSString(),
+		if cfg.IgnoreErrors {
+			return nil
 		}
+		return err
+	}
 
-		ctx := aws.BackgroundContext()
-		_, err := rd.GetClient().ChangeResourceRecordSetsWithContext(ctx, params)
-		if err != nil {
-			for _, rrs := range rrss {
-				cfg.logDeleteError(arn.Route53ResourceRecordSetRType, arn.ResourceName(*rrs.Name), err, logrus.Fields{
-					"parent_resource_type": arn.Route53HostedZoneRType,
-					"parent_resource_name": hz.String(),
-				})
-			}
-			if cfg.IgnoreErrors {
-				continue
-			}
-			return err
-		}
-
-		for _, rrs := range rrss {
-			fmt.Printf("%s %s (HZ %s)\n", fmtStr, *rrs.Name, hz)
-		}
+	for _, rrs := range rrss {
+		cfg.logRequestSuccess(arn.Route53ResourceRecordSetRType, *rrs.Name, logrus.Fields{
+			"parent_resource_type": arn.Route53HostedZoneRType,
+			"parent_resource_name": rd.HostedZoneID,
+		})
+		fmt.Printf("%s %s from HostedZone %s\n", fmtStr, *rrs.Name, rd.HostedZoneID)
 	}
 
 	return nil
@@ -273,45 +268,42 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 // RequestRoute53ResourceRecordSets requests route53 resource record sets by
 // hosted zone names from the AWS API and returns a map of hosted zones to
 // resource record sets
-func (rd *Route53ResourceRecordSetDeleter) RequestRoute53ResourceRecordSets() (map[arn.ResourceName][]*route53.ResourceRecordSet, error) {
-	if len(rd.ResourceNames) == 0 {
+func (rd *Route53ResourceRecordSetDeleter) RequestRoute53ResourceRecordSets() ([]*route53.ResourceRecordSet, error) {
+	if rd.HostedZoneID == "" {
 		return nil, nil
 	}
 
-	rrsMap := make(map[arn.ResourceName][]*route53.ResourceRecordSet)
-	var params *route53.ListResourceRecordSetsInput
+	recordSets := make([]*route53.ResourceRecordSet, 0)
 
-	for _, hz := range rd.ResourceNames {
-		params = &route53.ListResourceRecordSetsInput{
-			HostedZoneId: hz.AWSString(),
-			MaxItems:     aws.String("100"),
-		}
-
-		for {
-			ctx := aws.BackgroundContext()
-			resp, err := rd.GetClient().ListResourceRecordSetsWithContext(ctx, params)
-			if err != nil {
-				fmt.Printf("{\"error\": \"%s\"}\n", err)
-				return rrsMap, err
-			}
-
-			for _, rrs := range resp.ResourceRecordSets {
-				if !isTypeNSorSOA(aws.StringValue(rrs.Type)) {
-					rrsMap[hz] = append(rrsMap[hz], rrs)
-				}
-			}
-
-			if resp.IsTruncated == nil || !*resp.IsTruncated {
-				break
-			}
-
-			params.StartRecordIdentifier = resp.NextRecordIdentifier
-			params.StartRecordType = resp.NextRecordType
-			params.StartRecordName = resp.NextRecordName
-		}
+	params := &route53.ListResourceRecordSetsInput{
+		HostedZoneId: rd.HostedZoneID.AWSString(),
+		MaxItems:     aws.String("100"),
 	}
 
-	return rrsMap, nil
+	for {
+		ctx := aws.BackgroundContext()
+		resp, err := rd.GetClient().ListResourceRecordSetsWithContext(ctx, params)
+		if err != nil {
+			fmt.Printf("{\"error\": \"%s\"}\n", err)
+			return recordSets, err
+		}
+
+		for _, rrs := range resp.ResourceRecordSets {
+			if !isTypeNSorSOA(aws.StringValue(rrs.Type)) {
+				recordSets = append(recordSets, rrs)
+			}
+		}
+
+		if resp.IsTruncated == nil || !*resp.IsTruncated {
+			break
+		}
+
+		params.StartRecordIdentifier = resp.NextRecordIdentifier
+		params.StartRecordType = resp.NextRecordType
+		params.StartRecordName = resp.NextRecordName
+	}
+
+	return recordSets, nil
 }
 
 // Cannot delete NS/SOA type record sets

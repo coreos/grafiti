@@ -43,10 +43,10 @@ type DeleteConfig struct {
 }
 
 // InitRequestLogger creates a logrus.FieldLogger that logs to a file at path,
-// or os.Stderr if an error occurs opening the file
+// or os.Stdout if an error occurs opening the file
 func InitRequestLogger(path string) logrus.FieldLogger {
 	logger := &logrus.Logger{
-		Out:       os.Stderr,
+		Out:       os.Stdout,
 		Formatter: &logrus.JSONFormatter{},
 		Level:     logrus.InfoLevel,
 	}
@@ -55,7 +55,7 @@ func InitRequestLogger(path string) logrus.FieldLogger {
 	if err == nil {
 		logger.Out = f
 	} else {
-		logger.Infof("Failed to open file %s for logging, using stderr instead", path)
+		logger.Infof("Failed to open file %s for logging, using stdout instead", path)
 	}
 
 	return logger
@@ -64,6 +64,7 @@ func InitRequestLogger(path string) logrus.FieldLogger {
 // LogEntry maps potential log entry fields to a Go struct. Add fields here when
 // creating fields in ResourceDeleter.DeleteResources implementations
 type LogEntry struct {
+	Error              error            `json:"error"`
 	ResourceType       arn.ResourceType `json:"resource_type"`
 	ResourceName       arn.ResourceName `json:"resource_name"`
 	AWSErrorCode       string           `json:"aws_err_code,omitempty"`
@@ -73,36 +74,60 @@ type LogEntry struct {
 	ParentResourceName arn.ResourceName `json:"parent_resource_name,omitempty"`
 }
 
-// Log deletion errors to a DeleteConfig.Logger
-func (c *DeleteConfig) logDeleteError(rt arn.ResourceType, rn arn.ResourceName, err error, fs ...logrus.Fields) {
+// Log errors to a DeleteConfig.Logger
+func (c *DeleteConfig) logRequestError(rt arn.ResourceType, rn interface{}, err error, extraFields ...logrus.Fields) {
 	fields := logrus.Fields{
+		"error":         err,
 		"resource_type": rt,
-		"resource_name": rn.String(),
+		"resource_name": rn,
 	}
 
 	if aerr, ok := err.(awserr.Error); ok {
 		fields["aws_err_code"] = aerr.Code()
 		fields["aws_err_msg"] = aerr.Message()
-		fmt.Printf("Failed to delete %s \"%s\": %s\n", rt, rn, aerr.Code())
 	} else {
 		fields["err_msg"] = err.Error()
 	}
 
 	// Allow overwriting old fields or adding extra fields if desired
-	if len(fs) > 0 {
-		for fk, fv := range fs[0] {
+	for _, ef := range extraFields {
+		for fk, fv := range ef {
 			fields[fk] = fv
 		}
 	}
 
-	c.Logger.WithFields(fields).Info("Failed to delete resource")
+	failMsg := fmt.Sprintf("Failed to delete %s \"%v\"", rt, rn)
+	if fields["parent_resource_type"] != nil && fields["parent_resource_name"] != nil {
+		failMsg += fmt.Sprintf("from %s \"%s\"", fields["parent_resource_type"], fields["parent_resource_name"])
+	}
+	fmt.Printf("%s: %s\n", failMsg, err.Error())
+
+	c.Logger.WithFields(fields).Info("Resource request failed.")
+}
+
+// Log request data to a DeleteConfig.Logger
+func (c *DeleteConfig) logRequestSuccess(rt arn.ResourceType, rn interface{}, extraFields ...logrus.Fields) {
+	fields := logrus.Fields{
+		"error":         nil,
+		"resource_type": rt,
+		"resource_name": rn,
+	}
+
+	// Allow overwriting old fields or adding extra fields if desired
+	for _, ef := range extraFields {
+		for fk, fv := range ef {
+			fields[fk] = fv
+		}
+	}
+
+	c.Logger.WithFields(fields).Info("Resource request was successful.")
 }
 
 // LogFormatFunc formats LogEntry structs into a string
 type LogFormatFunc func(*LogEntry) string
 
 // PrintLogFileReport prints LogEntry structs with format determined by lff
-func PrintLogFileReport(reader io.Reader, lff LogFormatFunc) {
+func PrintLogFileReport(reader io.Reader, f LogFormatFunc) {
 	dec := json.NewDecoder(reader)
 
 	for {
@@ -118,7 +143,9 @@ func PrintLogFileReport(reader io.Reader, lff LogFormatFunc) {
 			continue
 		}
 
-		fmt.Println(lff(e))
+		if entryStr := f(e); entryStr != "" {
+			fmt.Println(entryStr)
+		}
 	}
 
 	return
