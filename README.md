@@ -96,7 +96,6 @@ Use "grafiti [command] --help" for more information about a command.
 Grafiti takes a config file which configures it's basic function.
 
 ```toml
-[grafiti]
 resourceTypes = ["AWS::EC2::Instance"]
 endHour = 0
 startHour = -8
@@ -186,7 +185,6 @@ Grafiti is designed to take advantage of existing tools like `jq`.
 $ cat config.toml
 ```
 ```toml
-[grafiti]
 resourceTypes = ["AWS::EC2::Instance"]
 endHour = 0
 startHour = -8
@@ -263,6 +261,8 @@ Filter input file (see `example-tags-input.json`) has the form:
 }
 ```
 
+**Note**: Both tag keys and values are _case sensitive_.
+
 TagFilters have the same form as the AWS Resource Group Tagging API `TagFilter`. See the [docs for details](http://docs.aws.amazon.com/resourcegroupstagging/latest/APIReference/API_TagFilter.html). Of note is tag value chaining with AND and OR e.g. `"Values": ["Yes", "OR", "Maybe"]`
 
 Filtering can be done like so:
@@ -302,7 +302,6 @@ This is a full example of parsing events and generating tags from them.
 
 config.toml
 ```toml
-[grafiti]
 resourceTypes = ["AWS::EC2::Instance"]
 endHour = 0
 startHour = -8
@@ -352,6 +351,8 @@ Delete input file (see `example-tags-input.json`) has the form:
 	]
 }
 ```
+
+**Note**: Both tag keys and values are _case sensitive_.
 
 As with `grafiti filter`'s input tag file, TagFilters have the same form as AWS TagFilter JSON. See the [docs for details](http://docs.aws.amazon.com/resourcegroupstagging/latest/APIReference/API_TagFilter.html). Of note is tag value chaining with AND and OR e.g. `"Values": ["Yes", "OR", "Maybe"]`
 
