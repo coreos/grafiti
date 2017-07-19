@@ -28,9 +28,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudtrail"
 	"github.com/aws/aws-sdk-go/service/cloudtrail/cloudtrailiface"
+	jq "github.com/estroz/jqpipe-go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	jq "github.com/threatgrid/jqpipe-go"
 	"github.com/tidwall/gjson"
 
 	"github.com/coreos/grafiti/arn"
