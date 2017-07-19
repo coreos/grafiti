@@ -1,6 +1,7 @@
 package deleter
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -103,6 +104,8 @@ func (rd *EC2CustomerGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	var params *ec2.DeleteCustomerGatewayInput
 	for _, cgw := range cgws {
+		idStr := aws.StringValue(cgw.CustomerGatewayId)
+
 		params = &ec2.DeleteCustomerGatewayInput{
 			CustomerGatewayId: cgw.CustomerGatewayId,
 			DryRun:            aws.Bool(cfg.DryRun),
@@ -112,17 +115,18 @@ func (rd *EC2CustomerGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteCustomerGatewayWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Println(drStr, fmtStr, *cgw.CustomerGatewayId)
+				fmt.Println(drStr, fmtStr, idStr)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2CustomerGatewayRType, arn.ResourceName(*cgw.CustomerGatewayId), err)
+			cfg.logRequestError(arn.EC2CustomerGatewayRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, *cgw.CustomerGatewayId)
+		cfg.logRequestSuccess(arn.EC2CustomerGatewayRType, idStr)
+		fmt.Println(fmtStr, idStr)
 	}
 
 	return nil
@@ -219,13 +223,14 @@ func (rd *EC2ElasticIPAllocationDeleter) DeleteResources(cfg *DeleteConfig) erro
 				fmt.Println(drStr, fmtStr, n)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2EIPRType, n, err)
+			cfg.logRequestError(arn.EC2EIPRType, n, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
+		cfg.logRequestSuccess(arn.EC2EIPRType, n)
 		fmt.Println(fmtStr, n)
 	}
 
@@ -281,13 +286,14 @@ func (rd *EC2ElasticIPAssocationDeleter) DeleteResources(cfg *DeleteConfig) erro
 				fmt.Println(drStr, fmtStr, n)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2EIPAssociationRType, n, err)
+			cfg.logRequestError(arn.EC2EIPAssociationRType, n, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
+		cfg.logRequestSuccess(arn.EC2EIPAssociationRType, n)
 		fmt.Println(fmtStr, n)
 	}
 
@@ -351,6 +357,8 @@ func (rd *EC2NetworkInterfaceDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	var params *ec2.DeleteNetworkInterfaceInput
 	for _, eni := range enis {
+		idStr := aws.StringValue(eni.NetworkInterfaceId)
+
 		params = &ec2.DeleteNetworkInterfaceInput{
 			NetworkInterfaceId: eni.NetworkInterfaceId,
 			DryRun:             aws.Bool(cfg.DryRun),
@@ -360,17 +368,18 @@ func (rd *EC2NetworkInterfaceDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteNetworkInterfaceWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Println(drStr, fmtStr, *eni.NetworkInterfaceId)
+				fmt.Println(drStr, fmtStr, idStr)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2NetworkInterfaceRType, arn.ResourceName(*eni.NetworkInterfaceId), err)
+			cfg.logRequestError(arn.EC2NetworkInterfaceRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, *eni.NetworkInterfaceId)
+		cfg.logRequestSuccess(arn.EC2NetworkInterfaceRType, idStr)
+		fmt.Println(fmtStr, idStr)
 	}
 
 	return nil
@@ -507,13 +516,14 @@ func (rd *EC2NetworkInterfaceAttachmentDeleter) DeleteResources(cfg *DeleteConfi
 				fmt.Println(drStr, fmtStr, n)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2NetworkInterfaceAttachmentRType, n, err)
+			cfg.logRequestError(arn.EC2NetworkInterfaceAttachmentRType, n, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
+		cfg.logRequestSuccess(arn.EC2NetworkInterfaceAttachmentRType, n)
 		fmt.Println(fmtStr, n)
 	}
 
@@ -560,6 +570,8 @@ func (rd *EC2NetworkACLEntryDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	var params *ec2.DeleteNetworkAclEntryInput
 	for _, entry := range rd.NetworkACLEntries {
+		ruleNum := aws.Int64Value(entry.RuleNumber)
+
 		params = &ec2.DeleteNetworkAclEntryInput{
 			NetworkAclId: rd.NetworkACLName.AWSString(),
 			RuleNumber:   entry.RuleNumber,
@@ -571,16 +583,24 @@ func (rd *EC2NetworkACLEntryDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteNetworkAclEntryWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Printf("%s %s %s Entry %d\n", drStr, fmtStr, rd.NetworkACLName, *entry.RuleNumber)
+				fmt.Printf("%s %s %s Entry %d\n", drStr, fmtStr, rd.NetworkACLName, ruleNum)
 				continue
 			}
+			cfg.logRequestError(arn.EC2NetworkACLEntryRType, ruleNum, err, logrus.Fields{
+				"parent_resource_type": arn.EC2NetworkACLRType,
+				"parent_resource_name": rd.NetworkACLName,
+			})
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Printf("%s %s Entry %d\n", fmtStr, rd.NetworkACLName, *entry.RuleNumber)
+		cfg.logRequestSuccess(arn.EC2NetworkACLEntryRType, ruleNum, logrus.Fields{
+			"parent_resource_type": arn.EC2NetworkACLRType,
+			"parent_resource_name": rd.NetworkACLName,
+		})
+		fmt.Printf("%s %s Entry %d\n", fmtStr, rd.NetworkACLName, ruleNum)
 	}
 
 	return nil
@@ -628,8 +648,10 @@ func (rd *EC2NetworkACLDeleter) DeleteResources(cfg *DeleteConfig) error {
 		naclEntryDel *EC2NetworkACLEntryDeleter
 	)
 	for _, acl := range acls {
+		idStr := aws.StringValue(acl.NetworkAclId)
+
 		// First delete network acl entries
-		naclEntryDel = &EC2NetworkACLEntryDeleter{NetworkACLName: arn.ResourceName(*acl.NetworkAclId)}
+		naclEntryDel = &EC2NetworkACLEntryDeleter{NetworkACLName: arn.ResourceName(idStr)}
 		if err := naclEntryDel.DeleteResources(cfg); err != nil {
 			return err
 		}
@@ -643,16 +665,18 @@ func (rd *EC2NetworkACLDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteNetworkAclWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Println(drStr, fmtStr, *acl.NetworkAclId)
+				fmt.Println(drStr, fmtStr, idStr)
 				continue
 			}
+			cfg.logRequestError(arn.EC2NetworkACLRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, *acl.NetworkAclId)
+		cfg.logRequestSuccess(arn.EC2NetworkACLRType, idStr)
+		fmt.Println(fmtStr, idStr)
 	}
 
 	return nil
@@ -769,11 +793,12 @@ func (rd *EC2InstanceDeleter) DeleteResources(cfg *DeleteConfig) error {
 			return nil
 		}
 		for _, n := range instanceNames {
-			cfg.logDeleteError(arn.EC2InstanceRType, n, err)
+			cfg.logRequestError(arn.EC2InstanceRType, n, err)
 		}
 		if cfg.IgnoreErrors {
 			return nil
 		}
+
 		return err
 	}
 
@@ -787,22 +812,23 @@ func (rd *EC2InstanceDeleter) DeleteResources(cfg *DeleteConfig) error {
 		rd.waitUntilInstancesTerminated(cfg, termInstances)
 	}
 
-	for _, id := range instanceNames {
-		fmt.Println(fmtStr, id)
+	for _, n := range instanceNames {
+		cfg.logRequestSuccess(arn.EC2InstanceRType, n)
+		fmt.Println(fmtStr, n)
 	}
 
 	return nil
 }
 
-func (rd *EC2InstanceDeleter) waitUntilInstancesTerminated(cfg *DeleteConfig, tis []*string) {
+func (rd *EC2InstanceDeleter) waitUntilInstancesTerminated(cfg *DeleteConfig, termInstances []*string) {
 	params := &ec2.DescribeInstancesInput{
-		InstanceIds: tis,
+		InstanceIds: termInstances,
 	}
 
 	ctx := aws.BackgroundContext()
 	if err := rd.GetClient().WaitUntilInstanceTerminatedWithContext(ctx, params); err != nil {
-		for _, ti := range tis {
-			cfg.logDeleteError(arn.EC2InstanceRType, arn.ResourceName(*ti), err)
+		for _, instanceID := range termInstances {
+			cfg.logRequestError(arn.EC2InstanceRType, aws.StringValue(instanceID), err)
 		}
 	}
 }
@@ -974,7 +1000,7 @@ func (rd *EC2InternetGatewayAttachmentDeleter) DeleteResources(cfg *DeleteConfig
 				fmt.Printf("%s %s %s from VPC %s\n", drStr, fmtStr, rd.InternetGatewayName, an)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2InternetGatewayAttachmentRType, an, err, logrus.Fields{
+			cfg.logRequestError(arn.EC2InternetGatewayAttachmentRType, an, err, logrus.Fields{
 				"parent_resource_type": arn.EC2InternetGatewayRType,
 				"parent_resource_name": rd.InternetGatewayName,
 			})
@@ -984,6 +1010,10 @@ func (rd *EC2InternetGatewayAttachmentDeleter) DeleteResources(cfg *DeleteConfig
 			return err
 		}
 
+		cfg.logRequestSuccess(arn.EC2InternetGatewayAttachmentRType, an, logrus.Fields{
+			"parent_resource_type": arn.EC2InternetGatewayRType,
+			"parent_resource_name": rd.InternetGatewayName,
+		})
 		fmt.Printf("%s %s from VPC %s\n", fmtStr, rd.InternetGatewayName, an)
 	}
 
@@ -1043,6 +1073,8 @@ func (rd *EC2InternetGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	var params *ec2.DeleteInternetGatewayInput
 	for _, igw := range igws {
+		idStr := aws.StringValue(igw.InternetGatewayId)
+
 		params = &ec2.DeleteInternetGatewayInput{
 			InternetGatewayId: igw.InternetGatewayId,
 			DryRun:            aws.Bool(cfg.DryRun),
@@ -1052,17 +1084,18 @@ func (rd *EC2InternetGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteInternetGatewayWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Println(drStr, fmtStr, *igw.InternetGatewayId)
+				fmt.Println(drStr, fmtStr, idStr)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2InternetGatewayRType, arn.ResourceName(*igw.InternetGatewayId), err)
+			cfg.logRequestError(arn.EC2InternetGatewayRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, *igw.InternetGatewayId)
+		cfg.logRequestSuccess(arn.EC2InternetGatewayRType, idStr)
+		fmt.Println(fmtStr, idStr)
 	}
 
 	return nil
@@ -1147,10 +1180,15 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	fmtStr := "Deleted EC2 NatGateway"
 
-	var params *ec2.DeleteNatGatewayInput
+	var (
+		params *ec2.DeleteNatGatewayInput
+		idStr  string
+	)
 	for _, ngw := range ngws {
+		idStr = aws.StringValue(ngw.NatGatewayId)
+
 		if cfg.DryRun {
-			fmt.Println(drStr, fmtStr, *ngw.NatGatewayId)
+			fmt.Println(drStr, fmtStr, idStr)
 			continue
 		}
 
@@ -1161,7 +1199,7 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DeleteNatGatewayWithContext(ctx, params)
 		if err != nil {
-			cfg.logDeleteError(arn.EC2NatGatewayRType, arn.ResourceName(*ngw.NatGatewayId), err)
+			cfg.logRequestError(arn.EC2NatGatewayRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
@@ -1182,12 +1220,17 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		fmt.Printf("{\"error\": \"%s\"}", err)
 	}
 	if len(aliveNGWs) != 0 {
+		ngwErrMsg := "Failed to delete EC2 Nat Gateway within 5 minutes."
 		for _, ngw := range aliveNGWs {
-			fmt.Printf("Could not delete EC2 Nat Gateway %s in 5 minutes (state \"%s\")\n", *ngw.NatGatewayId, *ngw.State)
+			idStr = aws.StringValue(ngw.NatGatewayId)
+			cfg.logRequestError(arn.EC2NatGatewayRType, idStr, errors.New(ngwErrMsg))
+			fmt.Printf("Could not delete EC2 Nat Gateway %s in 5 minutes (state \"%s\")\n", idStr, aws.StringValue(ngw.State))
 		}
 	}
 	for _, ngw := range deletedNGWs {
-		fmt.Println(fmtStr, *ngw.NatGatewayId)
+		idStr = aws.StringValue(ngw.NatGatewayId)
+		cfg.logRequestSuccess(arn.EC2NatGatewayRType, idStr)
+		fmt.Println(fmtStr, idStr)
 	}
 
 	return nil
@@ -1351,11 +1394,14 @@ func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nil
 	}
 
-	fmtStr := "Deleted RouteTable Route"
+	fmtStr := "Deleted Route"
+	rtbID := aws.StringValue(rd.RouteTable.RouteTableId)
 
 	var params *ec2.DeleteRouteInput
 	for _, r := range rd.RouteTable.Routes {
-		if isLocalGateway(r.GatewayId) {
+		cidrStr := aws.StringValue(r.DestinationCidrBlock)
+
+		if isLocalGateway(aws.StringValue(r.GatewayId)) {
 			continue
 		}
 
@@ -1369,12 +1415,12 @@ func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteRouteWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Printf("%s %s: Dst CIDR Block %s\n", drStr, fmtStr, *r.DestinationCidrBlock)
+				fmt.Printf("%s %s CIDR Block %s from RouteTable %s\n", drStr, fmtStr, cidrStr, rtbID)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2RouteTableRouteRType, arn.ResourceName(*r.DestinationCidrBlock), err, logrus.Fields{
+			cfg.logRequestError(arn.EC2RouteTableRouteRType, cidrStr, err, logrus.Fields{
 				"parent_resource_type": arn.EC2RouteTableRType,
-				"parent_resource_name": *rd.RouteTable.RouteTableId,
+				"parent_resource_name": rtbID,
 			})
 			if cfg.IgnoreErrors {
 				continue
@@ -1382,14 +1428,18 @@ func (rd *EC2RouteTableRouteDeleter) DeleteResources(cfg *DeleteConfig) error {
 			return err
 		}
 
-		fmt.Printf("%s: Dst CIDR Block %s\n", fmtStr, *r.DestinationCidrBlock)
+		cfg.logRequestSuccess(arn.EC2RouteTableRouteRType, cidrStr, logrus.Fields{
+			"parent_resource_type": arn.EC2RouteTableRType,
+			"parent_resource_name": rtbID,
+		})
+		fmt.Printf("%s CIDR Block %s from RouteTable %s\n", fmtStr, cidrStr, rtbID)
 	}
 
 	return nil
 }
 
-func isLocalGateway(gwID *string) bool {
-	return aws.StringValue(gwID) == localInternetGatewayID
+func isLocalGateway(gwID string) bool {
+	return gwID == localInternetGatewayID
 }
 
 // EC2RouteTableAssociationDeleter represents a collection of AWS EC2 route table associations
@@ -1438,13 +1488,14 @@ func (rd *EC2RouteTableAssociationDeleter) DeleteResources(cfg *DeleteConfig) er
 				fmt.Println(drStr, fmtStr, n)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2RouteTableAssociationRType, n, err)
+			cfg.logRequestError(arn.EC2RouteTableAssociationRType, n, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
+		cfg.logRequestSuccess(arn.EC2RouteTableAssociationRType, n)
 		fmt.Println(fmtStr, n)
 	}
 
@@ -1503,6 +1554,8 @@ func (rd *EC2RouteTableDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	var params *ec2.DeleteRouteTableInput
 	for _, rt := range rts {
+		idStr := aws.StringValue(rt.RouteTableId)
+
 		params = &ec2.DeleteRouteTableInput{
 			RouteTableId: rt.RouteTableId,
 			DryRun:       aws.Bool(cfg.DryRun),
@@ -1512,17 +1565,18 @@ func (rd *EC2RouteTableDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteRouteTableWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Println(drStr, fmtStr, *rt.RouteTableId)
+				fmt.Println(drStr, fmtStr, idStr)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2RouteTableRType, arn.ResourceName(*rt.RouteTableId), err)
+			cfg.logRequestError(arn.EC2RouteTableRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, *rt.RouteTableId)
+		cfg.logRequestSuccess(arn.EC2RouteTableRType, idStr)
+		fmt.Println(fmtStr, idStr)
 	}
 
 	return nil
@@ -1624,6 +1678,8 @@ func (rd *EC2SecurityGroupIngressRuleDeleter) DeleteResources(cfg *DeleteConfig)
 			continue
 		}
 
+		idStr := aws.StringValue(sg.GroupId)
+
 		params = &ec2.RevokeSecurityGroupIngressInput{
 			GroupId:       sg.GroupId,
 			IpPermissions: sg.IpPermissions,
@@ -1634,17 +1690,18 @@ func (rd *EC2SecurityGroupIngressRuleDeleter) DeleteResources(cfg *DeleteConfig)
 		_, err := rd.GetClient().RevokeSecurityGroupIngressWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Printf("%s %s for %s\n", drStr, fmtStr, *sg.GroupId)
+				fmt.Printf("%s %s from %s\n", drStr, fmtStr, idStr)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2SecurityGroupIngressRType, arn.ResourceName(*sg.GroupId), err)
+			cfg.logRequestError(arn.EC2SecurityGroupIngressRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
+		cfg.logRequestSuccess(arn.EC2SecurityGroupIngressRType, idStr)
+		fmt.Printf("%s from %s\n", fmtStr, idStr)
 	}
 	return nil
 }
@@ -1686,6 +1743,8 @@ func (rd *EC2SecurityGroupEgressRuleDeleter) DeleteResources(cfg *DeleteConfig) 
 			continue
 		}
 
+		idStr := aws.StringValue(sg.GroupId)
+
 		params = &ec2.RevokeSecurityGroupEgressInput{
 			GroupId:       sg.GroupId,
 			IpPermissions: sg.IpPermissionsEgress,
@@ -1696,17 +1755,18 @@ func (rd *EC2SecurityGroupEgressRuleDeleter) DeleteResources(cfg *DeleteConfig) 
 		_, err := rd.GetClient().RevokeSecurityGroupEgressWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Printf("%s %s for %s\n", drStr, fmtStr, *sg.GroupId)
+				fmt.Printf("%s %s from %s\n", drStr, fmtStr, idStr)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2SecurityGroupEgressRType, arn.ResourceName(*sg.GroupId), err)
+			cfg.logRequestError(arn.EC2SecurityGroupEgressRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Printf("%s for %s\n", fmtStr, *sg.GroupId)
+		cfg.logRequestSuccess(arn.EC2SecurityGroupEgressRType, idStr)
+		fmt.Printf("%s from %s\n", fmtStr, idStr)
 	}
 
 	return nil
@@ -1766,6 +1826,8 @@ func (rd *EC2SecurityGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	var params *ec2.DeleteSecurityGroupInput
 	for _, sg := range sgs {
+		idStr := aws.StringValue(sg.GroupId)
+
 		params = &ec2.DeleteSecurityGroupInput{
 			GroupId: sg.GroupId,
 			DryRun:  aws.Bool(cfg.DryRun),
@@ -1775,17 +1837,18 @@ func (rd *EC2SecurityGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteSecurityGroupWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Println(drStr, fmtStr, *sg.GroupId)
+				fmt.Println(drStr, fmtStr, idStr)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2SecurityGroupRType, arn.ResourceName(*sg.GroupId), err)
+			cfg.logRequestError(arn.EC2SecurityGroupRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, *sg.GroupId)
+		cfg.logRequestSuccess(arn.EC2SecurityGroupRType, idStr)
+		fmt.Println(fmtStr, idStr)
 	}
 
 	return nil
@@ -1883,6 +1946,8 @@ func (rd *EC2SubnetDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	var params *ec2.DeleteSubnetInput
 	for _, sn := range sns {
+		idStr := aws.StringValue(sn.SubnetId)
+
 		params = &ec2.DeleteSubnetInput{
 			SubnetId: sn.SubnetId,
 			DryRun:   aws.Bool(cfg.DryRun),
@@ -1892,17 +1957,18 @@ func (rd *EC2SubnetDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteSubnetWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Println(drStr, fmtStr, *sn.SubnetId)
+				fmt.Println(drStr, fmtStr, idStr)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2SubnetRType, arn.ResourceName(*sn.SubnetId), err)
+			cfg.logRequestError(arn.EC2SubnetRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, *sn.SubnetId)
+		cfg.logRequestSuccess(arn.EC2SubnetRType, idStr)
+		fmt.Println(fmtStr, idStr)
 	}
 
 	return nil
@@ -2003,13 +2069,20 @@ func (rd *EC2VPCCIDRBlockAssociationDeleter) DeleteResources(cfg *DeleteConfig) 
 		ctx := aws.BackgroundContext()
 		_, err := rd.GetClient().DisassociateVpcCidrBlockWithContext(ctx, params)
 		if err != nil {
-			cfg.logDeleteError(arn.EC2VPCCIDRAssociationRType, n, err)
+			cfg.logRequestError(arn.EC2VPCCIDRAssociationRType, n, err, logrus.Fields{
+				"parent_resource_type": arn.EC2VPCRType,
+				"parent_resource_name": rd.VPCName,
+			})
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
+		cfg.logRequestSuccess(arn.EC2VPCCIDRAssociationRType, n, logrus.Fields{
+			"parent_resource_type": arn.EC2VPCRType,
+			"parent_resource_name": rd.VPCName,
+		})
 		fmt.Printf("%s Deleted EC2 VPC %s CIDRBlockAssociation %s\n", drStr, rd.VPCName, n)
 	}
 
@@ -2055,6 +2128,8 @@ func (rd *EC2VolumeDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	var params *ec2.DeleteVolumeInput
 	for _, vol := range vols {
+		idStr := aws.StringValue(vol.VolumeId)
+
 		params = &ec2.DeleteVolumeInput{
 			VolumeId: vol.VolumeId,
 			DryRun:   aws.Bool(cfg.DryRun),
@@ -2064,17 +2139,18 @@ func (rd *EC2VolumeDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteVolumeWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Println(drStr, fmtStr, *vol.VolumeId)
+				fmt.Println(drStr, fmtStr, idStr)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2VolumeRType, arn.ResourceName(*vol.VolumeId), err)
+			cfg.logRequestError(arn.EC2VolumeRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, *vol.VolumeId)
+		cfg.logRequestSuccess(arn.EC2VolumeRType, idStr)
+		fmt.Println(fmtStr, idStr)
 	}
 
 	return nil
@@ -2197,6 +2273,8 @@ func (rd *EC2VPCDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	var params *ec2.DeleteVpcInput
 	for _, vpc := range vpcs {
+		idStr := aws.StringValue(vpc.VpcId)
+
 		params = &ec2.DeleteVpcInput{
 			VpcId:  vpc.VpcId,
 			DryRun: aws.Bool(cfg.DryRun),
@@ -2206,17 +2284,18 @@ func (rd *EC2VPCDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteVpcWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Println(drStr, fmtStr, *vpc.VpcId)
+				fmt.Println(drStr, fmtStr, idStr)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2VPCRType, arn.ResourceName(*vpc.VpcId), err)
+			cfg.logRequestError(arn.EC2VPCRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, *vpc.VpcId)
+		cfg.logRequestSuccess(arn.EC2VPCRType, idStr)
+		fmt.Println(fmtStr, idStr)
 	}
 
 	return nil
@@ -2472,12 +2551,15 @@ func (rd *EC2VPNConnectionRouteDeleter) DeleteResources(cfg *DeleteConfig) error
 	}
 
 	fmtStr := "Deleted EC2 VPN Connection Route"
+	vconnID := aws.StringValue(rd.VPNConnection.VpnConnectionId)
 
 	var params *ec2.DeleteVpnConnectionRouteInput
 	for _, route := range rd.VPNConnection.Routes {
 		if isDeleting(aws.StringValue(route.State)) {
 			continue
 		}
+
+		cidrStr := aws.StringValue(route.DestinationCidrBlock)
 
 		params = &ec2.DeleteVpnConnectionRouteInput{
 			DestinationCidrBlock: route.DestinationCidrBlock,
@@ -2488,12 +2570,12 @@ func (rd *EC2VPNConnectionRouteDeleter) DeleteResources(cfg *DeleteConfig) error
 		_, err := rd.GetClient().DeleteVpnConnectionRouteWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Printf("%s %s %s from %s\n", drStr, fmtStr, *route.DestinationCidrBlock, *rd.VPNConnection.VpnConnectionId)
+				fmt.Printf("%s %s %s from %s\n", drStr, fmtStr, cidrStr, vconnID)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2VPNConnectionRouteRType, arn.ResourceName(*route.DestinationCidrBlock), err, logrus.Fields{
+			cfg.logRequestError(arn.EC2VPNConnectionRouteRType, cidrStr, err, logrus.Fields{
 				"parent_resource_type": arn.EC2VPNConnectionRType,
-				"parent_resource_name": *rd.VPNConnection.VpnConnectionId,
+				"parent_resource_name": vconnID,
 			})
 			if cfg.IgnoreErrors {
 				continue
@@ -2501,7 +2583,11 @@ func (rd *EC2VPNConnectionRouteDeleter) DeleteResources(cfg *DeleteConfig) error
 			return err
 		}
 
-		fmt.Printf("%s %s from %s\n", fmtStr, *route.DestinationCidrBlock, *rd.VPNConnection.VpnConnectionId)
+		cfg.logRequestSuccess(arn.EC2VPNConnectionRouteRType, cidrStr, logrus.Fields{
+			"parent_resource_type": arn.EC2VPNConnectionRType,
+			"parent_resource_name": vconnID,
+		})
+		fmt.Printf("%s %s from %s\n", fmtStr, cidrStr, vconnID)
 	}
 
 	return nil
@@ -2558,6 +2644,8 @@ func (rd *EC2VPNConnectionDeleter) DeleteResources(cfg *DeleteConfig) error {
 			return err
 		}
 
+		idStr := aws.StringValue(vc.VpnConnectionId)
+
 		params = &ec2.DeleteVpnConnectionInput{
 			VpnConnectionId: vc.VpnConnectionId,
 			DryRun:          aws.Bool(cfg.DryRun),
@@ -2567,17 +2655,18 @@ func (rd *EC2VPNConnectionDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteVpnConnectionWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Println(drStr, fmtStr, *vc.VpnConnectionId)
+				fmt.Println(drStr, fmtStr, idStr)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2VPNConnectionRType, arn.ResourceName(*vc.VpnConnectionId), err)
+			cfg.logRequestError(arn.EC2VPNConnectionRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, *vc.VpnConnectionId)
+		cfg.logRequestSuccess(arn.EC2VPNConnectionRType, idStr)
+		fmt.Println(fmtStr, idStr)
 	}
 
 	return nil
@@ -2661,6 +2750,7 @@ func (rd *EC2VPNGatewayAttachmentDeleter) DeleteResources(cfg *DeleteConfig) err
 	}
 
 	fmtStr := "Detached EC2 VPN Gateway"
+	vgwID := aws.StringValue(rd.VPNGateway.VpnGatewayId)
 
 	var params *ec2.DetachVpnGatewayInput
 	for _, attachment := range rd.VPNGateway.VpcAttachments {
@@ -2668,6 +2758,8 @@ func (rd *EC2VPNGatewayAttachmentDeleter) DeleteResources(cfg *DeleteConfig) err
 		if isDetaching(aws.StringValue(attachment.State)) {
 			continue
 		}
+
+		vpcID := aws.StringValue(attachment.VpcId)
 
 		params = &ec2.DetachVpnGatewayInput{
 			VpcId:        attachment.VpcId,
@@ -2679,12 +2771,12 @@ func (rd *EC2VPNGatewayAttachmentDeleter) DeleteResources(cfg *DeleteConfig) err
 		_, err := rd.GetClient().DetachVpnGatewayWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Printf("%s %s %s from %s\n", drStr, fmtStr, *rd.VPNGateway.VpnGatewayId, *attachment.VpcId)
+				fmt.Printf("%s %s %s from %s\n", drStr, fmtStr, vgwID, vpcID)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2VPNGatewayAttachmentRType, arn.ResourceName(*attachment.VpcId), err, logrus.Fields{
+			cfg.logRequestError(arn.EC2VPNGatewayAttachmentRType, vpcID, err, logrus.Fields{
 				"parent_resource_type": arn.EC2VPNGatewayRType,
-				"parent_resource_name": *rd.VPNGateway.VpnGatewayId,
+				"parent_resource_name": vgwID,
 			})
 			if cfg.IgnoreErrors {
 				continue
@@ -2692,7 +2784,11 @@ func (rd *EC2VPNGatewayAttachmentDeleter) DeleteResources(cfg *DeleteConfig) err
 			return err
 		}
 
-		fmt.Printf("%s %s from %s\n", fmtStr, *rd.VPNGateway.VpnGatewayId, *attachment.VpcId)
+		cfg.logRequestSuccess(arn.EC2VPNGatewayAttachmentRType, vpcID, logrus.Fields{
+			"parent_resource_type": arn.EC2VPNGatewayRType,
+			"parent_resource_name": vgwID,
+		})
+		fmt.Printf("%s %s from %s\n", fmtStr, vgwID, vpcID)
 	}
 
 	return nil
@@ -2733,7 +2829,6 @@ func (rd *EC2VPNGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return rerr
 	}
 
-	// Now delete VPN gateway itself
 	fmtStr := "Deleted EC2 VPN Gateway"
 
 	var (
@@ -2744,6 +2839,8 @@ func (rd *EC2VPNGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		if isDeleting(aws.StringValue(vgw.State)) {
 			continue
 		}
+
+		idStr := aws.StringValue(vgw.VpnGatewayId)
 
 		vpnaDel = &EC2VPNGatewayAttachmentDeleter{VPNGateway: vgw}
 		if err := vpnaDel.DeleteResources(cfg); err != nil {
@@ -2759,17 +2856,18 @@ func (rd *EC2VPNGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 		_, err := rd.GetClient().DeleteVpnGatewayWithContext(ctx, params)
 		if err != nil {
 			if isDryRun(err) {
-				fmt.Println(drStr, fmtStr, *vgw.VpnGatewayId)
+				fmt.Println(drStr, fmtStr, idStr)
 				continue
 			}
-			cfg.logDeleteError(arn.EC2VPNGatewayRType, arn.ResourceName(*vgw.VpnGatewayId), err)
+			cfg.logRequestError(arn.EC2VPNGatewayRType, idStr, err)
 			if cfg.IgnoreErrors {
 				continue
 			}
 			return err
 		}
 
-		fmt.Println(fmtStr, *vgw.VpnGatewayId)
+		cfg.logRequestSuccess(arn.EC2VPNGatewayRType, idStr)
+		fmt.Println(fmtStr, idStr)
 	}
 
 	return nil

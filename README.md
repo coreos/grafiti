@@ -103,6 +103,7 @@ endTimeStamp = "2017-06-14T01:01:01Z"
 startTimeStamp = "2017-06-13T01:01:01Z"
 region = "us-east-1"
 maxNumRequestRetries = 11
+logS3BucketKey = "grafiti-test-bucket"
 includeEvent = false
 tagPatterns = [
   "{CreatedBy: .userIdentity.arn}"
@@ -119,6 +120,7 @@ filterPatterns = [
  * `region` - The AWS region to query.
  * `maxNumRequestRetries` = The maximum number of retries the delete request retryer should attempt. Defaults to 8.
  * `includeEvent` - Setting `true` will include the raw CloudEvent in the tagging output (this is useful for finding attributes to filter on).
+ * `logS3BucketName` - Name of an S3 bucket in which to stash delete logs.
  * `tagPatterns` - should use `jq` syntax to generate `{tagKey: tagValue}` objects from output from `grafiti parse`. The results will be included in the `Tags` field of the tagging output.
  * `filterPatterns` - will filter output of `grafiti parse` based on `jq` syntax matches.
 
