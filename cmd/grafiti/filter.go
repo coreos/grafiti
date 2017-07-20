@@ -28,7 +28,8 @@ func init() {
 
 var filterCmd = &cobra.Command{
 	Use:   "filter",
-	Short: "Filter AWS resources by tag",
+	Short: "Filter AWS resources by tag.",
+	Long:  "Filter AWS resources from 'parse' output by tags specified in the 'ignore-file'.",
 	RunE:  runFilterCommand,
 }
 

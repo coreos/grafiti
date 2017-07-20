@@ -82,13 +82,13 @@ func init() {
 	deleteCmd.PersistentFlags().StringVarP(&deleteFile, "delete-file", "f", "", "File of tags of resources to delete.")
 	deleteCmd.PersistentFlags().BoolVarP(&silent, "silent", "s", false, "Suppress JSON output.")
 	deleteCmd.PersistentFlags().BoolVar(&delAllDeps, "all-deps", false, "Delete all dependencies of all tagged resourcs.")
-	deleteCmd.PersistentFlags().BoolVar(&wantReport, "report", false, "Pretty-print a report of errors encountered while deleting resources.")
+	deleteCmd.PersistentFlags().BoolVar(&wantReport, "report", false, "Pretty-print a report of resource deletion errors, if any.")
 }
 
 var deleteCmd = &cobra.Command{
 	Use:   "delete",
-	Short: "Delete resources in AWS",
-	Long:  "Delete resources in AWS. Uses the configured delete filters to decide which resources to delete.",
+	Short: "Delete resources in AWS by tag.",
+	Long:  "Delete resources in AWS by tags specified in 'delete-file'.",
 	RunE:  runDeleteCommand,
 }
 
