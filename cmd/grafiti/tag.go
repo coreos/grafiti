@@ -227,17 +227,20 @@ var tagCmd = &cobra.Command{
 	Use:   "tag",
 	Short: "Tag resources in AWS.",
 	Long:  "Tag resources in AWS using tags created by the 'parse' subcommand.",
-	RunE:  runTagCommand,
+	Run:   runTagCommand,
 }
 
-func runTagCommand(cmd *cobra.Command, args []string) error {
+func runTagCommand(cmd *cobra.Command, args []string) {
 	if tagFile != "" {
-		return tagFromFile(tagFile)
+		if err := tagFromFile(tagFile); err != nil {
+			exitWithError(exitError, err)
+		}
+		exitWithSuccess()
 	}
+
 	if err := tagFromStdIn(); err != nil {
-		return err
+		exitWithError(exitError, err)
 	}
-	return nil
 }
 
 func tagFromFile(fname string) error {
@@ -321,40 +324,41 @@ func tagUnsupportedResourceType(rt arn.ResourceType, nameSet ResourceNameSet) er
 
 	switch arn.NamespaceForResource(rt) {
 	case arn.AutoScalingNamespace:
-		return tagAutoScalingResources(autoscaling.New(sess), rt, nameSet)
-	case arn.Route53Namespace:
+		svc := autoscaling.New(sess)
 		for n, tags := range nameSet {
-			return tagRoute53Resource(route53.New(sess), rt, n, tags)
+			if err := tagAutoScalingResources(svc, rt, n, tags); err != nil {
+				return err
+			}
+		}
+	case arn.Route53Namespace:
+		svc := route53.New(sess)
+		for n, tags := range nameSet {
+			if err := tagRoute53Resource(svc, rt, n, tags); err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
 }
 
-func tagAutoScalingResources(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, nameSet ResourceNameSet) error {
-	// Only AutoScaling Groups support tagging
-	if rt != arn.AutoScalingGroupRType {
+// Tag an autoscaling resource individually. Avoids failures encountered when
+// tagging a batch of resources containing one that does not exist in AWS
+func tagAutoScalingResources(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, rn arn.ResourceName, tags Tags) error {
+	// Only autoscaling groups can be tagged
+	if rt != arn.AutoScalingGroupRType || rn == "" {
 		return nil
 	}
 
 	asgTags := make([]*autoscaling.Tag, 0)
-	for rn, tags := range nameSet {
-		if rn == "" {
-			continue
-		}
-		for tk, tv := range tags {
-			asgTags = append(asgTags, &autoscaling.Tag{
-				Key:               aws.String(tk),
-				Value:             aws.String(tv),
-				ResourceType:      aws.String("auto-scaling-group"),
-				ResourceId:        rn.AWSString(),
-				PropagateAtLaunch: aws.Bool(true),
-			})
-		}
-	}
-
-	if len(asgTags) == 0 {
-		return nil
+	for tk, tv := range tags {
+		asgTags = append(asgTags, &autoscaling.Tag{
+			Key:               aws.String(tk),
+			Value:             aws.String(tv),
+			ResourceType:      aws.String("auto-scaling-group"),
+			ResourceId:        rn.AWSString(),
+			PropagateAtLaunch: aws.Bool(true),
+		})
 	}
 
 	params := &autoscaling.CreateOrUpdateTagsInput{
@@ -370,7 +374,10 @@ func tagAutoScalingResources(svc autoscalingiface.AutoScalingAPI, rt arn.Resourc
 
 	ctx := aws.BackgroundContext()
 	if _, err := svc.CreateOrUpdateTagsWithContext(ctx, params); err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+		if ignoreErrors {
+			logger.Errorln(err)
+			return nil
+		}
 		return err
 	}
 
@@ -378,8 +385,8 @@ func tagAutoScalingResources(svc autoscalingiface.AutoScalingAPI, rt arn.Resourc
 }
 
 func tagRoute53Resource(svc route53iface.Route53API, rt arn.ResourceType, rn arn.ResourceName, tags Tags) error {
-	// Only hostedzones (and healthchecks, but they are not supported yet) allow
-	// tagging
+	// Only hostedzones (and healthchecks, but they are not supported by grafiti)
+	// can be tagged
 	if rt != arn.Route53HostedZoneRType || rn == "" {
 		return nil
 	}
@@ -407,7 +414,10 @@ func tagRoute53Resource(svc route53iface.Route53API, rt arn.ResourceType, rn arn
 
 	ctx := aws.BackgroundContext()
 	if _, err := svc.ChangeTagsForResourceWithContext(ctx, params); err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+		if ignoreErrors {
+			logger.Errorln(err)
+			return nil
+		}
 		return err
 	}
 
@@ -431,7 +441,7 @@ func tagARNBucket(svc rgtaiface.ResourceGroupsTaggingAPIAPI, bucket arn.Resource
 	time.Sleep(time.Duration(2) * time.Second)
 	if _, err := svc.TagResources(params); err != nil {
 		if ignoreErrors {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			logger.Errorln(err)
 			return nil
 		}
 		return err
@@ -447,7 +457,7 @@ func decodeInput(decoder *json.Decoder) (*TagInput, bool, error) {
 			return &decoded, true, nil
 		}
 		if ignoreErrors {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			logger.Errorln(err)
 			return nil, false, nil
 		}
 		return nil, false, err

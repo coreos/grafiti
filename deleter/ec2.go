@@ -165,7 +165,7 @@ func (c *EC2Client) requestEC2CustomerGateways(filterKey string, chunk arn.Resou
 	ctx := aws.BackgroundContext()
 	resp, err := c.DescribeCustomerGatewaysWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		logger.Errorln(err)
 		return cgws, err
 	}
 
@@ -420,7 +420,7 @@ func (c *EC2Client) requestEC2NetworkInterfaces(filterKey string, chunk arn.Reso
 	ctx := aws.BackgroundContext()
 	resp, err := c.DescribeNetworkInterfacesWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		logger.Errorln(err)
 		return enis, err
 	}
 
@@ -461,7 +461,7 @@ func (c *EC2Client) requestEC2EIPAddresses(filterKey string, chunk arn.ResourceN
 	ctx := aws.BackgroundContext()
 	resp, err := c.DescribeAddressesWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		logger.Errorln(err)
 		return addresses, err
 	}
 
@@ -710,7 +710,7 @@ func (c *EC2Client) requestEC2NetworkACLs(filterKey string, chunk arn.ResourceNa
 	ctx := aws.BackgroundContext()
 	resp, err := c.DescribeNetworkAclsWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		logger.Errorln(err)
 		return acls, err
 	}
 
@@ -862,7 +862,7 @@ func (c *EC2Client) requestEC2Instances(filterKey string, chunk arn.ResourceName
 		ctx := aws.BackgroundContext()
 		resp, err := c.DescribeInstancesWithContext(ctx, params)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
+			logger.Errorln(err)
 			return instances, err
 		}
 
@@ -932,7 +932,7 @@ func (rd *EC2InstanceDeleter) RequestIAMInstanceProfilesFromInstances() ([]*iam.
 		ctx := aws.BackgroundContext()
 		resp, err := svc.ListInstanceProfilesWithContext(ctx, params)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
+			logger.Errorln(err)
 			return nil, err
 		}
 
@@ -1149,7 +1149,7 @@ func (c *EC2Client) requestEC2InternetGateways(filterKey string, chunk arn.Resou
 	ctx := aws.BackgroundContext()
 	resp, err := c.DescribeInternetGatewaysWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		logger.Errorln(err)
 		return igws, err
 	}
 
@@ -1278,7 +1278,7 @@ func (c *EC2Client) filterDeletedNATGateways(ngws []*ec2.NatGateway) ([]*ec2.Nat
 			ctx := aws.BackgroundContext()
 			resp, err := c.DescribeNatGatewaysWithContext(ctx, params)
 			if err != nil {
-				fmt.Printf("{\"error\": \"%s\"}\n", err)
+				logger.Errorln(err)
 				return deletedNGWs, aliveNGWs, err
 			}
 
@@ -1360,7 +1360,7 @@ func (c *EC2Client) requestEC2NatGateways(filterKey string, chunk arn.ResourceNa
 		ctx := aws.BackgroundContext()
 		resp, err := c.DescribeNatGatewaysWithContext(ctx, params)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
+			logger.Errorln(err)
 			return ngws, err
 		}
 
@@ -1630,7 +1630,7 @@ func (c *EC2Client) requestEC2RouteTables(filterKey string, chunk arn.ResourceNa
 	ctx := aws.BackgroundContext()
 	resp, err := c.DescribeRouteTablesWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		logger.Errorln(err)
 		return rtbs, err
 	}
 
@@ -1910,7 +1910,7 @@ func (c *EC2Client) requestEC2SecurityGroups(filterKey string, chunk arn.Resourc
 	ctx := aws.BackgroundContext()
 	resp, err := c.DescribeSecurityGroupsWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		logger.Errorln(err)
 		return sgs, err
 	}
 
@@ -2030,7 +2030,7 @@ func (c *EC2Client) requestEC2Subnets(filterKey string, chunk arn.ResourceNames,
 	ctx := aws.BackgroundContext()
 	resp, err := c.DescribeSubnetsWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		logger.Errorln(err)
 		return subnets, err
 	}
 
@@ -2213,7 +2213,7 @@ func (c *EC2Client) requestEC2Volumes(filterKey string, chunk arn.ResourceNames,
 		ctx := aws.BackgroundContext()
 		resp, err := c.DescribeVolumesWithContext(ctx, params)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
+			logger.Errorln(err)
 			return vols, err
 		}
 
@@ -2355,7 +2355,7 @@ func (c *EC2Client) requestEC2VPCs(filterKey string, chunk arn.ResourceNames, vp
 	ctx := aws.BackgroundContext()
 	resp, err := c.DescribeVpcsWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		logger.Errorln(err)
 		return vpcs, err
 	}
 
@@ -2727,7 +2727,7 @@ func (c *EC2Client) requestEC2VPNConnections(filterKey string, chunk arn.Resourc
 	ctx := aws.BackgroundContext()
 	resp, err := c.DescribeVpnConnectionsWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		logger.Errorln(err)
 		return vconns, err
 	}
 
@@ -2928,7 +2928,7 @@ func (c *EC2Client) requestEC2VPNGateways(filterKey string, chunk arn.ResourceNa
 	ctx := aws.BackgroundContext()
 	resp, err := c.DescribeVpnGatewaysWithContext(ctx, params)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		logger.Errorln(err)
 		return vgws, err
 	}
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -30,20 +31,18 @@ var filterCmd = &cobra.Command{
 	Use:   "filter",
 	Short: "Filter AWS resources by tag.",
 	Long:  "Filter AWS resources from 'parse' output by tags specified in the 'ignore-file'.",
-	RunE:  runFilterCommand,
+	Run:   runFilterCommand,
 }
 
-func runFilterCommand(cmd *cobra.Command, args []string) error {
+func runFilterCommand(cmd *cobra.Command, args []string) {
 	if ignoreFile == "" {
-		fmt.Println("Required: --ignore-file <arg>.")
-		os.Exit(1)
+		exitWithError(exitBadArgs, errors.New("required: --ignore-file <arg>"))
 	}
 
 	// Open ignoreFile
-	iFile, ferr := os.OpenFile(ignoreFile, os.O_RDONLY, 0644)
-	if ferr != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", ferr.Error())
-		return nil
+	iFile, err := os.OpenFile(ignoreFile, os.O_RDONLY, 0644)
+	if err != nil {
+		exitWithError(exitInvalidInput, err)
 	}
 	defer iFile.Close()
 
@@ -54,27 +53,22 @@ func runFilterCommand(cmd *cobra.Command, args []string) error {
 	)))
 
 	if filterFile != "" {
-		if ferr := filterFromFile(svc, iFile, filterFile); ferr != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", ferr.Error())
-			os.Exit(1)
+		if err = filterFromFile(svc, iFile, filterFile); err != nil {
+			exitWithError(exitError, err)
 		}
-		return nil
+		exitWithSuccess()
 	}
 
-	if serr := filterFromStdIn(svc, iFile); serr != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", serr.Error())
-		os.Exit(1)
+	if err = filterFromStdIn(svc, iFile); err != nil {
+		exitWithError(exitError, err)
 	}
-
-	return nil
 }
 
 func filterFromFile(svc rgtaiface.ResourceGroupsTaggingAPIAPI, r io.Reader, fname string) error {
 	// Open filterFile
-	f, ferr := os.OpenFile(fname, os.O_RDONLY, 0644)
-	if ferr != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", ferr.Error())
-		return nil
+	f, err := os.OpenFile(fname, os.O_RDONLY, 0644)
+	if err != nil {
+		return err
 	}
 	defer f.Close()
 
@@ -92,7 +86,6 @@ func filter(svc rgtaiface.ResourceGroupsTaggingAPIAPI, r, f io.Reader) error {
 	// Create a map that contains all ignorable ARN's
 	itMap, ierr := initIgnoreTagMap(svc, f)
 	if ierr != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", ierr.Error())
 		return ierr
 	}
 
@@ -158,7 +151,7 @@ func initIgnoreTagMap(svc rgtaiface.ResourceGroupsTaggingAPIAPI, r io.Reader) (m
 func forwardFilteredOutput(o *Output) {
 	oj, err := json.Marshal(o)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+		logger.Errorln(err)
 		return
 	}
 
@@ -172,7 +165,7 @@ func decodeIntoOutput(decoder *json.Decoder) (*Output, bool, error) {
 			return &decoded, true, nil
 		}
 		if ignoreErrors {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			logger.Errorln(err)
 			return nil, false, nil
 		}
 		return nil, false, err

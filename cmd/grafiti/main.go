@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -42,6 +43,30 @@ var envVarMap = map[string]string{
 	"GRF_INCLUDE_EVENT":   "includeEvent",
 }
 
+// http://tldp.org/LDP/abs/html/exitcodes.html
+const (
+	exitSuccess = iota
+	exitError
+	exitInvalidInput
+	exitBadArgs = 128
+)
+
+func exitWithError(code int, err error) {
+	fmt.Fprintln(os.Stderr, "Error:", err)
+	os.Exit(code)
+}
+
+func exitWithSuccess() {
+	os.Exit(exitSuccess)
+}
+
+// logger prints errors in JSON format without a timestamp
+var logger = logrus.Logger{
+	Out:       os.Stderr,
+	Formatter: &logrus.JSONFormatter{DisableTimestamp: true},
+	Level:     logrus.InfoLevel,
+}
+
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
 	Use:   "grafiti",
@@ -64,8 +89,7 @@ func init() {
 func initConfig() {
 	// Check for 'jq' in path
 	if path, err := exec.LookPath("jq"); err != nil || path == "" {
-		fmt.Println("Please install 'jq' before running grafiti.")
-		os.Exit(1)
+		exitWithError(exitError, errors.New("'jq' must be installed before running grafiti"))
 	}
 
 	if cfgFile != "" { // enable ability to specify config file via flag
@@ -106,6 +130,6 @@ func initConfig() {
 
 func main() {
 	if err := RootCmd.Execute(); err != nil {
-		os.Exit(-1)
+		exitWithError(exitError, err)
 	}
 }

@@ -300,9 +300,7 @@ func TestTagAutoScalingResource(t *testing.T) {
 	}
 
 	f := func(v interface{}, rt arn.ResourceType, rn arn.ResourceName, t Tags) {
-		rns := make(ResourceNameSet)
-		rns[rn] = t
-		tagAutoScalingResources(v.(autoscalingiface.AutoScalingAPI), rt, rns)
+		tagAutoScalingResources(v.(autoscalingiface.AutoScalingAPI), rt, rn, t)
 	}
 
 	for i, c := range cases {
