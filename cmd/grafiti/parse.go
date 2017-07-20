@@ -72,8 +72,8 @@ func init() {
 
 var parseCmd = &cobra.Command{
 	Use:   "parse",
-	Short: "Parse and output resources by reading CloudTrail logs",
-	Long:  "Parse a CloudTrail Log and output resources. By default, grafiti talks to the configured AWS account and reads directly from the CloudTrail API.",
+	Short: "Parse resource data from CloudTrail logs.",
+	Long:  "Parse CloudTrail logs and output resource data. By default, grafiti requests data from the CloudTrail API.",
 	RunE:  runParseCommand,
 }
 
