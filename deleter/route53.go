@@ -104,12 +104,8 @@ func (rd *Route53HostedZoneDeleter) DeletePrivateRoute53HostedZones(cfg *DeleteC
 // SplitHostedZoneID splits a hosted zones' AWS ID, which might be prefixed with
 // "/hostedzone/", into the actual ID (the suffix)
 func SplitHostedZoneID(hzID string) arn.ResourceName {
-	if strings.HasPrefix(hzID, hostedZonePrefix) {
-		hzSplit := strings.Split(hzID, hostedZonePrefix)
-		if len(hzSplit) < 2 {
-			return ""
-		}
-		return arn.ResourceName(hzSplit[1])
+	if hzSplit := strings.Split(hzID, hostedZonePrefix); len(hzSplit) == 2 && hzSplit[1] != "" {
+		hzID = hzSplit[1]
 	}
 	return arn.ResourceName(hzID)
 }
@@ -117,8 +113,8 @@ func SplitHostedZoneID(hzID string) arn.ResourceName {
 func filterPrivateHostedZones(hzs []*route53.HostedZone) arn.ResourceNames {
 	privateHZs := make(arn.ResourceNames, 0)
 	for _, hz := range hzs {
-		if hz.Config.PrivateZone != nil && *hz.Config.PrivateZone {
-			privateHZs = append(privateHZs, SplitHostedZoneID(*hz.Id))
+		if aws.BoolValue(hz.Config.PrivateZone) {
+			privateHZs = append(privateHZs, SplitHostedZoneID(aws.StringValue(hz.Id)))
 		}
 	}
 	return privateHZs
@@ -146,7 +142,7 @@ func (rd *Route53HostedZoneDeleter) RequestRoute53HostedZones() ([]*route53.Host
 	}
 
 	for _, hz := range hzs {
-		if _, ok := want[arn.ResourceName(*hz.Id)]; ok {
+		if _, ok := want[arn.ToResourceName(hz.Id)]; ok {
 			wantedHZs = append(wantedHZs, hz)
 		}
 	}
@@ -171,7 +167,7 @@ func (rd *Route53HostedZoneDeleter) RequestAllRoute53HostedZones() ([]*route53.H
 
 		hzs = append(hzs, resp.HostedZones...)
 
-		if resp.IsTruncated == nil || !*resp.IsTruncated {
+		if !aws.BoolValue(resp.IsTruncated) {
 			break
 		}
 
@@ -224,7 +220,7 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 	changes := make([]*route53.Change, 0, len(rrss))
 	for _, rrs := range rrss {
 		if cfg.DryRun {
-			fmt.Printf("%s %s %s from HostedZone %s\n", drStr, fmtStr, *rrs.Name, rd.HostedZoneID)
+			fmt.Printf("%s %s %s from HostedZone %s\n", drStr, fmtStr, aws.StringValue(rrs.Name), rd.HostedZoneID)
 			continue
 		}
 
@@ -243,7 +239,7 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 	_, err := rd.GetClient().ChangeResourceRecordSetsWithContext(ctx, params)
 	if err != nil {
 		for _, rrs := range rrss {
-			cfg.logRequestError(arn.Route53ResourceRecordSetRType, *rrs.Name, err, logrus.Fields{
+			cfg.logRequestError(arn.Route53ResourceRecordSetRType, aws.StringValue(rrs.Name), err, logrus.Fields{
 				"parent_resource_type": arn.Route53HostedZoneRType,
 				"parent_resource_name": rd.HostedZoneID,
 			})
@@ -255,11 +251,12 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 	}
 
 	for _, rrs := range rrss {
-		cfg.logRequestSuccess(arn.Route53ResourceRecordSetRType, *rrs.Name, logrus.Fields{
+		nameStr := aws.StringValue(rrs.Name)
+		cfg.logRequestSuccess(arn.Route53ResourceRecordSetRType, nameStr, logrus.Fields{
 			"parent_resource_type": arn.Route53HostedZoneRType,
 			"parent_resource_name": rd.HostedZoneID,
 		})
-		fmt.Printf("%s %s from HostedZone %s\n", fmtStr, *rrs.Name, rd.HostedZoneID)
+		fmt.Printf("%s %s from HostedZone %s\n", fmtStr, nameStr, rd.HostedZoneID)
 	}
 
 	return nil
@@ -294,7 +291,7 @@ func (rd *Route53ResourceRecordSetDeleter) RequestRoute53ResourceRecordSets() ([
 			}
 		}
 
-		if resp.IsTruncated == nil || !*resp.IsTruncated {
+		if !aws.BoolValue(resp.IsTruncated) {
 			break
 		}
 

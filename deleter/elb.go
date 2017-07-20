@@ -115,7 +115,7 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) requestElasticLoadBalancers(c
 
 		elbs = append(elbs, resp.LoadBalancerDescriptions...)
 
-		if resp.NextMarker == nil || *resp.NextMarker == "" {
+		if aws.StringValue(resp.NextMarker) == "" {
 			break
 		}
 

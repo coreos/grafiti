@@ -100,7 +100,7 @@ func (rd *S3ObjectDeleter) RequestS3ObjectsFromBucket() ([]*s3.Object, error) {
 
 		objs = append(objs, resp.Contents...)
 
-		if resp.IsTruncated == nil || !*resp.IsTruncated {
+		if !aws.BoolValue(resp.IsTruncated) {
 			break
 		}
 
@@ -155,7 +155,7 @@ func (rd *S3BucketDeleter) DeleteResources(cfg *DeleteConfig) error {
 		}
 
 		for _, obj := range objs {
-			objDel.AddResourceNames(arn.ResourceName(*obj.Key))
+			objDel.AddResourceNames(arn.ToResourceName(obj.Key))
 		}
 		if err := objDel.DeleteResources(cfg); err != nil {
 			return err

@@ -94,7 +94,7 @@ func (rd *AutoScalingGroupDeleter) RequestAutoScalingGroups() ([]*autoscaling.Gr
 
 		asgs = append(asgs, resp.AutoScalingGroups...)
 
-		if resp.NextToken == nil || *resp.NextToken == "" {
+		if aws.StringValue(resp.NextToken) == "" {
 			break
 		}
 
@@ -203,7 +203,7 @@ func (rd *AutoScalingLaunchConfigurationDeleter) requestAutoScalingLaunchConfigu
 
 		lcs = append(lcs, resp.LaunchConfigurations...)
 
-		if resp.NextToken == nil || *resp.NextToken == "" {
+		if aws.StringValue(resp.NextToken) == "" {
 			break
 		}
 
@@ -239,12 +239,12 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestIAMInstanceProfilesFromL
 		}
 
 		for _, ipr := range resp.InstanceProfiles {
-			if _, ok := want[*ipr.InstanceProfileName]; ok {
+			if _, ok := want[aws.StringValue(ipr.InstanceProfileName)]; ok {
 				iprs = append(iprs, ipr)
 			}
 		}
 
-		if resp.IsTruncated == nil || !*resp.IsTruncated {
+		if !aws.BoolValue(resp.IsTruncated) {
 			break
 		}
 
@@ -258,18 +258,10 @@ func createInstanceProfileMap(lcs []*autoscaling.LaunchConfiguration) map[string
 	want := map[string]struct{}{}
 	var iprName string
 	for _, lc := range lcs {
-		if lc.IamInstanceProfile == nil {
-			continue
-		}
-
 		// The docs say that IAMInstanceProfile can be either an ARN or name; if an
 		// ARN, parse out name
-		iprName = *lc.IamInstanceProfile
-		if strings.HasPrefix(*lc.IamInstanceProfile, "arn:") {
-			iprSplit := strings.Split(*lc.IamInstanceProfile, "instance-profile/")
-			if len(iprSplit) != 2 || iprSplit[1] == "" {
-				continue
-			}
+		iprName = aws.StringValue(lc.IamInstanceProfile)
+		if iprSplit := strings.Split(iprName, "instance-profile/"); len(iprSplit) == 2 && iprSplit[1] != "" {
 			iprName = iprSplit[1]
 		}
 		if _, ok := want[iprName]; !ok {

@@ -139,7 +139,7 @@ func (rd *IAMInstanceProfileDeleter) RequestIAMInstanceProfiles() ([]*iam.Instan
 
 	// We cannot request a filtered list of instance profiles, so we must
 	// iterate through all returned profiles and select the ones we want.
-	want, iprs := createResourceNameMap(rd.ResourceNames), make([]*iam.InstanceProfile, 0)
+	want, iprs := createResourceNameMapFromResourceNames(rd.ResourceNames), make([]*iam.InstanceProfile, 0)
 	params := &iam.ListInstanceProfilesInput{
 		MaxItems: aws.Int64(100),
 	}
@@ -152,12 +152,12 @@ func (rd *IAMInstanceProfileDeleter) RequestIAMInstanceProfiles() ([]*iam.Instan
 		}
 
 		for _, rp := range resp.InstanceProfiles {
-			if _, ok := want[arn.ResourceName(*rp.InstanceProfileName)]; ok {
+			if _, ok := want[arn.ToResourceName(rp.InstanceProfileName)]; ok {
 				iprs = append(iprs, rp)
 			}
 		}
 
-		if resp.IsTruncated == nil || !*resp.IsTruncated {
+		if !aws.BoolValue(resp.IsTruncated) {
 			break
 		}
 
@@ -167,7 +167,7 @@ func (rd *IAMInstanceProfileDeleter) RequestIAMInstanceProfiles() ([]*iam.Instan
 	return iprs, nil
 }
 
-func createResourceNameMap(names arn.ResourceNames) map[arn.ResourceName]struct{} {
+func createResourceNameMapFromResourceNames(names arn.ResourceNames) map[arn.ResourceName]struct{} {
 	want := map[arn.ResourceName]struct{}{}
 	for _, n := range names {
 		if _, ok := want[n]; !ok {
@@ -267,7 +267,7 @@ func (rd *IAMRoleDeleter) RequestIAMRoles() ([]*iam.Role, error) {
 	}
 
 	// No filtering fields in ListRolesInput, must be done iteratively
-	want, rls := createResourceNameMap(rd.ResourceNames), make([]*iam.Role, 0)
+	want, rls := createResourceNameMapFromResourceNames(rd.ResourceNames), make([]*iam.Role, 0)
 	params := new(iam.ListRolesInput)
 	for {
 		ctx := aws.BackgroundContext()
@@ -278,12 +278,12 @@ func (rd *IAMRoleDeleter) RequestIAMRoles() ([]*iam.Role, error) {
 		}
 
 		for _, rl := range resp.Roles {
-			if _, ok := want[arn.ResourceName(*rl.RoleName)]; ok {
+			if _, ok := want[arn.ToResourceName(rl.RoleName)]; ok {
 				rls = append(rls, rl)
 			}
 		}
 
-		if resp.IsTruncated == nil || !*resp.IsTruncated {
+		if !aws.BoolValue(resp.IsTruncated) {
 			break
 		}
 
@@ -382,11 +382,11 @@ func (rd *IAMRolePolicyDeleter) RequestIAMRolePoliciesFromRoles() (arn.ResourceN
 			return policyNames, err
 		}
 
-		for _, rp := range resp.PolicyNames {
-			policyNames = append(policyNames, arn.ResourceName(*rp))
+		for _, policyName := range resp.PolicyNames {
+			policyNames = append(policyNames, arn.ToResourceName(policyName))
 		}
 
-		if resp.IsTruncated == nil || !*resp.IsTruncated {
+		if !aws.BoolValue(resp.IsTruncated) {
 			break
 		}
 

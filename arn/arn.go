@@ -25,6 +25,11 @@ func (a ResourceARN) AWSString() *string {
 	return aws.String(a.String())
 }
 
+// ToResourceARN converts a string pointer to a ResourceARN
+func ToResourceARN(sp *string) ResourceARN {
+	return ResourceARN(aws.StringValue(sp))
+}
+
 // ResourceARNs aliases string slice for ARNs
 type ResourceARNs []ResourceARN
 
@@ -50,6 +55,11 @@ func (r ResourceType) AWSString() *string {
 	return aws.String(r.String())
 }
 
+// ToResourceType converts a string pointer to a ResourceType
+func ToResourceType(sp *string) ResourceType {
+	return ResourceType(aws.StringValue(sp))
+}
+
 // ResourceTypes aliases a string slice for AWS resource types
 type ResourceTypes []ResourceType
 
@@ -73,6 +83,11 @@ func (r ResourceName) String() string {
 // AWSString converts a ResourceName to a string pointer
 func (r ResourceName) AWSString() *string {
 	return aws.String(r.String())
+}
+
+// ToResourceName converts a string pointer to a ResourceName
+func ToResourceName(sp *string) ResourceName {
+	return ResourceName(aws.StringValue(sp))
 }
 
 // ResourceNames aliases a string slice for AWS resource names
@@ -352,9 +367,9 @@ func NamespaceForResource(t ResourceType) string {
 	return ""
 }
 
-func getAutoScalingGroup(rn ResourceName) (*autoscaling.Group, error) {
+func getAutoScalingGroupARN(rn ResourceName) (string, error) {
 	if rn == "" {
-		return nil, nil
+		return "", nil
 	}
 
 	svc := autoscaling.New(session.Must(session.NewSession(
@@ -368,11 +383,11 @@ func getAutoScalingGroup(rn ResourceName) (*autoscaling.Group, error) {
 
 	ctx := aws.BackgroundContext()
 	resp, err := svc.DescribeAutoScalingGroupsWithContext(ctx, params)
-	if err != nil || resp.AutoScalingGroups == nil {
-		return nil, err
+	if err != nil || len(resp.AutoScalingGroups) == 0 {
+		return "", err
 	}
 
-	return resp.AutoScalingGroups[0], nil
+	return aws.StringValue(resp.AutoScalingGroups[0].AutoScalingGroupARN), nil
 }
 
 // MapResourceTypeToARN maps ResourceType to ARN
@@ -402,11 +417,11 @@ func MapResourceTypeToARN(rt ResourceType, rn ResourceName, parsedEvents ...gjso
 	switch rt {
 	case AutoScalingGroupRType:
 		// arn:aws:autoscaling:region:account-id:autoScalingGroup:groupid:autoScalingGroupName/groupfriendlyname
-		asg, err := getAutoScalingGroup(rn)
-		if err != nil || asg == nil {
+		asgARN, err := getAutoScalingGroupARN(rn)
+		if err != nil || asgARN == "" {
 			return ""
 		}
-		arn = *asg.AutoScalingGroupARN
+		arn = asgARN
 	case AutoScalingLaunchConfigurationRType:
 		// arn:aws:autoscaling:region:account-id:launchConfiguration:launchconfigid:launchConfigurationName/launchconfigfriendlyname
 		// NOTE: type does not support tagging

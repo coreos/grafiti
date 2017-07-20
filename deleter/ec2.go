@@ -547,7 +547,7 @@ func (rd *EC2NetworkACLEntryDeleter) String() string {
 		aclEntries = append(aclEntries, struct {
 			RuleNumber int64
 			Egress     bool
-		}{*entry.RuleNumber, *entry.Egress})
+		}{aws.Int64Value(entry.RuleNumber), aws.BoolValue(entry.Egress)})
 	}
 	return fmt.Sprintf(`{"Type": "%s", "NetworkACLName": %v, "NetworkACLEntries": %v}`, rd.ResourceType, rd.NetworkACLName, aclEntries)
 }
@@ -769,7 +769,7 @@ func (rd *EC2InstanceDeleter) DeleteResources(cfg *DeleteConfig) error {
 
 	instanceNames := make(arn.ResourceNames, 0, len(instances))
 	for _, instance := range instances {
-		instanceNames = append(instanceNames, arn.ResourceName(*instance.InstanceId))
+		instanceNames = append(instanceNames, arn.ToResourceName(instance.InstanceId))
 	}
 
 	if len(instanceNames) == 0 {
@@ -879,7 +879,7 @@ func (c *EC2Client) requestEC2Instances(filterKey string, chunk arn.ResourceName
 			}
 		}
 
-		if resp.NextToken == nil || *resp.NextToken == "" {
+		if aws.StringValue(resp.NextToken) == "" {
 			break
 		}
 
@@ -891,7 +891,7 @@ func (c *EC2Client) requestEC2Instances(filterKey string, chunk arn.ResourceName
 
 func isInstanceTerminating(instance *ec2.Instance) bool {
 	// Instance is shutting down (32) or terminated (48)
-	return instance.State.Code != nil && (*instance.State.Code == 32 || *instance.State.Code == 48)
+	return aws.Int64Value(instance.State.Code) == 32 || aws.Int64Value(instance.State.Code) == 48
 }
 
 // RequestIAMInstanceProfilesFromInstances retrieves instance profiles from instance ID's
@@ -907,23 +907,7 @@ func (rd *EC2InstanceDeleter) RequestIAMInstanceProfilesFromInstances() ([]*iam.
 
 	// We cannot request instance profiles by their ID's so we must search
 	// iteratively with a map
-	want := map[string]struct{}{}
-	var iprName string
-	for _, instance := range instances {
-		if instance.IamInstanceProfile == nil || instance.IamInstanceProfile.Arn == nil {
-			continue
-		}
-
-		iprSplit := strings.Split(*instance.IamInstanceProfile.Arn, "instance-profile/")
-		if len(iprSplit) != 2 || iprSplit[1] == "" {
-			continue
-		}
-		iprName = iprSplit[1]
-
-		if _, ok := want[iprName]; !ok {
-			want[iprName] = struct{}{}
-		}
-	}
+	want := createResourceNameMapFromInstances(instances)
 
 	svc := iam.New(setUpAWSSession())
 	iprs := make([]*iam.InstanceProfile, 0)
@@ -937,12 +921,12 @@ func (rd *EC2InstanceDeleter) RequestIAMInstanceProfilesFromInstances() ([]*iam.
 		}
 
 		for _, ipr := range resp.InstanceProfiles {
-			if _, ok := want[*ipr.InstanceProfileName]; ok {
+			if _, ok := want[aws.StringValue(ipr.InstanceProfileName)]; ok {
 				iprs = append(iprs, ipr)
 			}
 		}
 
-		if resp.IsTruncated == nil || !*resp.IsTruncated {
+		if !aws.BoolValue(resp.IsTruncated) {
 			break
 		}
 
@@ -950,6 +934,21 @@ func (rd *EC2InstanceDeleter) RequestIAMInstanceProfilesFromInstances() ([]*iam.
 	}
 
 	return iprs, nil
+}
+
+func createResourceNameMapFromInstances(instances []*ec2.Instance) map[string]struct{} {
+	want := map[string]struct{}{}
+	for _, instance := range instances {
+		if instance.IamInstanceProfile != nil {
+			arnStr := aws.StringValue(instance.IamInstanceProfile.Arn)
+			_, iprName := arn.MapARNToRTypeAndRName(arn.ResourceARN(arnStr))
+
+			if _, ok := want[iprName.String()]; !ok {
+				want[iprName.String()] = struct{}{}
+			}
+		}
+	}
+	return want
 }
 
 // EC2InternetGatewayAttachmentDeleter represents a collection of AWS EC2 internet gateway attachments
@@ -1059,10 +1058,10 @@ func (rd *EC2InternetGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 	// Detach internet gateways from all vpc's
 	for _, igw := range igws {
 		igwaDel := &EC2InternetGatewayAttachmentDeleter{
-			InternetGatewayName: arn.ResourceName(*igw.InternetGatewayId),
+			InternetGatewayName: arn.ToResourceName(igw.InternetGatewayId),
 		}
 		for _, an := range igw.Attachments {
-			igwaDel.AddResourceNames(arn.ResourceName(*an.VpcId))
+			igwaDel.AddResourceNames(arn.ToResourceName(an.VpcId))
 		}
 		if err := igwaDel.DeleteResources(cfg); err != nil {
 			return err
@@ -1269,7 +1268,7 @@ func (c *EC2Client) filterDeletedNATGateways(ngws []*ec2.NatGateway) ([]*ec2.Nat
 
 			deletedNGWs, aliveNGWs = splitNATGatewaysByState(resp.NatGateways, deletedNGWs, aliveNGWs)
 
-			if resp.NextToken == nil || *resp.NextToken == "" {
+			if aws.StringValue(resp.NextToken) == "" {
 				break
 			}
 
@@ -1355,7 +1354,7 @@ func (c *EC2Client) requestEC2NatGateways(filterKey string, chunk arn.ResourceNa
 			}
 		}
 
-		if resp.NextToken == nil || *resp.NextToken == "" {
+		if aws.StringValue(resp.NextToken) == "" {
 			break
 		}
 
@@ -1375,9 +1374,9 @@ type EC2RouteTableRouteDeleter struct {
 func (rd *EC2RouteTableRouteDeleter) String() string {
 	routes := make([]string, 0, len(rd.RouteTable.Routes))
 	for _, r := range rd.RouteTable.Routes {
-		routes = append(routes, *r.DestinationCidrBlock)
+		routes = append(routes, aws.StringValue(r.DestinationCidrBlock))
 	}
-	return fmt.Sprintf(`{"Type": "%s", "RouteTable": "%s", "Routes": %v}`, rd.ResourceType, *rd.RouteTable.RouteTableId, routes)
+	return fmt.Sprintf(`{"Type": "%s", "RouteTable": "%s", "Routes": %v}`, rd.ResourceType, aws.StringValue(rd.RouteTable.RouteTableId), routes)
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
@@ -1632,7 +1631,7 @@ func (c *EC2Client) requestEC2RouteTables(filterKey string, chunk arn.ResourceNa
 // cannot be deleted explicitly
 func isMainRouteTable(rtb *ec2.RouteTable) bool {
 	for _, a := range rtb.Associations {
-		if a.Main != nil && *a.Main {
+		if aws.BoolValue(a.Main) {
 			return true
 		}
 	}
@@ -1648,8 +1647,12 @@ type EC2SecurityGroupIngressRuleDeleter struct {
 
 func (rd *EC2SecurityGroupIngressRuleDeleter) String() string {
 	rules := make([]string, 0)
+	perms := make([]struct{ FromPort, ToPort int64 }, 0)
 	for _, sg := range rd.SecurityGroups {
-		rules = append(rules, fmt.Sprintf(`{"SecurityGroupName": "%s", "IpPermissions": %v}`, *sg.GroupName, sg.IpPermissions))
+		for _, perm := range sg.IpPermissions {
+			perms = append(perms, struct{ FromPort, ToPort int64 }{aws.Int64Value(perm.FromPort), aws.Int64Value(perm.ToPort)})
+		}
+		rules = append(rules, fmt.Sprintf(`{"SecurityGroupName": "%s", "IpPermissions": %v}`, aws.StringValue(sg.GroupName), perms))
 	}
 	return fmt.Sprintf(`{"Type": "%s", "IngressRules": %v}`, rd.ResourceType, rules)
 }
@@ -1715,8 +1718,12 @@ type EC2SecurityGroupEgressRuleDeleter struct {
 
 func (rd *EC2SecurityGroupEgressRuleDeleter) String() string {
 	rules := make([]string, 0)
+	perms := make([]struct{ FromPort, ToPort int64 }, 0)
 	for _, sg := range rd.SecurityGroups {
-		rules = append(rules, fmt.Sprintf(`{"SecurityGroupName": "%s", "IpPermissions": %v}`, *sg.GroupName, sg.IpPermissionsEgress))
+		for _, perm := range sg.IpPermissions {
+			perms = append(perms, struct{ FromPort, ToPort int64 }{aws.Int64Value(perm.FromPort), aws.Int64Value(perm.ToPort)})
+		}
+		rules = append(rules, fmt.Sprintf(`{"SecurityGroupName": "%s", "IpPermissions": %v}`, aws.StringValue(sg.GroupName), perms))
 	}
 	return fmt.Sprintf(`{"Type": "%s", "EgressRules": %v}`, rd.ResourceType, rules)
 }
@@ -2200,7 +2207,7 @@ func (c *EC2Client) requestEC2Volumes(filterKey string, chunk arn.ResourceNames,
 			}
 		}
 
-		if resp.NextToken == nil || *resp.NextToken == "" {
+		if aws.StringValue(resp.NextToken) == "" {
 			break
 		}
 
@@ -2252,29 +2259,27 @@ func (rd *EC2VPCDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nil
 	}
 
-	// Disassociate vpc cidr blocks
 	vpcs, rerr := rd.RequestEC2VPCs()
 	if rerr != nil && !cfg.IgnoreErrors {
 		return rerr
 	}
 
-	for _, vpc := range vpcs {
-		vpcaDel := &EC2VPCCIDRBlockAssociationDeleter{VPCName: arn.ResourceName(*vpc.VpcId)}
-		for _, a := range vpc.Ipv6CidrBlockAssociationSet {
-			vpcaDel.AddResourceNames(arn.ResourceName(*a.AssociationId))
-		}
-		if err := vpcaDel.DeleteResources(cfg); err != nil {
-			return err
-		}
-	}
-
-	// Now delete VPC itself
 	fmtStr := "Deleted EC2 VPC"
 
 	var params *ec2.DeleteVpcInput
 	for _, vpc := range vpcs {
 		idStr := aws.StringValue(vpc.VpcId)
 
+		// Disassociate vpc cidr blocks
+		vpcaDel := &EC2VPCCIDRBlockAssociationDeleter{VPCName: arn.ResourceName(idStr)}
+		for _, a := range vpc.Ipv6CidrBlockAssociationSet {
+			vpcaDel.AddResourceNames(arn.ToResourceName(a.AssociationId))
+		}
+		if err := vpcaDel.DeleteResources(cfg); err != nil {
+			return err
+		}
+
+		// Delete the vpc itself
 		params = &ec2.DeleteVpcInput{
 			VpcId:  vpc.VpcId,
 			DryRun: aws.Bool(cfg.DryRun),
@@ -2728,9 +2733,9 @@ type EC2VPNGatewayAttachmentDeleter struct {
 }
 
 func (rd *EC2VPNGatewayAttachmentDeleter) String() string {
-	attachments := make([]string, 0)
+	attachments, vgwID := make([]string, 0), aws.StringValue(rd.VPNGateway.VpnGatewayId)
 	for _, attachment := range rd.VPNGateway.VpcAttachments {
-		attachments = append(attachments, fmt.Sprintf(`{"VpnGatewayId": "%s", "VpcId": "%s"}`, *rd.VPNGateway.VpnGatewayId, *attachment.VpcId))
+		attachments = append(attachments, fmt.Sprintf(`{"VpnGatewayId": "%s", "VpcId": "%s"}`, vgwID, aws.StringValue(attachment.VpcId)))
 	}
 	return fmt.Sprintf(`{"Type": "%s", "VPNAttachments": %v}`, rd.ResourceType, attachments)
 }
