@@ -1,0 +1,44 @@
+apiVersion: batch/v2alpha1
+kind: CronJob
+metadata:
+  name: grafiti-deleter
+spec:
+  schedule: "* */6 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - command:
+            - /bin/bash
+            - -c
+            - grafiti -e -c /opt/config.toml delete -s --all-deps -f /opt/tags.json
+            env:
+              - name: AWS_REGION
+                value: ${AWS_REGION}
+              - name: AWS_CREDENTIAL_PROFILES_FILE
+                value: /etc/credentials
+            name: grafiti-deleter
+            image: your/registry/grafiti:v0.1.1
+            volumeMounts:
+              - mountPath: /etc/credentials
+                name: grafiti-aws-credentials
+                readOnly: true
+              - mountPath: /opt/config.toml
+                name: config-path
+              - mountPath: /opt/tags.json
+                name: tags-path
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 1000
+          volumes:
+            - hostPath:
+                path: ~/.aws/credentials
+              name: grafiti-aws-credentials
+            - hostPath:
+                path: ./config.toml
+              name: config-path
+            - hostPath:
+                path: ./example-tags-input.json
+              name: tags-path
+          restartPolicy: OnFailure
