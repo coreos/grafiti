@@ -2,7 +2,6 @@ package deleter
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
@@ -12,7 +11,6 @@ import (
 )
 
 const (
-	hostedZonePrefix = "/hostedzone/"
 	recordSetNSType  = "NS"
 	recordSetSOAType = "SOA"
 )
@@ -52,20 +50,32 @@ func (rd *Route53HostedZoneDeleter) DeleteResources(cfg *DeleteConfig) error {
 	fmtStr := "Deleted Route53 HostedZone"
 
 	var (
-		params     *route53.DeleteHostedZoneInput
-		rrsDeleter Route53ResourceRecordSetDeleter
+		params           *route53.DeleteHostedZoneInput
+		recordSetDeleter Route53ResourceRecordSetDeleter
 	)
 	for _, n := range rd.ResourceNames {
+		// Delete resource record sets from hosted zone
+		recordSetDeleter = Route53ResourceRecordSetDeleter{HostedZoneID: n}
+		recordSets, rerr := recordSetDeleter.RequestRoute53ResourceRecordSets()
+		if rerr != nil && !cfg.IgnoreErrors {
+			return rerr
+		}
+		recordSetDeleter.ResourceRecordSets = recordSets
+		if err := recordSetDeleter.DeleteResources(cfg); err != nil {
+			return err
+		}
+
+		// Delete any record sets created in a public hosted zone
+		if err := recordSetDeleter.deleteRecordSetsFromPublicHostedZones(cfg); err != nil {
+			return err
+		}
+
 		if cfg.DryRun {
 			fmt.Println(drStr, fmtStr, n)
 			continue
 		}
 
-		rrsDeleter = Route53ResourceRecordSetDeleter{HostedZoneID: n}
-		if rerr := rrsDeleter.DeleteResources(cfg); rerr != nil {
-			return rerr
-		}
-
+		// Delete hosted zones
 		params = &route53.DeleteHostedZoneInput{
 			Id: n.AWSString(),
 		}
@@ -86,41 +96,7 @@ func (rd *Route53HostedZoneDeleter) DeleteResources(cfg *DeleteConfig) error {
 	return nil
 }
 
-// DeletePrivateRoute53HostedZones deletes only private hosted zones
-func (rd *Route53HostedZoneDeleter) DeletePrivateRoute53HostedZones(cfg *DeleteConfig) error {
-	hzs, err := rd.RequestRoute53HostedZones()
-	if err != nil && !cfg.IgnoreErrors {
-		return err
-	}
-	if len(hzs) == 0 {
-		return nil
-	}
-
-	rd.ResourceNames = filterPrivateHostedZones(hzs)
-
-	return rd.DeleteResources(cfg)
-}
-
-// SplitHostedZoneID splits a hosted zones' AWS ID, which might be prefixed with
-// "/hostedzone/", into the actual ID (the suffix)
-func SplitHostedZoneID(hzID string) arn.ResourceName {
-	if hzSplit := strings.Split(hzID, hostedZonePrefix); len(hzSplit) == 2 && hzSplit[1] != "" {
-		hzID = hzSplit[1]
-	}
-	return arn.ResourceName(hzID)
-}
-
-func filterPrivateHostedZones(hzs []*route53.HostedZone) arn.ResourceNames {
-	privateHZs := make(arn.ResourceNames, 0)
-	for _, hz := range hzs {
-		if aws.BoolValue(hz.Config.PrivateZone) {
-			privateHZs = append(privateHZs, SplitHostedZoneID(aws.StringValue(hz.Id)))
-		}
-	}
-	return privateHZs
-}
-
-// RequestRoute53HostedZones requests resources from the AWS API and returns route53
+// RequestRoute53HostedZones requests resources from the AWS API and returns
 // hosted zones by names
 func (rd *Route53HostedZoneDeleter) RequestRoute53HostedZones() ([]*route53.HostedZone, error) {
 	if len(rd.ResourceNames) == 0 {
@@ -130,8 +106,8 @@ func (rd *Route53HostedZoneDeleter) RequestRoute53HostedZones() ([]*route53.Host
 	// Only way to filter is iteratively (no query parameters)
 	want := map[arn.ResourceName]struct{}{}
 	for _, id := range rd.ResourceNames {
-		if _, ok := want["/hostedzone/"+id]; !ok {
-			want["/hostedzone/"+id] = struct{}{}
+		if _, ok := want[arn.HostedZonePrefix+id]; !ok {
+			want[arn.HostedZonePrefix+id] = struct{}{}
 		}
 	}
 
@@ -183,6 +159,9 @@ type Route53ResourceRecordSetDeleter struct {
 	ResourceType       arn.ResourceType
 	HostedZoneID       arn.ResourceName
 	ResourceRecordSets []*route53.ResourceRecordSet
+
+	// Cache hosted zones to avoid requesting all hosted zones multiple times
+	cachedPublicHostedZones []*route53.HostedZone
 }
 
 func (rd *Route53ResourceRecordSetDeleter) String() string {
@@ -203,27 +182,21 @@ func (rd *Route53ResourceRecordSetDeleter) GetClient() route53iface.Route53API {
 
 // DeleteResources deletes route53 resource record sets from AWS
 func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) error {
-	if rd.HostedZoneID == "" {
-		return nil
-	}
-
-	rrss, rerr := rd.RequestRoute53ResourceRecordSets()
-	if rerr != nil && !cfg.IgnoreErrors {
-		return rerr
-	}
-	if len(rrss) == 0 {
+	if rd.HostedZoneID == "" || len(rd.ResourceRecordSets) == 0 {
 		return nil
 	}
 
 	fmtStr := "Deleted Route53 ResourceRecordSet"
 
-	changes := make([]*route53.Change, 0, len(rrss))
-	for _, rrs := range rrss {
-		if cfg.DryRun {
+	if cfg.DryRun {
+		for _, rrs := range rd.ResourceRecordSets {
 			fmt.Printf("%s %s %s from HostedZone %s\n", drStr, fmtStr, aws.StringValue(rrs.Name), rd.HostedZoneID)
-			continue
 		}
+		return nil
+	}
 
+	changes := make([]*route53.Change, 0, len(rd.ResourceRecordSets))
+	for _, rrs := range rd.ResourceRecordSets {
 		changes = append(changes, &route53.Change{
 			Action:            aws.String(route53.ChangeActionDelete),
 			ResourceRecordSet: rrs,
@@ -238,7 +211,7 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 	ctx := aws.BackgroundContext()
 	_, err := rd.GetClient().ChangeResourceRecordSetsWithContext(ctx, params)
 	if err != nil {
-		for _, rrs := range rrss {
+		for _, rrs := range rd.ResourceRecordSets {
 			cfg.logRequestError(arn.Route53ResourceRecordSetRType, aws.StringValue(rrs.Name), err, logrus.Fields{
 				"parent_resource_type": arn.Route53HostedZoneRType,
 				"parent_resource_name": rd.HostedZoneID,
@@ -250,7 +223,7 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 		return err
 	}
 
-	for _, rrs := range rrss {
+	for _, rrs := range rd.ResourceRecordSets {
 		nameStr := aws.StringValue(rrs.Name)
 		cfg.logRequestSuccess(arn.Route53ResourceRecordSetRType, nameStr, logrus.Fields{
 			"parent_resource_type": arn.Route53HostedZoneRType,
@@ -260,6 +233,67 @@ func (rd *Route53ResourceRecordSetDeleter) DeleteResources(cfg *DeleteConfig) er
 	}
 
 	return nil
+}
+
+// Delete resource record sets that correspond to a private hosted zone with
+// ID 'hzID' from any public hosted zones
+func (rd *Route53ResourceRecordSetDeleter) deleteRecordSetsFromPublicHostedZones(cfg *DeleteConfig) error {
+	want := createResourceNameMapFromHostedZones(rd.ResourceRecordSets)
+
+	var (
+		err error
+		hzs []*route53.HostedZone
+	)
+	hzDel := new(Route53HostedZoneDeleter)
+	if len(rd.cachedPublicHostedZones) == 0 {
+		if hzs, err = hzDel.RequestAllRoute53HostedZones(); err != nil && !cfg.IgnoreErrors {
+			return err
+		}
+		for _, hz := range hzs {
+			if !isPrivateHostedZone(hz) {
+				rd.cachedPublicHostedZones = append(rd.cachedPublicHostedZones, hz)
+			}
+		}
+	}
+
+	recordSetDel := new(Route53ResourceRecordSetDeleter)
+	var recordSets []*route53.ResourceRecordSet
+	for _, hz := range rd.cachedPublicHostedZones {
+		recordSetDel.HostedZoneID = arn.SplitHostedZoneID(aws.StringValue(hz.Id))
+		if recordSets, err = recordSetDel.RequestRoute53ResourceRecordSets(); err != nil && !cfg.IgnoreErrors {
+			return err
+		}
+
+		for _, recordSet := range recordSets {
+			if _, ok := want[aws.StringValue(recordSet.Name)]; ok {
+				recordSetDel.ResourceRecordSets = append(recordSetDel.ResourceRecordSets, recordSet)
+			}
+		}
+
+		if err = recordSetDel.DeleteResources(cfg); err != nil {
+			return err
+		}
+
+		recordSetDel.ResourceRecordSets = nil
+	}
+	rd = nil
+
+	return nil
+}
+
+func createResourceNameMapFromHostedZones(recordSets []*route53.ResourceRecordSet) map[string]struct{} {
+	want := map[string]struct{}{}
+	for _, recordSet := range recordSets {
+		setName := aws.StringValue(recordSet.Name)
+		if _, ok := want[setName]; !ok {
+			want[setName] = struct{}{}
+		}
+	}
+	return want
+}
+
+func isPrivateHostedZone(hz *route53.HostedZone) bool {
+	return aws.BoolValue(hz.Config.PrivateZone)
 }
 
 // RequestRoute53ResourceRecordSets requests route53 resource record sets by

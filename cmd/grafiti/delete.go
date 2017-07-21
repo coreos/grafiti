@@ -297,24 +297,9 @@ func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.R
 }
 
 func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType, rgtaTags []*rgta.TagFilter, arnList *arn.ResourceARNs) {
-	if len(rgtaTags) == 0 || arnList == nil {
-		return
-	}
-
 	// Currently only Route53 HostedZones support tagging
-	if rt != arn.Route53HostedZoneRType {
+	if len(rgtaTags) == 0 || arnList == nil || rt != arn.Route53HostedZoneRType {
 		return
-	}
-
-	tagKeyMap := make(map[string][]string)
-	for _, tag := range rgtaTags {
-		key := aws.StringValue(tag.Key)
-		if _, ok := tagKeyMap[key]; !ok {
-			tagKeyMap[key] = make([]string, 0, len(tag.Values))
-			for _, v := range tag.Values {
-				tagKeyMap[key] = append(tagKeyMap[key], aws.StringValue(v))
-			}
-		}
 	}
 
 	rd := deleter.Route53HostedZoneDeleter{Client: svc}
@@ -325,7 +310,7 @@ func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType,
 
 	hzIDs := make(arn.ResourceNames, 0, len(hzs))
 	for _, hz := range hzs {
-		hzIDs = append(hzIDs, deleter.SplitHostedZoneID(aws.StringValue(hz.Id)))
+		hzIDs = append(hzIDs, arn.SplitHostedZoneID(aws.StringValue(hz.Id)))
 	}
 
 	size, chunk := len(hzIDs), 10
@@ -348,7 +333,7 @@ func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType,
 			return
 		}
 
-		filteredHZIDs = filterHostedZones(resp.ResourceTagSets, tagKeyMap)
+		filteredHZIDs = filterHostedZones(resp.ResourceTagSets, createHostedZoneKeyMap(rgtaTags))
 	}
 
 	for _, id := range filteredHZIDs {
@@ -359,12 +344,26 @@ func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType,
 	return
 }
 
-func filterHostedZones(tagSets []*route53.ResourceTagSet, tagKeyMap map[string][]string) arn.ResourceNames {
+func createHostedZoneKeyMap(rgtaTags []*rgta.TagFilter) map[string][]string {
+	keyMap := make(map[string][]string)
+	for _, tag := range rgtaTags {
+		key := aws.StringValue(tag.Key)
+		if _, ok := keyMap[key]; !ok {
+			keyMap[key] = make([]string, 0, len(tag.Values))
+			for _, v := range tag.Values {
+				keyMap[key] = append(keyMap[key], aws.StringValue(v))
+			}
+		}
+	}
+	return keyMap
+}
+
+func filterHostedZones(tagSets []*route53.ResourceTagSet, keyMap map[string][]string) arn.ResourceNames {
 	filteredHZIDs := make(arn.ResourceNames, 0, len(tagSets))
 	for _, rts := range tagSets {
 		idStr := aws.StringValue(rts.ResourceId)
 		for _, tag := range rts.Tags {
-			if vals, ok := tagKeyMap[aws.StringValue(tag.Key)]; ok {
+			if vals, ok := keyMap[aws.StringValue(tag.Key)]; ok {
 				// If no tag values are specified, then we want all hosted zones that
 				// match a specific key but have any value. Append all that have key
 				if vals == nil || len(vals) == 0 {

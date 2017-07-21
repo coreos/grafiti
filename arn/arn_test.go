@@ -252,9 +252,14 @@ func TestMapResourceTypeToARN(t *testing.T) {
 			InputName: "subscription-name",
 		},
 		{
-			Expected:  "arn:aws:route53:::hostedzone/zoneid",
+			Expected:  "arn:aws:route53:::hostedzone/zoneid-1",
 			InputType: Route53HostedZoneRType,
-			InputName: "/hostedzone/zoneid",
+			InputName: HostedZonePrefix + "zoneid-1",
+		},
+		{
+			Expected:  "arn:aws:route53:::hostedzone/zoneid-2",
+			InputType: Route53HostedZoneRType,
+			InputName: "zoneid-2",
 		},
 		{
 			Expected:  "arn:aws:s3:::bucket-name",
