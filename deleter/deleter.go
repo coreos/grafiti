@@ -205,8 +205,6 @@ func InitResourceDeleter(t arn.ResourceType) ResourceDeleter {
 		return &EC2NetworkACLDeleter{ResourceType: t}
 	case arn.EC2NetworkInterfaceRType:
 		return &EC2NetworkInterfaceDeleter{ResourceType: t}
-	case arn.EC2NetworkInterfaceAttachmentRType:
-		return &EC2NetworkInterfaceAttachmentDeleter{ResourceType: t}
 	case arn.EC2RouteTableAssociationRType:
 		return &EC2RouteTableAssociationDeleter{ResourceType: t}
 	case arn.EC2RouteTableRType:

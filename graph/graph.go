@@ -158,6 +158,16 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		// Get Network ACL's
 	case arn.EC2InstanceRType:
 		instanceDel := depMap[rt].(*deleter.EC2InstanceDeleter)
+
+		// Get EC2 network interfaces
+		enis, _ := instanceDel.RequestEC2NetworkInterfacesFromInstances()
+		if _, ok := depMap[arn.EC2NetworkInterfaceRType]; !ok {
+			depMap[arn.EC2NetworkInterfaceRType] = deleter.InitResourceDeleter(arn.EC2NetworkInterfaceRType)
+		}
+		for _, eni := range enis {
+			depMap[arn.EC2NetworkInterfaceRType].AddResourceNames(arn.ResourceName(*eni.NetworkInterfaceId))
+		}
+
 		// Get IAM instance profiles
 		iprs, err := instanceDel.RequestIAMInstanceProfilesFromInstances()
 		if err != nil || len(iprs) == 0 {

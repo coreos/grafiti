@@ -36,6 +36,7 @@ func isDetaching(state string) bool {
 const (
 	cgwFilterKey           = "customer-gateway-id"
 	eniFilterKey           = "network-interface-id"
+	eniAttachmentFilterKey = "attachment.instance-id"
 	instanceFilterKey      = "instance-id"
 	igwFilterKey           = "internet-gateway-id"
 	ngwFilterKey           = "nat-gateway-id"
@@ -336,28 +337,28 @@ func (rd *EC2NetworkInterfaceDeleter) DeleteResources(cfg *DeleteConfig) error {
 		return nerr
 	}
 
-	eniaNames := make(arn.ResourceNames, 0)
-	for _, eni := range enis {
-		if eni.Attachment != nil && eni.Attachment.AttachmentId != nil {
-			// eth0 is the primary network interface and cannot be detached
-			if eni.Attachment.DeviceIndex != nil && *eni.Attachment.DeviceIndex == 0 {
-				continue
-			}
-			eniaNames = append(eniaNames, arn.ResourceName(*eni.Attachment.AttachmentId))
-		}
-	}
-
-	// Detach network interfaces
-	eniaDel := &EC2NetworkInterfaceAttachmentDeleter{ResourceNames: eniaNames}
-	if err := eniaDel.DeleteResources(cfg); err != nil {
-		return err
-	}
-
 	fmtStr := "Deleted EC2 NetworkInterface"
 
 	var params *ec2.DeleteNetworkInterfaceInput
 	for _, eni := range enis {
 		idStr := aws.StringValue(eni.NetworkInterfaceId)
+
+		// Detach network interfaces
+		if eni.Attachment != nil {
+			// If attachement is not 'detached'/'detaching', we cannot delete it
+			if !isDetaching(aws.StringValue(eni.Attachment.Status)) && !cfg.DryRun {
+				continue
+			}
+
+			a := eni.Attachment
+			// eth0 (device index 0) is the primary network interface and cannot be detached
+			if aws.StringValue(a.AttachmentId) != "" && aws.Int64Value(a.DeviceIndex) > 0 {
+				attachmentDel := &EC2NetworkInterfaceAttachmentDeleter{NetworkInterfaceAttachment: eni.Attachment}
+				if err := attachmentDel.DeleteResources(cfg); err != nil {
+					return err
+				}
+			}
+		}
 
 		params = &ec2.DeleteNetworkInterfaceInput{
 			NetworkInterfaceId: eni.NetworkInterfaceId,
@@ -471,13 +472,14 @@ func (c *EC2Client) requestEC2EIPAddresses(filterKey string, chunk arn.ResourceN
 
 // EC2NetworkInterfaceAttachmentDeleter represents a collection of AWS EC2 network interface attachments
 type EC2NetworkInterfaceAttachmentDeleter struct {
-	Client        EC2Client
-	ResourceType  arn.ResourceType
-	ResourceNames arn.ResourceNames
+	Client                     EC2Client
+	ResourceType               arn.ResourceType
+	NetworkInterfaceAttachment *ec2.NetworkInterfaceAttachment
 }
 
 func (rd *EC2NetworkInterfaceAttachmentDeleter) String() string {
-	return fmt.Sprintf(`{"Type": "%s", "ResourceNames": %v}`, rd.ResourceType, rd.ResourceNames)
+	attachID := aws.StringValue(rd.NetworkInterfaceAttachment.AttachmentId)
+	return fmt.Sprintf(`{"Type": "%s", "NetworkInterfaceAttachmentID": %v}`, rd.ResourceType, attachID)
 }
 
 // GetClient returns an AWS Client, and initalizes one if one has not been
@@ -488,44 +490,37 @@ func (rd *EC2NetworkInterfaceAttachmentDeleter) GetClient() *EC2Client {
 	return &rd.Client
 }
 
-// AddResourceNames adds EC2 network interface attachment names to ResourceNames
-func (rd *EC2NetworkInterfaceAttachmentDeleter) AddResourceNames(ns ...arn.ResourceName) {
-	rd.ResourceNames = append(rd.ResourceNames, ns...)
-}
-
 // DeleteResources deletes EC2 network interface attachments from AWS
 func (rd *EC2NetworkInterfaceAttachmentDeleter) DeleteResources(cfg *DeleteConfig) error {
-	if len(rd.ResourceNames) == 0 {
+	if rd.NetworkInterfaceAttachment == nil {
 		return nil
 	}
 
 	fmtStr := "Detached EC2 NetworkInterface"
+	idStr := aws.StringValue(rd.NetworkInterfaceAttachment.AttachmentId)
 
-	var params *ec2.DetachNetworkInterfaceInput
-	for _, n := range rd.ResourceNames {
-		params = &ec2.DetachNetworkInterfaceInput{
-			AttachmentId: n.AWSString(),
-			Force:        aws.Bool(true),
-			DryRun:       aws.Bool(cfg.DryRun),
-		}
-
-		ctx := aws.BackgroundContext()
-		_, err := rd.GetClient().DetachNetworkInterfaceWithContext(ctx, params)
-		if err != nil {
-			if isDryRun(err) {
-				fmt.Println(drStr, fmtStr, n)
-				continue
-			}
-			cfg.logRequestError(arn.EC2NetworkInterfaceAttachmentRType, n, err)
-			if cfg.IgnoreErrors {
-				continue
-			}
-			return err
-		}
-
-		cfg.logRequestSuccess(arn.EC2NetworkInterfaceAttachmentRType, n)
-		fmt.Println(fmtStr, n)
+	params := &ec2.DetachNetworkInterfaceInput{
+		AttachmentId: rd.NetworkInterfaceAttachment.AttachmentId,
+		Force:        aws.Bool(true),
+		DryRun:       aws.Bool(cfg.DryRun),
 	}
+
+	ctx := aws.BackgroundContext()
+	_, err := rd.GetClient().DetachNetworkInterfaceWithContext(ctx, params)
+	if err != nil {
+		if isDryRun(err) {
+			fmt.Println(drStr, fmtStr, idStr)
+			return nil
+		}
+		cfg.logRequestError(arn.EC2NetworkInterfaceAttachmentRType, idStr, err)
+		if cfg.IgnoreErrors {
+			return nil
+		}
+		return err
+
+	}
+	cfg.logRequestSuccess(arn.EC2NetworkInterfaceAttachmentRType, idStr)
+	fmt.Println(fmtStr, idStr)
 
 	return nil
 }
@@ -894,7 +889,28 @@ func isInstanceTerminating(instance *ec2.Instance) bool {
 	return aws.Int64Value(instance.State.Code) == 32 || aws.Int64Value(instance.State.Code) == 48
 }
 
-// RequestIAMInstanceProfilesFromInstances retrieves instance profiles from instance ID's
+// RequestEC2NetworkInterfacesFromInstances retrieves EC2 network interfaces from instance ID's
+func (rd *EC2InstanceDeleter) RequestEC2NetworkInterfacesFromInstances() ([]*ec2.NetworkInterface, error) {
+	if len(rd.ResourceNames) == 0 {
+		return nil, nil
+	}
+
+	size, chunk := len(rd.ResourceNames), 200
+	enis := make([]*ec2.NetworkInterface, 0)
+	var err error
+	// Can only filter in batches of 200
+	for i := 0; i < size; i += chunk {
+		stop := CalcChunk(i, size, chunk)
+		enis, err = rd.GetClient().requestEC2NetworkInterfaces(eniAttachmentFilterKey, rd.ResourceNames[i:stop], enis)
+		if err != nil {
+			return enis, err
+		}
+	}
+
+	return enis, nil
+}
+
+// RequestIAMInstanceProfilesFromInstances retrieves IAM instance profiles from instance ID's
 func (rd *EC2InstanceDeleter) RequestIAMInstanceProfilesFromInstances() ([]*iam.InstanceProfile, error) {
 	if len(rd.ResourceNames) == 0 {
 		return nil, nil
