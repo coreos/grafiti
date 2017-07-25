@@ -136,6 +136,8 @@ const (
 	EC2NatGatewayRType = "AWS::EC2::NatGateway"
 	// EC2NetworkACLRType is an AWS ResourceType enum value
 	EC2NetworkACLRType = "AWS::EC2::NetworkAcl"
+	// EC2NetworkACLEntryRType is an AWS ResourceType enum value
+	EC2NetworkACLEntryRType = "AWS::EC2::NetworkAclEntry"
 	// EC2NetworkInterfaceRType is an AWS ResourceType enum value
 	EC2NetworkInterfaceRType = "AWS::EC2::NetworkInterface"
 	// EC2NetworkInterfaceAttachmentRType is an AWS ResourceType enum value
