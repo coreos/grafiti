@@ -367,6 +367,19 @@ func NamespaceForResource(t ResourceType) string {
 	return ""
 }
 
+// HostedZonePrefix is the string prefixing hostedzone IDs when retrieved from
+// the AWS API
+const HostedZonePrefix = "/hostedzone/"
+
+// SplitHostedZoneID splits a hosted zones' AWS ID, which might be prefixed with
+// "/hostedzone/", into the actual ID (the suffix)
+func SplitHostedZoneID(hzID string) ResourceName {
+	if hzSplit := strings.Split(hzID, HostedZonePrefix); len(hzSplit) == 2 && hzSplit[1] != "" {
+		hzID = hzSplit[1]
+	}
+	return ResourceName(hzID)
+}
+
 func getAutoScalingGroupARN(rn ResourceName) (string, error) {
 	if rn == "" {
 		return "", nil
@@ -602,11 +615,7 @@ func MapResourceTypeToARN(rt ResourceType, rn ResourceName, parsedEvents ...gjso
 		// arn:aws:route53:::change/changeid
 	case Route53HostedZoneRType:
 		// arn:aws:route53:::hostedzone/zoneid
-		hzSplit := strings.Split(rn.String(), "/hostedzone/")
-		if len(hzSplit) != 2 {
-			break
-		}
-		arn = fmt.Sprintf("%s:::hostedzone/%s", ARNPrefix, hzSplit[1])
+		arn = fmt.Sprintf("%s:::hostedzone/%s", ARNPrefix, SplitHostedZoneID(rn.String()))
 	case S3BucketRType:
 		// arn:aws:s3:::bucket-name
 		arn = fmt.Sprintf("%s:::%s", ARNPrefix, rn)
