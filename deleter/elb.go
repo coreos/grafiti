@@ -4,10 +4,16 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/elb"
 	"github.com/aws/aws-sdk-go/service/elb/elbiface"
 	"github.com/coreos/grafiti/arn"
 )
+
+func isELBNotFoundError(err error) bool {
+	aerr, ok := err.(awserr.Error)
+	return ok && aerr.Code() == elb.ErrCodeAccessPointNotFoundException
+}
 
 // ElasticLoadBalancingLoadBalancerDeleter represents a collection of AWS elastic load balancers
 type ElasticLoadBalancingLoadBalancerDeleter struct {
@@ -82,14 +88,13 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) RequestElasticLoadBalancers()
 		return nil, nil
 	}
 
-	size, chunk := len(rd.ResourceNames), 20
 	elbs := make([]*elb.LoadBalancerDescription, 0)
 	var err error
-	// Can only filter in batches of 20
-	for i := 0; i < size; i += chunk {
-		stop := CalcChunk(i, size, chunk)
-		elbs, err = rd.requestElasticLoadBalancers(rd.ResourceNames[i:stop], elbs)
-		if err != nil {
+	// Requesting a batch of resources that contains at least one already deleted
+	// resource will return an error and no resources. To guard against this,
+	// request them one by one
+	for _, name := range rd.ResourceNames {
+		if elbs, err = rd.requestElasticLoadBalancer(name, elbs); err != nil && !isELBNotFoundError(err) {
 			return elbs, err
 		}
 	}
@@ -97,30 +102,19 @@ func (rd *ElasticLoadBalancingLoadBalancerDeleter) RequestElasticLoadBalancers()
 	return elbs, nil
 }
 
-// Requesting elastic load balancers using filters prevents API errors caused by
-// requesting non-existent elastic load balancers
-func (rd *ElasticLoadBalancingLoadBalancerDeleter) requestElasticLoadBalancers(chunk arn.ResourceNames, elbs []*elb.LoadBalancerDescription) ([]*elb.LoadBalancerDescription, error) {
+func (rd *ElasticLoadBalancingLoadBalancerDeleter) requestElasticLoadBalancer(rn arn.ResourceName, elbs []*elb.LoadBalancerDescription) ([]*elb.LoadBalancerDescription, error) {
 	params := &elb.DescribeLoadBalancersInput{
-		LoadBalancerNames: chunk.AWSStringSlice(),
-		PageSize:          aws.Int64(50),
+		LoadBalancerNames: []*string{rn.AWSString()},
 	}
 
-	for {
-		ctx := aws.BackgroundContext()
-		resp, err := rd.GetClient().DescribeLoadBalancersWithContext(ctx, params)
-		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return elbs, err
-		}
-
-		elbs = append(elbs, resp.LoadBalancerDescriptions...)
-
-		if aws.StringValue(resp.NextMarker) == "" {
-			break
-		}
-
-		params.Marker = resp.NextMarker
+	ctx := aws.BackgroundContext()
+	resp, err := rd.GetClient().DescribeLoadBalancersWithContext(ctx, params)
+	if err != nil {
+		logger.Errorln(err)
+		return elbs, err
 	}
+
+	elbs = append(elbs, resp.LoadBalancerDescriptions...)
 
 	return elbs, nil
 }

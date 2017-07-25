@@ -74,34 +74,38 @@ var parseCmd = &cobra.Command{
 	Use:   "parse",
 	Short: "Parse resource data from CloudTrail logs.",
 	Long:  "Parse CloudTrail logs and output resource data. By default, grafiti requests data from the CloudTrail API.",
-	RunE:  runParseCommand,
+	Run:   runParseCommand,
 }
 
-func runParseCommand(cmd *cobra.Command, args []string) error {
+func runParseCommand(cmd *cobra.Command, args []string) {
 	fi, err := os.Stdin.Stat()
 	if err != nil {
-		fmt.Println("Error opening Stdin:", err)
-		os.Exit(1)
+		exitWithError(exitInvalidInput, err)
 	}
 
 	if (fi.Mode() & os.ModeCharDevice) == 0 {
-		return parseFromStdin()
+		if err = parseFromStdin(); err != nil {
+			exitWithError(exitError, err)
+		}
+		exitWithSuccess()
 	}
 
 	if inputFile != "" {
-		return parseFromFile(inputFile)
+		if err = parseFromFile(inputFile); err != nil {
+			exitWithError(exitError, err)
+		}
+		exitWithSuccess()
 	}
 
-	sess := session.Must(session.NewSession(
+	svc := cloudtrail.New(session.Must(session.NewSession(
 		&aws.Config{
 			Region: aws.String(viper.GetString("region")),
 		},
-	))
-	if err := parseFromCloudTrail(cloudtrail.New(sess)); err != nil {
-		return err
-	}
+	)))
 
-	return nil
+	if err := parseFromCloudTrail(svc); err != nil {
+		exitWithError(exitError, err)
+	}
 }
 
 // CloudTrailLogFile holds the array of Record strings in a S3 CloudTrail log
@@ -139,8 +143,7 @@ func parseBytes(raw []byte) error {
 func parseFromStdin() error {
 	raw, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
-		fmt.Println("Error reading from stdin:", err)
-		os.Exit(1)
+		return err
 	}
 
 	return parseBytes(raw)
@@ -149,8 +152,7 @@ func parseFromStdin() error {
 func parseFromFile(logFileName string) error {
 	f, err := os.Open(logFileName)
 	if err != nil {
-		fmt.Printf("Error opening file %s: %s\n", logFileName, err)
-		os.Exit(1)
+		return err
 	}
 	defer f.Close()
 
@@ -161,16 +163,14 @@ func parseFromFile(logFileName string) error {
 	if isGzipFile(br) {
 		r, err = gzip.NewReader(br)
 		if err != nil {
-			fmt.Println("Error creating gzip archive reader:", err)
-			os.Exit(1)
+			return err
 		}
 		defer r.(*gzip.Reader).Close()
 	}
 
 	raw, err := ioutil.ReadAll(r)
 	if err != nil {
-		fmt.Println("Error reading json file:", err)
-		os.Exit(1)
+		return err
 	}
 
 	return parseBytes(raw)
@@ -180,8 +180,7 @@ func parseFromFile(logFileName string) error {
 func isGzipFile(tr *bufio.Reader) bool {
 	tb, err := tr.Peek(2)
 	if err != nil {
-		fmt.Println("Error peeking file:", err)
-		os.Exit(1)
+		return false
 	}
 
 	return tb[0] == 31 && tb[1] == 139
@@ -215,6 +214,7 @@ func parseFromCloudTrail(svc cloudtrailiface.CloudTrailAPI) error {
 		start, end = calcTimeWindowFromHourRange(viper.GetInt("startHour"), viper.GetInt("endHour"))
 	}
 	if start == nil || end == nil {
+		logger.Errorln("timestamp range was invalid")
 		return nil
 	}
 
@@ -247,18 +247,18 @@ func parseFromCloudTrail(svc cloudtrailiface.CloudTrailAPI) error {
 func calcTimeWindowFromTimeStamp(start, end string) (*time.Time, *time.Time) {
 	startTime, err := time.Parse(time.RFC3339, start)
 	if err != nil {
-		fmt.Println("startTimeStamp parse error:", err.Error())
+		logger.Errorln("startTimeStamp parse error:", err.Error())
 		return nil, nil
 	}
 
 	endTime, err := time.Parse(time.RFC3339, end)
 	if err != nil {
-		fmt.Println("endTimeStamp parse error:", err.Error())
+		logger.Errorln("endTimeStamp parse error:", err.Error())
 		return nil, nil
 	}
 
 	if startTime.After(endTime) || startTime.Equal(endTime) {
-		fmt.Printf(`{"error": "startTimeStamp (%s) is at or after endTimeStamp (%s)"}%s`, startTime, endTime, "\n")
+		logger.Errorf("startTimeStamp (%s) is at or after endTimeStamp (%s)", startTime, endTime)
 		return nil, nil
 	}
 
@@ -268,7 +268,7 @@ func calcTimeWindowFromTimeStamp(start, end string) (*time.Time, *time.Time) {
 // Calculates a time window between a starting hour and ending hour.
 func calcTimeWindowFromHourRange(start, end int) (*time.Time, *time.Time) {
 	if start >= end {
-		fmt.Printf(`{"error": "startHour (%d) is at or after endHour (%d)"}%s`, start, end, "\n")
+		logger.Errorf("startHour (%d) is at or after endHour (%d)", start, end)
 		return nil, nil
 	}
 
@@ -363,7 +363,7 @@ func parseDataFromEvent(rt arn.ResourceType, rn arn.ResourceName, parsedEvent gj
 
 	oj, err := json.Marshal(output)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+		logger.Errorln(err)
 	}
 	if jsonMatch := matchFilter(oj); jsonMatch {
 		return string(oj)
@@ -397,8 +397,8 @@ func getTags(rawEvent string) map[string]string {
 	for _, p := range tagPatterns {
 		results, err := jq.Eval(rawEvent, p)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-			return nil
+			logger.Errorln(err)
+			continue
 		}
 
 		for _, r := range results {

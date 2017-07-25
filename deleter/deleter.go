@@ -17,6 +17,12 @@ import (
 
 const drStr = "(dry-run)"
 
+// Error codes not defined by aws-sdk-go
+
+// ErrCodeValidationError is returned when a request did not conform to AWS API
+// backend expectations, ex. when a requested resource cannot be found
+const ErrCodeValidationError = "ValidationError"
+
 func setUpAWSSession() *session.Session {
 	maxRetries := viper.GetInt("maxNumRequestRetries")
 	return session.Must(session.NewSession(
@@ -33,6 +39,14 @@ func CalcChunk(curr, size, chunk int) int {
 		return size
 	}
 	return curr + chunk
+}
+
+// logger prints errors in JSON format without a timestamp. Used for reporting
+// Describe/List/Get API request errors
+var logger = logrus.Logger{
+	Out:       os.Stderr,
+	Formatter: &logrus.JSONFormatter{DisableTimestamp: true},
+	Level:     logrus.InfoLevel,
 }
 
 // DeleteConfig holds configuration info for resource deletion

@@ -39,7 +39,6 @@ import (
 
 var (
 	deleteFile string
-	silent     bool
 	delAllDeps bool
 	wantReport bool
 )
@@ -80,7 +79,6 @@ type TagFileInput struct {
 func init() {
 	RootCmd.AddCommand(deleteCmd)
 	deleteCmd.PersistentFlags().StringVarP(&deleteFile, "delete-file", "f", "", "File of tags of resources to delete.")
-	deleteCmd.PersistentFlags().BoolVarP(&silent, "silent", "s", false, "Suppress JSON output.")
 	deleteCmd.PersistentFlags().BoolVar(&delAllDeps, "all-deps", false, "Delete all dependencies of all tagged resourcs.")
 	deleteCmd.PersistentFlags().BoolVar(&wantReport, "report", false, "Pretty-print a report of resource deletion errors, if any.")
 }
@@ -89,17 +87,20 @@ var deleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete resources in AWS by tag.",
 	Long:  "Delete resources in AWS by tags specified in 'delete-file'.",
-	RunE:  runDeleteCommand,
+	Run:   runDeleteCommand,
 }
 
-func runDeleteCommand(cmd *cobra.Command, args []string) error {
+func runDeleteCommand(cmd *cobra.Command, args []string) {
 	if deleteFile != "" {
-		return deleteFromFile(deleteFile)
+		if err := deleteFromFile(deleteFile); err != nil {
+			exitWithError(exitError, err)
+		}
+		exitWithSuccess()
 	}
+
 	if err := deleteFromStdIn(); err != nil {
-		return err
+		exitWithError(exitError, err)
 	}
-	return nil
 }
 
 func deleteFromFile(fname string) error {
@@ -119,7 +120,7 @@ func deleteFromStdIn() error {
 
 func deleteFromTags(reader io.Reader) error {
 	dec := json.NewDecoder(reader)
-	// Collect all ARN's
+
 	allARNs := make(arn.ResourceARNs, 0)
 
 	svc := rgta.New(session.Must(session.NewSession(
@@ -149,16 +150,7 @@ func deleteFromTags(reader io.Reader) error {
 	}
 
 	// Delete batch of matching resources
-	if err := deleteARNs(allARNs); err != nil {
-		return err
-	}
-
-	if !silent {
-		arnsJSON, _ := json.MarshalIndent(allARNs, "", " ")
-		fmt.Printf("{\"DeletedARNs\": %s}\n", arnsJSON)
-	}
-
-	return nil
+	return deleteARNs(allARNs)
 }
 
 func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.TagFilter, arnList arn.ResourceARNs) arn.ResourceARNs {
@@ -187,11 +179,11 @@ func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.
 		ctx := aws.BackgroundContext()
 		resp, err := svc.GetResourcesWithContext(ctx, params)
 		if err != nil {
+			logger.Errorln(err)
 			return arnList
 		}
 
 		if len(resp.ResourceTagMappingList) == 0 {
-			fmt.Println(`{"error": "No resources match the specified tag filters"}`)
 			return arnList
 		}
 
@@ -260,8 +252,9 @@ func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.R
 	asgNames := make(arn.ResourceNames, 0)
 	for {
 		ctx := aws.BackgroundContext()
-		resp, rerr := svc.DescribeTagsWithContext(ctx, params)
-		if rerr != nil {
+		resp, err := svc.DescribeTagsWithContext(ctx, params)
+		if err != nil {
+			logger.Errorln(err)
 			return
 		}
 
@@ -303,8 +296,8 @@ func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType,
 	}
 
 	rd := deleter.Route53HostedZoneDeleter{Client: svc}
-	hzs, rerr := rd.RequestAllRoute53HostedZones()
-	if rerr != nil || len(hzs) == 0 {
+	hzs, err := rd.RequestAllRoute53HostedZones()
+	if err != nil || len(hzs) == 0 {
 		return
 	}
 
@@ -329,7 +322,7 @@ func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType,
 		ctx := aws.BackgroundContext()
 		resp, rerr := svc.ListTagsForResourcesWithContext(ctx, params)
 		if rerr != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", rerr.Error())
+			logger.Errorln(rerr)
 			return
 		}
 
@@ -337,7 +330,7 @@ func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType,
 	}
 
 	for _, id := range filteredHZIDs {
-		hzARN := fmt.Sprintf("arn:aws:route53:::hostedzone/%s", id)
+		hzARN := arn.MapResourceTypeToARN(arn.Route53HostedZoneRType, id)
 		*arnList = append(*arnList, arn.ResourceARN(hzARN))
 	}
 
@@ -444,15 +437,15 @@ func deleteARNs(ARNs arn.ResourceARNs) error {
 	// delete all non-dependent resources first
 	for i := len(sorted) - 1; i >= 0; i-- {
 		if err := sorted[i].Deleters.DeleteResources(cfg); err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			logger.Errorln(err)
 		}
 	}
 
 	// Print all failed deletion logs in report format at end of deletion cycle
 	if wantReport {
-		f, ferr := os.Open(logFilePath)
-		if ferr != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", ferr.Error())
+		f, err := os.Open(logFilePath)
+		if err != nil {
+			logger.Errorln(err)
 			return nil
 		}
 		defer f.Close()
@@ -496,7 +489,7 @@ func decodeTagFileInput(decoder *json.Decoder) (*TagFileInput, bool, error) {
 			return &decoded, true, nil
 		}
 		if ignoreErrors {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			logger.Errorln(err)
 			return nil, false, nil
 		}
 		return nil, false, err

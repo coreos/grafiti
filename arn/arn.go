@@ -2,15 +2,24 @@ package arn
 
 import (
 	"fmt"
+	"os"
 	re "regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/tidwall/gjson"
 )
+
+// logger prints errors in JSON format without a timestamp
+var logger = logrus.Logger{
+	Out:       os.Stderr,
+	Formatter: &logrus.JSONFormatter{DisableTimestamp: true},
+	Level:     logrus.InfoLevel,
+}
 
 // ResourceARN aliases a string type for ARNs
 type ResourceARN string
@@ -639,7 +648,7 @@ func MapARNToRTypeAndRName(arnStr ResourceARN) (ResourceType, ResourceName) {
 	case strings.HasPrefix(arn, "arn:aws:autoscaling:"):
 		erASG, err := re.Compile("arn:aws:autoscaling:[^:]+:[^:]+:(.+)")
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			logger.Errorln(err)
 			break
 		}
 		m := erASG.FindStringSubmatch(arn)
@@ -658,7 +667,7 @@ func MapARNToRTypeAndRName(arnStr ResourceARN) (ResourceType, ResourceName) {
 	case strings.HasPrefix(arn, "arn:aws:ec2:"):
 		erEC2, err := re.Compile("arn:aws:ec2:[^:]+:(?:[^:]+:)?(.+)")
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			logger.Errorln(err)
 			break
 		}
 		m := erEC2.FindStringSubmatch(arn)
@@ -700,7 +709,7 @@ func MapARNToRTypeAndRName(arnStr ResourceARN) (ResourceType, ResourceName) {
 	case strings.HasPrefix(arn, "arn:aws:iam::"):
 		erIAM, err := re.Compile("arn:aws:iam::[^:]+:(.+)")
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			logger.Errorln(err)
 			break
 		}
 		m := erIAM.FindStringSubmatch(arn)
