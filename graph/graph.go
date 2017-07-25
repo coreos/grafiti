@@ -66,7 +66,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 
 		vpcDel.ResourceNames = nil
 		for _, vpc := range vpcs {
-			vpcDel.AddResourceNames(arn.ResourceName(*vpc.VpcId))
+			vpcDel.AddResourceNames(arn.ToResourceName(vpc.VpcId))
 		}
 
 		// Get EC2 instances
@@ -75,7 +75,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.EC2InstanceRType] = deleter.InitResourceDeleter(arn.EC2InstanceRType)
 		}
 		for _, instance := range instances {
-			depMap[arn.EC2InstanceRType].AddResourceNames(arn.ResourceName(*instance.InstanceId))
+			depMap[arn.EC2InstanceRType].AddResourceNames(arn.ToResourceName(instance.InstanceId))
 		}
 
 		// Get EC2 internet gateways
@@ -84,7 +84,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.EC2InternetGatewayRType] = deleter.InitResourceDeleter(arn.EC2InternetGatewayRType)
 		}
 		for _, igw := range igws {
-			depMap[arn.EC2InternetGatewayRType].AddResourceNames(arn.ResourceName(*igw.InternetGatewayId))
+			depMap[arn.EC2InternetGatewayRType].AddResourceNames(arn.ToResourceName(igw.InternetGatewayId))
 		}
 
 		// Get EC2 NAT gateways
@@ -93,7 +93,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.EC2NatGatewayRType] = deleter.InitResourceDeleter(arn.EC2NatGatewayRType)
 		}
 		for _, ngw := range ngws {
-			depMap[arn.EC2NatGatewayRType].AddResourceNames(arn.ResourceName(*ngw.NatGatewayId))
+			depMap[arn.EC2NatGatewayRType].AddResourceNames(arn.ToResourceName(ngw.NatGatewayId))
 		}
 
 		// Get EC2 network interfaces
@@ -102,7 +102,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.EC2NetworkInterfaceRType] = deleter.InitResourceDeleter(arn.EC2NetworkInterfaceRType)
 		}
 		for _, eni := range enis {
-			depMap[arn.EC2NetworkInterfaceRType].AddResourceNames(arn.ResourceName(*eni.NetworkInterfaceId))
+			depMap[arn.EC2NetworkInterfaceRType].AddResourceNames(arn.ToResourceName(eni.NetworkInterfaceId))
 		}
 
 		// Get Route Tables
@@ -111,7 +111,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.EC2RouteTableRType] = deleter.InitResourceDeleter(arn.EC2RouteTableRType)
 		}
 		for _, rt := range rts {
-			depMap[arn.EC2RouteTableRType].AddResourceNames(arn.ResourceName(*rt.RouteTableId))
+			depMap[arn.EC2RouteTableRType].AddResourceNames(arn.ToResourceName(rt.RouteTableId))
 		}
 
 		// Get Security Groups
@@ -120,7 +120,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.EC2SecurityGroupRType] = deleter.InitResourceDeleter(arn.EC2SecurityGroupRType)
 		}
 		for _, sg := range sgs {
-			depMap[arn.EC2SecurityGroupRType].AddResourceNames(arn.ResourceName(*sg.GroupId))
+			depMap[arn.EC2SecurityGroupRType].AddResourceNames(arn.ToResourceName(sg.GroupId))
 		}
 
 		// Get Subnets
@@ -129,7 +129,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.EC2SubnetRType] = deleter.InitResourceDeleter(arn.EC2SubnetRType)
 		}
 		for _, sn := range sns {
-			depMap[arn.EC2SubnetRType].AddResourceNames(arn.ResourceName(*sn.SubnetId))
+			depMap[arn.EC2SubnetRType].AddResourceNames(arn.ToResourceName(sn.SubnetId))
 		}
 
 		// Get VPN Gateways
@@ -138,7 +138,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.EC2VPNGatewayRType] = deleter.InitResourceDeleter(arn.EC2VPNGatewayRType)
 		}
 		for _, vgw := range vgws {
-			depMap[arn.EC2VPNGatewayRType].AddResourceNames(arn.ResourceName(*vgw.VpnGatewayId))
+			depMap[arn.EC2VPNGatewayRType].AddResourceNames(arn.ToResourceName(vgw.VpnGatewayId))
 		}
 	case arn.EC2VPNGatewayRType:
 		vgwDel := depMap[rt].(*deleter.EC2VPNGatewayDeleter)
@@ -152,7 +152,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.EC2VPNConnectionRType] = deleter.InitResourceDeleter(arn.EC2VPNConnectionRType)
 		}
 		for _, vc := range vcs {
-			depMap[arn.EC2VPNConnectionRType].AddResourceNames(arn.ResourceName(*vc.VpnConnectionId))
+			depMap[arn.EC2VPNConnectionRType].AddResourceNames(arn.ToResourceName(vc.VpnConnectionId))
 		}
 	case arn.EC2SubnetRType:
 		// Get Network ACL's
@@ -171,10 +171,10 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.IAMRoleRType] = deleter.InitResourceDeleter(arn.IAMRoleRType)
 		}
 		for _, ipr := range iprs {
-			depMap[arn.IAMInstanceProfileRType].AddResourceNames(arn.ResourceName(*ipr.InstanceProfileName))
+			depMap[arn.IAMInstanceProfileRType].AddResourceNames(arn.ToResourceName(ipr.InstanceProfileName))
 			// Get IAM roles
 			for _, rl := range ipr.Roles {
-				depMap[arn.IAMRoleRType].AddResourceNames(arn.ResourceName(*rl.RoleName))
+				depMap[arn.IAMRoleRType].AddResourceNames(arn.ToResourceName(rl.RoleName))
 			}
 		}
 	case arn.EC2NetworkInterfaceRType:
@@ -195,10 +195,10 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		}
 		for _, adr := range adrs {
 			if adr.AllocationId != nil {
-				depMap[arn.EC2EIPRType].AddResourceNames(arn.ResourceName(*adr.AllocationId))
+				depMap[arn.EC2EIPRType].AddResourceNames(arn.ToResourceName(adr.AllocationId))
 			}
 			if adr.AssociationId != nil {
-				depMap[arn.EC2EIPAssociationRType].AddResourceNames(arn.ResourceName(*adr.AssociationId))
+				depMap[arn.EC2EIPAssociationRType].AddResourceNames(arn.ToResourceName(adr.AssociationId))
 			}
 		}
 	case arn.EC2RouteTableRType:
@@ -216,7 +216,7 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 		for _, rt := range rts {
 			for _, rta := range rt.Associations {
 				if rta.Main != nil && !*rta.Main {
-					depMap[arn.EC2RouteTableAssociationRType].AddResourceNames(arn.ResourceName(*rta.RouteTableAssociationId))
+					depMap[arn.EC2RouteTableAssociationRType].AddResourceNames(arn.ToResourceName(rta.RouteTableAssociationId))
 				}
 			}
 		}
@@ -236,9 +236,9 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.ElasticLoadBalancingLoadBalancerRType] = deleter.InitResourceDeleter(arn.ElasticLoadBalancingLoadBalancerRType)
 		}
 		for _, asg := range asgs {
-			depMap[arn.AutoScalingLaunchConfigurationRType].AddResourceNames(arn.ResourceName(*asg.LaunchConfigurationName))
+			depMap[arn.AutoScalingLaunchConfigurationRType].AddResourceNames(arn.ToResourceName(asg.LaunchConfigurationName))
 			for _, elbName := range asg.LoadBalancerNames {
-				depMap[arn.ElasticLoadBalancingLoadBalancerRType].AddResourceNames(arn.ResourceName(*elbName))
+				depMap[arn.ElasticLoadBalancingLoadBalancerRType].AddResourceNames(arn.ToResourceName(elbName))
 			}
 		}
 	case arn.AutoScalingLaunchConfigurationRType:
@@ -256,10 +256,10 @@ func traverseDependencyGraph(rt arn.ResourceType, depMap map[arn.ResourceType]de
 			depMap[arn.IAMRoleRType] = deleter.InitResourceDeleter(arn.IAMRoleRType)
 		}
 		for _, ipr := range iprs {
-			depMap[arn.IAMInstanceProfileRType].AddResourceNames(arn.ResourceName(*ipr.InstanceProfileName))
+			depMap[arn.IAMInstanceProfileRType].AddResourceNames(arn.ToResourceName(ipr.InstanceProfileName))
 			// Get IAM roles
 			for _, rl := range ipr.Roles {
-				depMap[arn.IAMRoleRType].AddResourceNames(arn.ResourceName(*rl.RoleName))
+				depMap[arn.IAMRoleRType].AddResourceNames(arn.ToResourceName(rl.RoleName))
 			}
 		}
 	}

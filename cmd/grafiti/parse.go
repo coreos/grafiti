@@ -296,7 +296,7 @@ func parseLookupAttribute(svc cloudtrailiface.CloudTrailAPI, attr *cloudtrail.Lo
 
 		printEvents(resp.Events)
 
-		if resp.NextToken == nil || *resp.NextToken == "" {
+		if aws.StringValue(resp.NextToken) == "" {
 			break
 		}
 
@@ -337,8 +337,7 @@ func printEvent(event *cloudtrail.Event, parsedEvent gjson.Result) {
 		}
 
 		rt, rn := arn.ResourceType(typeStr), arn.ResourceName(nameStr)
-		tmString := parseDataFromEvent(rt, rn, parsedEvent, event)
-		if tmString != "" {
+		if tmString := parseDataFromEvent(rt, rn, parsedEvent, event); tmString != "" {
 			fmt.Println(tmString)
 		}
 	}

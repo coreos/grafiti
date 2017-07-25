@@ -196,12 +196,12 @@ func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.
 		}
 
 		for _, r := range resp.ResourceTagMappingList {
-			if r.ResourceARN != nil && *r.ResourceARN != "" {
-				arnList = append(arnList, arn.ResourceARN(*r.ResourceARN))
+			if arnStr := aws.StringValue(r.ResourceARN); arnStr != "" {
+				arnList = append(arnList, arn.ResourceARN(arnStr))
 			}
 		}
 
-		if resp.PaginationToken == nil || *resp.PaginationToken == "" {
+		if aws.StringValue(resp.PaginationToken) == "" {
 			break
 		}
 
@@ -270,10 +270,10 @@ func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.R
 		}
 
 		for _, t := range resp.Tags {
-			asgNames = append(asgNames, arn.ResourceName(*t.ResourceId))
+			asgNames = append(asgNames, arn.ToResourceName(t.ResourceId))
 		}
 
-		if resp.NextToken == nil || *resp.NextToken == "" {
+		if aws.StringValue(resp.NextToken) == "" {
 			break
 		}
 
@@ -290,7 +290,7 @@ func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.R
 	}
 
 	for _, asg := range asgs {
-		*arnList = append(*arnList, arn.ResourceARN(*asg.AutoScalingGroupARN))
+		*arnList = append(*arnList, arn.ToResourceARN(asg.AutoScalingGroupARN))
 	}
 
 	return
@@ -308,10 +308,11 @@ func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType,
 
 	tagKeyMap := make(map[string][]string)
 	for _, tag := range rgtaTags {
-		if _, ok := tagKeyMap[*tag.Key]; !ok {
-			tagKeyMap[*tag.Key] = make([]string, 0, len(tag.Values))
+		key := aws.StringValue(tag.Key)
+		if _, ok := tagKeyMap[key]; !ok {
+			tagKeyMap[key] = make([]string, 0, len(tag.Values))
 			for _, v := range tag.Values {
-				tagKeyMap[*tag.Key] = append(tagKeyMap[*tag.Key], *v)
+				tagKeyMap[key] = append(tagKeyMap[key], aws.StringValue(v))
 			}
 		}
 	}
@@ -324,7 +325,7 @@ func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType,
 
 	hzIDs := make(arn.ResourceNames, 0, len(hzs))
 	for _, hz := range hzs {
-		hzIDs = append(hzIDs, deleter.SplitHostedZoneID(*hz.Id))
+		hzIDs = append(hzIDs, deleter.SplitHostedZoneID(aws.StringValue(hz.Id)))
 	}
 
 	size, chunk := len(hzIDs), 10
@@ -361,17 +362,18 @@ func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType,
 func filterHostedZones(tagSets []*route53.ResourceTagSet, tagKeyMap map[string][]string) arn.ResourceNames {
 	filteredHZIDs := make(arn.ResourceNames, 0, len(tagSets))
 	for _, rts := range tagSets {
+		idStr := aws.StringValue(rts.ResourceId)
 		for _, tag := range rts.Tags {
-			if vals, ok := tagKeyMap[*tag.Key]; ok {
+			if vals, ok := tagKeyMap[aws.StringValue(tag.Key)]; ok {
 				// If no tag values are specified, then we want all hosted zones that
 				// match a specific key but have any value. Append all that have key
 				if vals == nil || len(vals) == 0 {
-					filteredHZIDs = append(filteredHZIDs, arn.ResourceName(*rts.ResourceId))
+					filteredHZIDs = append(filteredHZIDs, arn.ResourceName(idStr))
 					continue
 				}
 				for _, v := range vals {
-					if v == *tag.Value {
-						filteredHZIDs = append(filteredHZIDs, arn.ResourceName(*rts.ResourceId))
+					if v == aws.StringValue(tag.Value) {
+						filteredHZIDs = append(filteredHZIDs, arn.ResourceName(idStr))
 						break
 					}
 				}
