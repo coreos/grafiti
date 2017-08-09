@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -127,8 +126,8 @@ func deleteFromStdIn() error {
 
 func deleteFromTags(reader io.Reader) error {
 	dec := json.NewDecoder(reader)
-	// Collect all ARN's
-	allARNs := make(arn.ResourceARNs, 0)
+	// ARNs for all resources tagged with key:values encoded in tagFile.
+	var arns arn.ResourceARNs
 
 	svc := rgta.New(session.Must(session.NewSession(
 		&aws.Config{},
@@ -146,19 +145,25 @@ func deleteFromTags(reader io.Reader) error {
 			continue
 		}
 
-		allARNs = getARNsForResource(svc, t.TagFilters, allARNs)
-
+		// Request all RGTA-taggable resources tagged with key:values encoded in
+		// tagFile.
+		if arns, err = getARNsForResource(svc, t.TagFilters, arns); err != nil {
+			return err
+		}
 		for rtk := range arn.RGTAUnsupportedResourceTypes {
-			// Request all RGTA-unsupported resources with the same tags
-			allARNs = getARNsForUnsupportedResource(rtk, t.TagFilters, allARNs)
+			// Request all RGTA-unsupported resources tagged with key:values encoded
+			// in tagFile.
+			if arns, err = getARNsForUnsupportedResource(rtk, t.TagFilters, arns); err != nil {
+				return err
+			}
 		}
 	}
 
 	// Delete batch of matching resources
-	return deleteARNs(allARNs)
+	return deleteARNs(arns)
 }
 
-func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.TagFilter, arnList arn.ResourceARNs) arn.ResourceARNs {
+func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.TagFilter, arnList arn.ResourceARNs) (arn.ResourceARNs, error) {
 	// Get ARNs of matching tags
 	params := &rgta.GetResourcesInput{
 		TagFilters:  tags,
@@ -184,12 +189,15 @@ func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.
 		ctx := aws.BackgroundContext()
 		resp, err := svc.GetResourcesWithContext(ctx, params)
 		if err != nil {
-			return arnList
+			if ignoreErrors {
+				logger.Debugln("rgta: get resources:", err)
+				return arnList, nil
+			}
+			return arnList, fmt.Errorf("rgta: get resources: %s", err)
 		}
 
 		if len(resp.ResourceTagMappingList) == 0 {
-			fmt.Println(`{"error": "No resources match the specified tag filters"}`)
-			return arnList
+			return arnList, nil
 		}
 
 		for _, r := range resp.ResourceTagMappingList {
@@ -205,32 +213,36 @@ func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.
 		params.PaginationToken = resp.PaginationToken
 	}
 
-	return arnList
+	return arnList, nil
 }
 
-func getARNsForUnsupportedResource(rt arn.ResourceType, tags []*rgta.TagFilter, arnList arn.ResourceARNs) arn.ResourceARNs {
+func getARNsForUnsupportedResource(rt arn.ResourceType, tags []*rgta.TagFilter, arnList arn.ResourceARNs) (arn.ResourceARNs, error) {
 	sess := session.Must(session.NewSession(
 		&aws.Config{},
 	))
 
 	switch arn.NamespaceForResource(rt) {
 	case arn.AutoScalingNamespace:
-		getAutoScalingResourcesByTags(autoscaling.New(sess), rt, tags, &arnList)
+		return getAutoScalingResourcesByTags(autoscaling.New(sess), rt, tags, arnList)
 	case arn.Route53Namespace:
-		getRoute53ResourcesByTags(route53.New(sess), rt, tags, &arnList)
+		return getRoute53ResourcesByTags(route53.New(sess), rt, tags, arnList)
 	}
 
-	return arnList
+	return arnList, nil
 }
 
-func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, rgtaTags []*rgta.TagFilter, arnList *arn.ResourceARNs) {
-	if len(rgtaTags) == 0 || arnList == nil {
-		return
+func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, rgtaTags []*rgta.TagFilter, arnList arn.ResourceARNs) (arn.ResourceARNs, error) {
+	if len(rgtaTags) == 0 || len(arnList) == 0 {
+		return arnList, nil
 	}
 
 	// Currently only AutoScaling Groups support tagging
 	if rt != arn.AutoScalingGroupRType {
-		return
+		if ignoreErrors {
+			logger.Debugf("autoscaling: ResourceType %q not supported", rt)
+			return arnList, nil
+		}
+		return arnList, fmt.Errorf("autoscaling: ResourceType %q not supported", rt)
 	}
 
 	asgTags := make([]*autoscaling.Filter, 0)
@@ -255,13 +267,17 @@ func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.R
 	asgNames := make(arn.ResourceNames, 0)
 	for {
 		ctx := aws.BackgroundContext()
-		resp, rerr := svc.DescribeTagsWithContext(ctx, params)
-		if rerr != nil {
-			return
+		resp, err := svc.DescribeTagsWithContext(ctx, params)
+		if err != nil {
+			if ignoreErrors {
+				logger.Debugln("autoscaling: describe tags: %s", err)
+				return arnList, nil
+			}
+			return arnList, fmt.Errorf("autoscaling: describe tags: %s", err)
 		}
 
 		if len(resp.Tags) == 0 {
-			return
+			return arnList, nil
 		}
 
 		for _, t := range resp.Tags {
@@ -279,28 +295,44 @@ func getAutoScalingResourcesByTags(svc autoscalingiface.AutoScalingAPI, rt arn.R
 		Client:        svc,
 		ResourceNames: asgNames,
 	}
-	asgs, aerr := asgDel.RequestAutoScalingGroups()
-	if aerr != nil {
-		return
+	asgs, err := asgDel.RequestAutoScalingGroups()
+	if err != nil {
+		if ignoreErrors {
+			logger.Debugln("autoscaling: request ASGs: %s", err)
+			return arnList, nil
+		}
+		return arnList, fmt.Errorf("autoscaling: request ASGs: %s", err)
 	}
 
 	for _, asg := range asgs {
-		*arnList = append(*arnList, arn.ToResourceARN(asg.AutoScalingGroupARN))
+		arnList = append(arnList, arn.ToResourceARN(asg.AutoScalingGroupARN))
 	}
 
-	return
+	return arnList, nil
 }
 
-func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType, rgtaTags []*rgta.TagFilter, arnList *arn.ResourceARNs) {
+func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType, rgtaTags []*rgta.TagFilter, arnList arn.ResourceARNs) (arn.ResourceARNs, error) {
+	if len(rgtaTags) == 0 || len(arnList) == 0 {
+		return arnList, nil
+	}
+
 	// Currently only Route53 HostedZones support tagging
-	if len(rgtaTags) == 0 || arnList == nil || rt != arn.Route53HostedZoneRType {
-		return
+	if rt != arn.Route53HostedZoneRType {
+		if ignoreErrors {
+			logger.Debugf("route53: ResourceType %q not supported", rt)
+			return arnList, nil
+		}
+		return arnList, fmt.Errorf("route53: ResourceType %q not supported", rt)
 	}
 
 	rd := deleter.Route53HostedZoneDeleter{Client: svc}
-	hzs, rerr := rd.RequestAllRoute53HostedZones()
-	if rerr != nil || len(hzs) == 0 {
-		return
+	hzs, err := rd.RequestAllRoute53HostedZones()
+	if err != nil || len(hzs) == 0 {
+		if ignoreErrors {
+			logger.Debugln("route53: request hosted zones: %s", err)
+			return arnList, nil
+		}
+		return arnList, fmt.Errorf("route53: request hosted zones: %s", err)
 	}
 
 	var hzIDs arn.ResourceNames
@@ -322,10 +354,13 @@ func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType,
 		}
 
 		ctx := aws.BackgroundContext()
-		resp, rerr := svc.ListTagsForResourcesWithContext(ctx, params)
-		if rerr != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", rerr.Error())
-			return
+		resp, err := svc.ListTagsForResourcesWithContext(ctx, params)
+		if err != nil {
+			if ignoreErrors {
+				logger.Debugln("route53: list resource tags: %s", err)
+				return arnList, nil
+			}
+			return arnList, fmt.Errorf("route53: list resource tags: %s", err)
 		}
 
 		filteredHZIDs = filterHostedZones(filteredHZIDs, resp.ResourceTagSets, tagMap)
@@ -333,10 +368,10 @@ func getRoute53ResourcesByTags(svc route53iface.Route53API, rt arn.ResourceType,
 
 	for _, id := range filteredHZIDs {
 		hzARN := arn.MapResourceTypeToARN(arn.Route53HostedZoneRType, id)
-		*arnList = append(*arnList, hzARN)
+		arnList = append(arnList, arn.ResourceARN(hzARN))
 	}
 
-	return
+	return arnList, nil
 }
 
 // createHostedZoneTagMap creates a map[string][]string corresponding to tags of
@@ -428,30 +463,27 @@ func deleteARNs(ARNs arn.ResourceARNs) error {
 	// graph must be constructed and executed. See README for deletion order.
 	sorted := organizeByDelOrder(resMap)
 
-	// Create log filename
-	t := time.Now()
-	logFilePath := fmt.Sprintf("./deleted-resources-%d%02d%02d_%02d%02d%02d.log", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second())
-
 	cfg := &deleter.DeleteConfig{
 		IgnoreErrors: ignoreErrors,
 		DryRun:       dryRun,
-		Logger:       deleter.InitRequestLogger(logFilePath),
+		Logger:       logger,
 	}
 
 	// Delete all ARN's in a slice mapped by ResourceType. Iterate in reverse to
 	// delete all non-dependent resources first
 	for i := len(sorted) - 1; i >= 0; i-- {
 		if err := sorted[i].Deleters.DeleteResources(cfg); err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			// DeleteResources should only return an error when ignoreErrors == false,
+			// so we want to return this err if one is encountered.
+			return fmt.Errorf("delete resources: %s", err)
 		}
 	}
 
 	// Print all failed deletion logs in report format at end of deletion cycle
-	if wantReport {
-		f, ferr := os.Open(logFilePath)
-		if ferr != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", ferr.Error())
-			return nil
+	if wantReport && logger.LogFile != "" {
+		f, err := os.Open(logger.LogFile)
+		if err != nil {
+			return fmt.Errorf("open log file: %s", err)
 		}
 		defer f.Close()
 		fmt.Println(logHead)
@@ -494,10 +526,10 @@ func decodeTagFileInput(decoder *json.Decoder) (*TagFileInput, bool, error) {
 			return &decoded, true, nil
 		}
 		if ignoreErrors {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			logger.Debugln("decode delete input:", err)
 			return nil, false, nil
 		}
-		return nil, false, err
+		return nil, false, fmt.Errorf("decode delete input: %s", err)
 	}
 	return &decoded, false, nil
 }

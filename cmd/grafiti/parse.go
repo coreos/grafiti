@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -126,19 +127,13 @@ func parseBytes(raw []byte) error {
 		return err
 	}
 
-	var (
-		event    []byte
-		eventStr string
-		err      error
-	)
 	for _, eventData := range logFile.Events {
-		event, err = eventData.MarshalJSON()
+		event, err := eventData.MarshalJSON()
 		if err != nil {
 			continue
 		}
 
-		eventStr = parseRawCloudTrailEvent(string(event))
-		if eventStr != "" {
+		if eventStr := parseRawCloudTrailEvent(string(event)); eventStr != "" {
 			fmt.Println(eventStr)
 		}
 	}
@@ -206,11 +201,6 @@ func parseRawCloudTrailEvent(event string) string {
 	return parseDataFromEvent(rt, rn, parsedEvent, nil)
 }
 
-// NotTaggedFilter holds the resource types of all resources not tagged
-type NotTaggedFilter struct {
-	Type string `json:"type"`
-}
-
 func parseFromCloudTrail(svc cloudtrailiface.CloudTrailAPI) error {
 	var start, end *time.Time
 	// Check if timestamps or hours exist
@@ -219,8 +209,10 @@ func parseFromCloudTrail(svc cloudtrailiface.CloudTrailAPI) error {
 	} else if viper.IsSet("startHour") && viper.IsSet("endHour") {
 		start, end = calcTimeWindowFromHourRange(viper.GetInt("startHour"), viper.GetInt("endHour"))
 	}
-	if start == nil || end == nil {
-		return nil
+	if start == nil {
+		return errors.New("start of time window was invalid or nil")
+	} else if end == nil {
+		return errors.New("end of time window was invalid or nil")
 	}
 
 	// Create LookupEvents for all resourceTypes. If none are specified,
@@ -252,18 +244,18 @@ func parseFromCloudTrail(svc cloudtrailiface.CloudTrailAPI) error {
 func calcTimeWindowFromTimeStamp(start, end string) (*time.Time, *time.Time) {
 	startTime, err := time.Parse(time.RFC3339, start)
 	if err != nil {
-		fmt.Println("startTimeStamp parse error:", err.Error())
+		logger.Debugln("startTimeStamp parse error:", err)
 		return nil, nil
 	}
 
 	endTime, err := time.Parse(time.RFC3339, end)
 	if err != nil {
-		fmt.Println("endTimeStamp parse error:", err.Error())
+		logger.Debugln("endTimeStamp parse error:", err)
 		return nil, nil
 	}
 
 	if startTime.After(endTime) || startTime.Equal(endTime) {
-		fmt.Printf(`{"error": "startTimeStamp (%s) is at or after endTimeStamp (%s)"}%s`, startTime, endTime, "\n")
+		logger.Debugf("startTimeStamp (%s) is at or after endTimeStamp (%s)", startTime, endTime)
 		return nil, nil
 	}
 
@@ -273,7 +265,7 @@ func calcTimeWindowFromTimeStamp(start, end string) (*time.Time, *time.Time) {
 // Calculates a time window between a starting hour and ending hour.
 func calcTimeWindowFromHourRange(start, end int) (*time.Time, *time.Time) {
 	if start >= end {
-		fmt.Printf(`{"error": "startHour (%d) is at or after endHour (%d)"}%s`, start, end, "\n")
+		logger.Debugf("startHour (%d) is at or after endHour (%d)", start, end)
 		return nil, nil
 	}
 
@@ -296,7 +288,7 @@ func parseLookupAttribute(svc cloudtrailiface.CloudTrailAPI, attr *cloudtrail.Lo
 		ctx := aws.BackgroundContext()
 		resp, err := svc.LookupEventsWithContext(ctx, params)
 		if err != nil {
-			return err
+			return fmt.Errorf("parse lookup event: %s", err)
 		}
 
 		printEvents(resp.Events)
@@ -368,7 +360,8 @@ func parseDataFromEvent(rt arn.ResourceType, rn arn.ResourceName, parsedEvent gj
 
 	oj, err := json.Marshal(output)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+		logger.Debugln("marshal parse output:", err)
+		return ""
 	}
 	if jsonMatch := matchFilter(oj); jsonMatch {
 		return string(oj)
@@ -402,13 +395,14 @@ func getTags(rawEvent string) map[string]string {
 	for _, p := range tagPatterns {
 		results, err := jq.Eval(rawEvent, p)
 		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-			return nil
+			logger.Debugln("jq eval tag pattern:", err)
+			continue
 		}
 
 		for _, r := range results {
 			rBytes, err := r.MarshalJSON()
 			if err != nil {
+				logger.Debugln("marshal tag result:", err)
 				break
 			}
 

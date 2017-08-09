@@ -45,6 +45,8 @@ func captureFilterStdOut(f func(rgtaiface.ResourceGroupsTaggingAPIAPI, io.Reader
 
 	// Execute any f that takes an interface{} argument
 	if err := f(svc, v1, v2); err != nil {
+		w.Close()
+		os.Stdout = oldStdOut
 		return "", err
 	}
 

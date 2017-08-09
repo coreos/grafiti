@@ -370,12 +370,18 @@ func tagAutoScalingResources(svc autoscalingiface.AutoScalingAPI, rt arn.Resourc
 	if len(asgTags) == 0 {
 		return nil
 	}
-
 	params := &autoscaling.CreateOrUpdateTagsInput{
 		Tags: asgTags,
 	}
 
-	pj, _ := json.Marshal(params)
+	pj, err := json.Marshal(params)
+	if err != nil {
+		if ignoreErrors {
+			logger.Debugln("marshal autoscaling params:", err)
+			return nil
+		}
+		return fmt.Errorf("marshal autoscaling params: %s", err)
+	}
 	fmt.Println(string(pj))
 
 	if dryRun {
@@ -384,16 +390,19 @@ func tagAutoScalingResources(svc autoscalingiface.AutoScalingAPI, rt arn.Resourc
 
 	ctx := aws.BackgroundContext()
 	if _, err := svc.CreateOrUpdateTagsWithContext(ctx, params); err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-		return err
+		if ignoreErrors {
+			logger.Debugln("autoscaling: tag resources:", err)
+			return nil
+		}
+		return fmt.Errorf("autoscaling: tag resources %s", err)
 	}
 
 	return nil
 }
 
 func tagRoute53Resource(svc route53iface.Route53API, rt arn.ResourceType, rn arn.ResourceName, tags Tags) error {
-	// Only hostedzones (and healthchecks, but they are not supported yet) allow
-	// tagging
+	// Only hostedzones (and healthchecks, but they are not supported by grafiti)
+	// can be tagged
 	if rt != arn.Route53HostedZoneRType || rn == "" {
 		return nil
 	}
@@ -412,7 +421,14 @@ func tagRoute53Resource(svc route53iface.Route53API, rt arn.ResourceType, rn arn
 		ResourceType: aws.String("hostedzone"),
 	}
 
-	pj, _ := json.Marshal(params)
+	pj, err := json.Marshal(params)
+	if err != nil {
+		if ignoreErrors {
+			logger.Debugln("marshal route53 params:", err)
+			return nil
+		}
+		return fmt.Errorf("marshal route53 params: %s", err)
+	}
 	fmt.Println(string(pj))
 
 	if dryRun {
@@ -421,8 +437,11 @@ func tagRoute53Resource(svc route53iface.Route53API, rt arn.ResourceType, rn arn
 
 	ctx := aws.BackgroundContext()
 	if _, err := svc.ChangeTagsForResourceWithContext(ctx, params); err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-		return err
+		if ignoreErrors {
+			logger.Debugln("route53: tag resources:", err)
+			return nil
+		}
+		return fmt.Errorf("route53: tag resources %s", err)
 	}
 
 	return nil
@@ -434,8 +453,15 @@ func tagARNBucket(svc rgtaiface.ResourceGroupsTaggingAPIAPI, bucket arn.Resource
 		Tags:            map[string]*string{tag.Key: aws.String(tag.Value)},
 	}
 
-	paramsJSON, _ := json.Marshal(params)
-	fmt.Println(string(paramsJSON))
+	pj, err := json.Marshal(params)
+	if err != nil {
+		if ignoreErrors {
+			logger.Debugln("marshal rgta params:", err)
+			return nil
+		}
+		return fmt.Errorf("marshal rgta params: %s", err)
+	}
+	fmt.Println(string(pj))
 
 	if dryRun {
 		return nil
@@ -445,11 +471,10 @@ func tagARNBucket(svc rgtaiface.ResourceGroupsTaggingAPIAPI, bucket arn.Resource
 	time.Sleep(time.Duration(2) * time.Second)
 	if _, err := svc.TagResources(params); err != nil {
 		if ignoreErrors {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			logger.Debugln("rgta: tag resources:", err)
 			return nil
 		}
-		return err
-
+		return fmt.Errorf("rgta: tag resources %s", err)
 	}
 	return nil
 }
@@ -461,10 +486,10 @@ func decodeInput(decoder *json.Decoder) (*TagInput, bool, error) {
 			return &decoded, true, nil
 		}
 		if ignoreErrors {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			logger.Debugln("decode tag input:", err)
 			return nil, false, nil
 		}
-		return nil, false, err
+		return nil, false, fmt.Errorf("decode tag input: %s", err)
 	}
 	return &decoded, false, nil
 }

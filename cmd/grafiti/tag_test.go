@@ -160,11 +160,11 @@ func TestAddResourceNameToBucket(t *testing.T) {
 }
 
 // Set stdout to pipe and capture printed output of a Print event
-func captureRGTAStdOut(f func(rgtaiface.ResourceGroupsTaggingAPIAPI, arn.ResourceARNs, Tag) error, i rgtaiface.ResourceGroupsTaggingAPIAPI, as arn.ResourceARNs, t Tag) string {
+func captureRGTAStdOut(f func(rgtaiface.ResourceGroupsTaggingAPIAPI, arn.ResourceARNs, Tag) error, i rgtaiface.ResourceGroupsTaggingAPIAPI, as arn.ResourceARNs, t Tag) (string, error) {
 	oldStdOut := os.Stdout
 	r, w, err := os.Pipe()
 	if err != nil {
-		return ""
+		return "", err
 	}
 
 	os.Stdout = w
@@ -176,12 +176,16 @@ func captureRGTAStdOut(f func(rgtaiface.ResourceGroupsTaggingAPIAPI, arn.Resourc
 		pipeOut <- buf.String()
 	}()
 
-	// Execute any f that takes (rgtaiface.ResourceGroupsTaggingAPIAPI, string, Tag) as arguments
-	f(i, as, t)
+	// Capture stdout of any f that prints to stdout
+	if err := f(i, as, t); err != nil {
+		w.Close()
+		os.Stdout = oldStdOut
+		return "", err
+	}
 
 	w.Close()
 	os.Stdout = oldStdOut
-	return <-pipeOut
+	return <-pipeOut, nil
 }
 
 // Mock API types for AWS requests
@@ -234,7 +238,10 @@ func TestTagARNBucket(t *testing.T) {
 			Resp: c.Resp,
 		}
 
-		outString := captureRGTAStdOut(tagARNBucket, tr, c.TestARNs, c.TestTag)
+		outString, err := captureRGTAStdOut(tagARNBucket, tr, c.TestARNs, c.TestTag)
+		if err != nil {
+			t.Fatal("Error capturing tagARNBucket stdout:", err)
+		}
 		if outString != c.Expected {
 			t.Errorf("tagARNBucket failed\nwanted\n%s\ngot\n%s", c.Expected, outString)
 		}
@@ -242,11 +249,11 @@ func TestTagARNBucket(t *testing.T) {
 }
 
 // Set stdout to pipe and capture printed output of a Print event
-func captureRGTAUnsupportedStdOut(f func(interface{}, arn.ResourceType, arn.ResourceName, Tags), i interface{}, rt arn.ResourceType, rn arn.ResourceName, t Tags) string {
+func captureRGTAUnsupportedStdOut(f func(interface{}, arn.ResourceType, arn.ResourceName, Tags) error, i interface{}, rt arn.ResourceType, rn arn.ResourceName, t Tags) (string, error) {
 	oldStdOut := os.Stdout
 	r, w, err := os.Pipe()
 	if err != nil {
-		return ""
+		return "", err
 	}
 
 	os.Stdout = w
@@ -258,12 +265,16 @@ func captureRGTAUnsupportedStdOut(f func(interface{}, arn.ResourceType, arn.Reso
 		pipeOut <- buf.String()
 	}()
 
-	// Execute any f that takes (interface{}, string, string, Tags) as arguments
-	f(i, rt, rn, t)
+	// Capture stdout of any f that prints to stdout
+	if err := f(i, rt, rn, t); err != nil {
+		w.Close()
+		os.Stdout = oldStdOut
+		return "", err
+	}
 
 	w.Close()
 	os.Stdout = oldStdOut
-	return <-pipeOut
+	return <-pipeOut, nil
 }
 
 // Mock AutoScaling API type for AWS requests
@@ -299,8 +310,8 @@ func TestTagAutoScalingResource(t *testing.T) {
 		},
 	}
 
-	f := func(v interface{}, rt arn.ResourceType, rn arn.ResourceName, t Tags) {
-		tagAutoScalingResources(v.(autoscalingiface.AutoScalingAPI), rt, rn, t)
+	f := func(v interface{}, rt arn.ResourceType, rn arn.ResourceName, t Tags) error {
+		return tagAutoScalingResources(v.(autoscalingiface.AutoScalingAPI), rt, rn, t)
 	}
 
 	for i, c := range cases {
@@ -308,7 +319,11 @@ func TestTagAutoScalingResource(t *testing.T) {
 			Resp: c.Resp,
 		}
 
-		outString := captureRGTAUnsupportedStdOut(f, tr, arn.AutoScalingGroupRType, c.InputName, c.InputTags)
+		outString, err := captureRGTAUnsupportedStdOut(f, tr, arn.AutoScalingGroupRType, c.InputName, c.InputTags)
+		if err != nil {
+			t.Fatal("Error capturing tagARNBucket stdout:", err)
+		}
+
 		if outString != c.Expected {
 			t.Errorf("tagAutoScalingResource case %d failed\nwanted\n%s\ngot\n%s", i+1, c.Expected, outString)
 		}
@@ -348,8 +363,8 @@ func TestTagRoute53Resource(t *testing.T) {
 		},
 	}
 
-	f := func(v interface{}, rt arn.ResourceType, rn arn.ResourceName, t Tags) {
-		tagRoute53Resource(v.(route53iface.Route53API), rt, rn, t)
+	f := func(v interface{}, rt arn.ResourceType, rn arn.ResourceName, t Tags) error {
+		return tagRoute53Resource(v.(route53iface.Route53API), rt, rn, t)
 	}
 
 	for _, c := range cases {
@@ -357,7 +372,11 @@ func TestTagRoute53Resource(t *testing.T) {
 			Resp: c.Resp,
 		}
 
-		outString := captureRGTAUnsupportedStdOut(f, tr, arn.Route53HostedZoneRType, c.InputName, c.InputTags)
+		outString, err := captureRGTAUnsupportedStdOut(f, tr, arn.Route53HostedZoneRType, c.InputName, c.InputTags)
+		if err != nil {
+			t.Fatal("Error capturing tagARNBucket stdout:", err)
+		}
+
 		if outString != c.Expected {
 			t.Errorf("TestTagRoute53Resource failed\nwanted\n%s\ngot\n%s", c.Expected, outString)
 		}

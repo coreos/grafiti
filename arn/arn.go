@@ -638,11 +638,7 @@ func MapARNToRTypeAndRName(arnStr ResourceARN) (ResourceType, ResourceName) {
 	var sfx string
 	switch {
 	case strings.HasPrefix(arn, "arn:aws:autoscaling:"):
-		erASG, err := re.Compile("arn:aws:autoscaling:[^:]+:[^:]+:(.+)")
-		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-			break
-		}
+		erASG := re.MustCompile("arn:aws:autoscaling:[^:]+:[^:]+:(.+)")
 		m := erASG.FindStringSubmatch(arn)
 		if len(m) == 2 {
 			sfx = m[1]
@@ -657,11 +653,7 @@ func MapARNToRTypeAndRName(arnStr ResourceARN) (ResourceType, ResourceName) {
 		}
 
 	case strings.HasPrefix(arn, "arn:aws:ec2:"):
-		erEC2, err := re.Compile("arn:aws:ec2:[^:]+:(?:[^:]+:)?(.+)")
-		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-			break
-		}
+		erEC2 := re.MustCompile("arn:aws:ec2:[^:]+:(?:[^:]+:)?(.+)")
 		m := erEC2.FindStringSubmatch(arn)
 		if len(m) == 2 {
 			sfx = m[1]
@@ -699,11 +691,7 @@ func MapARNToRTypeAndRName(arnStr ResourceARN) (ResourceType, ResourceName) {
 		return ElasticLoadBalancingLoadBalancerRType, arnToID("loadbalancer/", arn)
 
 	case strings.HasPrefix(arn, "arn:aws:iam::"):
-		erIAM, err := re.Compile("arn:aws:iam::[^:]+:(.+)")
-		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
-			break
-		}
+		erIAM := re.MustCompile("arn:aws:iam::[^:]+:(.+)")
 		m := erIAM.FindStringSubmatch(arn)
 		if len(m) == 2 {
 			sfx = m[1]

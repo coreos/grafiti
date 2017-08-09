@@ -70,10 +70,9 @@ func runFilterCommand(cmd *cobra.Command, args []string) error {
 
 func filterFromFile(svc rgtaiface.ResourceGroupsTaggingAPIAPI, r io.Reader, fname string) error {
 	// Open filterFile
-	f, ferr := os.OpenFile(fname, os.O_RDONLY, 0644)
-	if ferr != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", ferr.Error())
-		return nil
+	f, err := os.OpenFile(fname, os.O_RDONLY, 0644)
+	if err != nil {
+		return err
 	}
 	defer f.Close()
 
@@ -89,10 +88,9 @@ func filter(svc rgtaiface.ResourceGroupsTaggingAPIAPI, r, f io.Reader) error {
 	dec := json.NewDecoder(r)
 
 	// Create a map that contains all ignorable ARN's
-	itMap, ierr := initIgnoreTagMap(svc, f)
-	if ierr != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", ierr.Error())
-		return ierr
+	itMap, err := initIgnoreTagMap(svc, f)
+	if err != nil {
+		return err
 	}
 
 	for {
@@ -137,11 +135,15 @@ func initIgnoreTagMap(svc rgtaiface.ResourceGroupsTaggingAPIAPI, r io.Reader) (m
 			continue
 		}
 
-		arns = getARNsForResource(svc, t.TagFilters, arns)
+		if arns, err = getARNsForResource(svc, t.TagFilters, arns); err != nil {
+			return nil, err
+		}
 
 		for rtk := range arn.RGTAUnsupportedResourceTypes {
 			// Request all RGTA-unsupported resources with the same tags
-			arns = getARNsForUnsupportedResource(rtk, t.TagFilters, arns)
+			if arns, err = getARNsForUnsupportedResource(rtk, t.TagFilters, arns); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -157,7 +159,7 @@ func initIgnoreTagMap(svc rgtaiface.ResourceGroupsTaggingAPIAPI, r io.Reader) (m
 func forwardFilteredOutput(o *Output) {
 	oj, err := json.Marshal(o)
 	if err != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+		logger.Debugln("marshal filter output:", err)
 		return
 	}
 
@@ -171,10 +173,10 @@ func decodeIntoOutput(decoder *json.Decoder) (*Output, bool, error) {
 			return &decoded, true, nil
 		}
 		if ignoreErrors {
-			fmt.Printf("{\"error\": \"%s\"}\n", err.Error())
+			logger.Debugln("decode filter output:", err)
 			return nil, false, nil
 		}
-		return nil, false, err
+		return nil, false, fmt.Errorf("decode filter output: %s", err)
 	}
 	return &decoded, false, nil
 }
