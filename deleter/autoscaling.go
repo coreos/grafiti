@@ -5,11 +5,17 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/coreos/grafiti/arn"
 )
+
+func isValidationError(err error) bool {
+	aerr, ok := err.(awserr.Error)
+	return ok && aerr.Code() == ErrCodeValidationError
+}
 
 // AutoScalingGroupDeleter represents an AWS autoscaling group
 type AutoScalingGroupDeleter struct {
@@ -72,36 +78,42 @@ func (rd *AutoScalingGroupDeleter) DeleteResources(cfg *DeleteConfig) error {
 	return nil
 }
 
-// RequestAutoScalingGroups requests autoscaling groups from the AWS API and returns autoscaling
-// groups by names
+// RequestAutoScalingGroups requests resources from the AWS API and returns
+// autoscaling groups by names
 func (rd *AutoScalingGroupDeleter) RequestAutoScalingGroups() ([]*autoscaling.Group, error) {
 	if len(rd.ResourceNames) == 0 {
 		return nil, nil
 	}
 
-	asgs := make([]*autoscaling.Group, 0)
+	var lcs []*autoscaling.Group
+	// Requesting a batch of resources that contains at least one already deleted
+	// resource will return an error and no resources. To guard against this,
+	// request them one by one
+	for _, name := range rd.ResourceNames {
+		var err error
+		if lcs, err = rd.requestAutoScalingGroup(name, lcs); err != nil && !isValidationError(err) {
+			return lcs, err
+		}
+	}
+
+	return lcs, nil
+}
+
+func (rd *AutoScalingGroupDeleter) requestAutoScalingGroup(rn arn.ResourceName, lcs []*autoscaling.Group) ([]*autoscaling.Group, error) {
 	params := &autoscaling.DescribeAutoScalingGroupsInput{
-		AutoScalingGroupNames: rd.ResourceNames.AWSStringSlice(),
+		AutoScalingGroupNames: []*string{rn.AWSString()},
 	}
 
-	for {
-		ctx := aws.BackgroundContext()
-		resp, err := rd.GetClient().DescribeAutoScalingGroupsWithContext(ctx, params)
-		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return asgs, err
-		}
-
-		asgs = append(asgs, resp.AutoScalingGroups...)
-
-		if aws.StringValue(resp.NextToken) == "" {
-			break
-		}
-
-		params.NextToken = resp.NextToken
+	ctx := aws.BackgroundContext()
+	resp, err := rd.GetClient().DescribeAutoScalingGroupsWithContext(ctx, params)
+	if err != nil {
+		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		return lcs, err
 	}
 
-	return asgs, nil
+	lcs = append(lcs, resp.AutoScalingGroups...)
+
+	return lcs, nil
 }
 
 // AutoScalingLaunchConfigurationDeleter represents an AWS launch configuration
@@ -171,14 +183,13 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestAutoScalingLaunchConfigu
 		return nil, nil
 	}
 
-	size, chunk := len(rd.ResourceNames), 20
-	lcs := make([]*autoscaling.LaunchConfiguration, 0)
-	var err error
-	// Can only filter in batches of 20
-	for i := 0; i < size; i += chunk {
-		stop := CalcChunk(i, size, chunk)
-		lcs, err = rd.requestAutoScalingLaunchConfigurations(rd.ResourceNames[i:stop], lcs)
-		if err != nil {
+	var lcs []*autoscaling.LaunchConfiguration
+	// Requesting a batch of resources that contains at least one already deleted
+	// resource will return an error and no resources. To guard against this,
+	// request them one by one
+	for _, name := range rd.ResourceNames {
+		var err error
+		if lcs, err = rd.requestAutoScalingLaunchConfiguration(name, lcs); err != nil && !isValidationError(err) {
 			return lcs, err
 		}
 	}
@@ -186,29 +197,19 @@ func (rd *AutoScalingLaunchConfigurationDeleter) RequestAutoScalingLaunchConfigu
 	return lcs, nil
 }
 
-// Requesting internet gateways using filters prevents API errors caused by
-// requesting non-existent internet gateways
-func (rd *AutoScalingLaunchConfigurationDeleter) requestAutoScalingLaunchConfigurations(chunk arn.ResourceNames, lcs []*autoscaling.LaunchConfiguration) ([]*autoscaling.LaunchConfiguration, error) {
+func (rd *AutoScalingLaunchConfigurationDeleter) requestAutoScalingLaunchConfiguration(rn arn.ResourceName, lcs []*autoscaling.LaunchConfiguration) ([]*autoscaling.LaunchConfiguration, error) {
 	params := &autoscaling.DescribeLaunchConfigurationsInput{
-		LaunchConfigurationNames: chunk.AWSStringSlice(),
+		LaunchConfigurationNames: []*string{rn.AWSString()},
 	}
 
-	for {
-		ctx := aws.BackgroundContext()
-		resp, err := rd.GetClient().DescribeLaunchConfigurationsWithContext(ctx, params)
-		if err != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", err)
-			return lcs, err
-		}
-
-		lcs = append(lcs, resp.LaunchConfigurations...)
-
-		if aws.StringValue(resp.NextToken) == "" {
-			break
-		}
-
-		params.NextToken = resp.NextToken
+	ctx := aws.BackgroundContext()
+	resp, err := rd.GetClient().DescribeLaunchConfigurationsWithContext(ctx, params)
+	if err != nil {
+		fmt.Printf("{\"error\": \"%s\"}\n", err)
+		return lcs, err
 	}
+
+	lcs = append(lcs, resp.LaunchConfigurations...)
 
 	return lcs, nil
 }
