@@ -411,7 +411,7 @@ spec:
           - command:
             - /bin/bash
             - -c
-            - grafiti -e -c /opt/config.toml delete -s --all-deps -f /opt/tags.json
+            - grafiti -e -c /opt/config.toml delete --all-deps -f /opt/tags.json
             env:
               # Specify GRF_* environment variables here
               - name: AWS_REGION

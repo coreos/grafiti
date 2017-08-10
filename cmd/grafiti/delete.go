@@ -39,7 +39,6 @@ import (
 
 var (
 	deleteFile string
-	silent     bool
 	delAllDeps bool
 	wantReport bool
 )
@@ -80,7 +79,6 @@ type TagFileInput struct {
 func init() {
 	RootCmd.AddCommand(deleteCmd)
 	deleteCmd.PersistentFlags().StringVarP(&deleteFile, "delete-file", "f", "", "File of tags of resources to delete.")
-	deleteCmd.PersistentFlags().BoolVarP(&silent, "silent", "s", false, "Suppress JSON output.")
 	deleteCmd.PersistentFlags().BoolVar(&delAllDeps, "all-deps", false, "Delete all dependencies of all tagged resourcs.")
 	deleteCmd.PersistentFlags().BoolVar(&wantReport, "report", false, "Pretty-print a report of resource deletion errors, if any.")
 }
@@ -149,16 +147,7 @@ func deleteFromTags(reader io.Reader) error {
 	}
 
 	// Delete batch of matching resources
-	if err := deleteARNs(allARNs); err != nil {
-		return err
-	}
-
-	if !silent {
-		arnsJSON, _ := json.MarshalIndent(allARNs, "", " ")
-		fmt.Printf("{\"DeletedARNs\": %s}\n", arnsJSON)
-	}
-
-	return nil
+	return deleteARNs(allARNs)
 }
 
 func getARNsForResource(svc rgtaiface.ResourceGroupsTaggingAPIAPI, tags []*rgta.TagFilter, arnList arn.ResourceARNs) arn.ResourceARNs {

@@ -12,7 +12,7 @@ spec:
           - command:
             - /bin/bash
             - -c
-            - grafiti -e -c /opt/config.toml delete -s --all-deps -f /opt/tags.json
+            - grafiti -e -c /opt/config.toml delete --all-deps -f /opt/tags.json
             env:
               - name: AWS_REGION
                 value: ${AWS_REGION}
