@@ -133,7 +133,7 @@ In addition to, or in lieu of, a config file, grafiti can be configured with the
  * `GRF_END_TIMESTAMP` corresponds to the `endTimeStamp` config file field.
  * `GRF_INCLUDE_EVENT` corresponds to the `includeEvent` config file field.
 
-If one of the above variables is set, its' data will be used as a default value. That means that the only circumstance in which its' value will be used is when no corresponding config file field is set, and, by extension, no config file is provided. Setting these variables allows you to avoid using a config file.
+If one of the above variables is set, its' data will be used as the corresponding config value and override that config file field if set. Setting environment variables allows you to avoid using a config file in certain cases; some config file fields are complex, ex. `tagPatterns` and `filterPatterns`, and cannot be succinctly encoded by environment variables. See [this pull request][grafiti-pr-env-var] for the reasoning behind this hierarchy.
 
 ### A note on AWS resource deletion order
 AWS resources have (potentially many) dependencies that must be explicitly detached/removed/deleted before deleting a top-level resource (ex. a VPC). Therefore a deletion order must be enforced. This order is universal for all AWS resources and is not use-case-specific, because deletion actions will only run if a resource with a specific tag, or one of it's dependencies, is detected.
