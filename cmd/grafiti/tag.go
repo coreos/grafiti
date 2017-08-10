@@ -321,7 +321,12 @@ func tagUnsupportedResourceType(rt arn.ResourceType, nameSet ResourceNameSet) er
 
 	switch arn.NamespaceForResource(rt) {
 	case arn.AutoScalingNamespace:
-		return tagAutoScalingResources(autoscaling.New(sess), rt, nameSet)
+		svc := autoscaling.New(sess)
+		for n, tags := range nameSet {
+			if err := tagAutoScalingResources(svc, rt, n, tags); err != nil {
+				return err
+			}
+		}
 	case arn.Route53Namespace:
 		for n, tags := range nameSet {
 			return tagRoute53Resource(route53.New(sess), rt, n, tags)
@@ -331,28 +336,24 @@ func tagUnsupportedResourceType(rt arn.ResourceType, nameSet ResourceNameSet) er
 	return nil
 }
 
-func tagAutoScalingResources(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, nameSet ResourceNameSet) error {
-	// Only AutoScaling Groups support tagging
-	if rt != arn.AutoScalingGroupRType {
+// Tag an autoscaling resource individually. Avoids failures encountered when
+// tagging a batch of resources containing one that does not exist in AWS
+func tagAutoScalingResources(svc autoscalingiface.AutoScalingAPI, rt arn.ResourceType, rn arn.ResourceName, tags Tags) error {
+	// Only autoscaling groups can be tagged
+	if rt != arn.AutoScalingGroupRType || rn == "" {
 		return nil
 	}
 
-	asgTags := make([]*autoscaling.Tag, 0)
-	for rn, tags := range nameSet {
-		if rn == "" {
-			continue
-		}
-		for tk, tv := range tags {
-			asgTags = append(asgTags, &autoscaling.Tag{
-				Key:               aws.String(tk),
-				Value:             aws.String(tv),
-				ResourceType:      aws.String("auto-scaling-group"),
-				ResourceId:        rn.AWSString(),
-				PropagateAtLaunch: aws.Bool(true),
-			})
-		}
+	var asgTags []*autoscaling.Tag
+	for tk, tv := range tags {
+		asgTags = append(asgTags, &autoscaling.Tag{
+			Key:               aws.String(tk),
+			Value:             aws.String(tv),
+			ResourceType:      aws.String("auto-scaling-group"),
+			ResourceId:        rn.AWSString(),
+			PropagateAtLaunch: aws.Bool(true),
+		})
 	}
-
 	if len(asgTags) == 0 {
 		return nil
 	}

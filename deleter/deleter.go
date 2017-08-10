@@ -17,6 +17,12 @@ import (
 
 const drStr = "(dry-run)"
 
+// Error codes not defined by aws-sdk-go
+
+// ErrCodeValidationError is returned when a request did not conform to AWS API
+// backend expectations, ex. when a requested resource cannot be found
+const ErrCodeValidationError = "ValidationError"
+
 func setUpAWSSession() *session.Session {
 	maxRetries := viper.GetInt("maxNumRequestRetries")
 	return session.Must(session.NewSession(
