@@ -224,19 +224,28 @@ func init() {
 }
 
 var tagCmd = &cobra.Command{
-	Use:   "tag",
-	Short: "Tag resources in AWS.",
-	Long:  "Tag resources in AWS using tags created by the 'parse' subcommand.",
-	RunE:  runTagCommand,
+	Use:           "tag",
+	Short:         "Tag resources in AWS.",
+	Long:          "Tag resources in AWS using tags created by the 'parse' subcommand.",
+	RunE:          runTagCommand,
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 func runTagCommand(cmd *cobra.Command, args []string) error {
+	// tagFile holds data structured in the output format of `grafiti parse`.
 	if tagFile != "" {
-		return tagFromFile(tagFile)
+		if err := tagFromFile(tagFile); err != nil {
+			return fmt.Errorf("tag: %s", err)
+		}
+		return nil
 	}
+
+	// Same data as that in tagFile but passed by stdin.
 	if err := tagFromStdIn(); err != nil {
-		return err
+		return fmt.Errorf("tag: %s", err)
 	}
+
 	return nil
 }
 

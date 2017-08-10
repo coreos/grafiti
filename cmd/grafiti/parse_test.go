@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"reflect"
 	"sort"
@@ -31,39 +30,33 @@ var (
 func TestMain(m *testing.M) {
 	wd, _ := os.Getwd()
 	dataDir := wd + "/../../testdata"
-
 	// Use a test config file
 	viper.SetConfigName("test-config")
 	viper.AddConfigPath(dataDir + "/config")
-	if verr := viper.ReadInConfig(); verr != nil {
-		log.Printf("Error reading config file %s:\n%s\n", viper.ConfigFileUsed(), verr.Error())
-		os.Exit(1)
+	if err := viper.ReadInConfig(); err != nil {
+		exitWithError(fmt.Errorf("read config file %q: %s", viper.ConfigFileUsed(), err))
 	}
 
 	// Init CloudTrail API test data
 	ctAPIInputFile := dataDir + "/parse/cloudtrail-api-input.json"
-	ctAPIInputBytes, cerr := ioutil.ReadFile(ctAPIInputFile)
-	if cerr != nil {
-		fmt.Printf("Error opening %s: %s", ctAPIInputFile, cerr)
-		os.Exit(1)
+	ctAPIInputBytes, err := ioutil.ReadFile(ctAPIInputFile)
+	if err != nil {
+		exitWithError(fmt.Errorf("open file %q: %s", ctAPIInputFile, err))
 	}
 
 	if err := json.Unmarshal(ctAPIInputBytes, &cloudTrailAPIEvents); err != nil {
-		fmt.Println("Error marshalling cloudtrail API events:", err.Error())
-		os.Exit(1)
+		exitWithError(fmt.Errorf("marshal cloudtrail API events: %s", err))
 	}
 
 	// Init CloudTrail logfile test data
 	ctLogFileInputFile := dataDir + "/parse/cloudtrail-logfile-input.json"
-	ctLogFileInputBytes, cerr := ioutil.ReadFile(ctLogFileInputFile)
-	if cerr != nil {
-		fmt.Printf("Error opening %s: %s", ctLogFileInputFile, cerr)
-		os.Exit(1)
+	ctLogFileInputBytes, err := ioutil.ReadFile(ctLogFileInputFile)
+	if err != nil {
+		exitWithError(fmt.Errorf("open file %q: %s", ctLogFileInputFile, err))
 	}
 
 	if err := json.Unmarshal(ctLogFileInputBytes, &cloudTrailLogFileEvents); err != nil {
-		fmt.Println("Error marshalling cloudtrail logfile events:", err.Error())
-		os.Exit(1)
+		exitWithError(fmt.Errorf("marshal cloudtrail logfile: %s", err))
 	}
 
 	os.Exit(m.Run())
@@ -153,8 +146,7 @@ func TestParseCloudTrailEvent(t *testing.T) {
 		// Get desired output of parseRawCloudTrailEvent from file
 		want, err := ioutil.ReadFile(c.ExpectedFile)
 		if err != nil {
-			fmt.Println("Failed to open", c.ExpectedFile)
-			t.FailNow()
+			t.Fatal("Failed to open", c.ExpectedFile)
 		}
 
 		var gotStr string
@@ -177,8 +169,8 @@ func TestParseCloudTrailEvent(t *testing.T) {
 // Set stdout to pipe and capture printed output of a Print event
 func captureStdOut(f func(interface{}), v interface{}) string {
 	oldStdOut := os.Stdout
-	r, w, perr := os.Pipe()
-	if perr != nil {
+	r, w, err := os.Pipe()
+	if err != nil {
 		return ""
 	}
 
@@ -227,8 +219,7 @@ func TestPrintCloudTrailEvents(t *testing.T) {
 		// Get desired output of printCloudTrailEvent from file
 		want, err := ioutil.ReadFile(c.ExpectedFile)
 		if err != nil {
-			fmt.Println("Failed to open", c.ExpectedFile)
-			t.FailNow()
+			t.Fatal("Failed to open", c.ExpectedFile)
 		}
 
 		// NOTE: non-deterministic pass. jq eval will occasionally fail for some reason.

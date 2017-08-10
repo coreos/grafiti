@@ -71,34 +71,46 @@ func init() {
 }
 
 var parseCmd = &cobra.Command{
-	Use:   "parse",
-	Short: "Parse resource data from CloudTrail logs.",
-	Long:  "Parse CloudTrail logs and output resource data. By default, grafiti requests data from the CloudTrail API.",
-	RunE:  runParseCommand,
+	Use:           "parse",
+	Short:         "Parse resource data from CloudTrail logs.",
+	Long:          "Parse CloudTrail logs and output resource data. By default, grafiti requests data from the CloudTrail API.",
+	RunE:          runParseCommand,
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 func runParseCommand(cmd *cobra.Command, args []string) error {
+	// `grafiti parse`'s default behavior is to parse data from the CloudTrail API
+	// and not from stdin like other sub-commands, so we must check if data exists
+	// in stdin before proceeding with that logic branch.
 	fi, err := os.Stdin.Stat()
 	if err != nil {
-		fmt.Println("Error opening Stdin:", err)
-		os.Exit(1)
+		return fmt.Errorf("parse: stdin stat: %s", err)
 	}
-
 	if (fi.Mode() & os.ModeCharDevice) == 0 {
-		return parseFromStdin()
+		if err := parseFromStdin(); err != nil {
+			return fmt.Errorf("parse: %s", err)
+		}
+		return nil
 	}
 
+	// inputFile encodes CloudTrail log data, in JSON or gzipped JSON encoding,
+	// for grafiti to extract resource information from.
 	if inputFile != "" {
-		return parseFromFile(inputFile)
+		if err := parseFromFile(inputFile); err != nil {
+			return fmt.Errorf("parse: %s", err)
+		}
+		return nil
 	}
 
-	sess := session.Must(session.NewSession(
+	// Parse resource data from the CloudTrail API.
+	svc := cloudtrail.New(session.Must(session.NewSession(
 		&aws.Config{
 			Region: aws.String(viper.GetString("region")),
 		},
-	))
-	if err := parseFromCloudTrail(cloudtrail.New(sess)); err != nil {
-		return err
+	)))
+	if err := parseFromCloudTrail(svc); err != nil {
+		return fmt.Errorf("parse: %s", err)
 	}
 
 	return nil
@@ -139,8 +151,7 @@ func parseBytes(raw []byte) error {
 func parseFromStdin() error {
 	raw, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
-		fmt.Println("Error reading from stdin:", err)
-		os.Exit(1)
+		return fmt.Errorf("read from stdin: %s", err)
 	}
 
 	return parseBytes(raw)
@@ -149,8 +160,7 @@ func parseFromStdin() error {
 func parseFromFile(logFileName string) error {
 	f, err := os.Open(logFileName)
 	if err != nil {
-		fmt.Printf("Error opening file %s: %s\n", logFileName, err)
-		os.Exit(1)
+		return fmt.Errorf("open parse file: %s", err)
 	}
 	defer f.Close()
 
@@ -158,33 +168,30 @@ func parseFromFile(logFileName string) error {
 
 	var r io.Reader
 	r = br
-	if isGzipFile(br) {
-		r, err = gzip.NewReader(br)
-		if err != nil {
-			fmt.Println("Error creating gzip archive reader:", err)
-			os.Exit(1)
+	if isGzip, err := isGzipFile(br); err != nil {
+		return err
+	} else if isGzip {
+		if r, err = gzip.NewReader(br); err != nil {
+			return fmt.Errorf("create gzip reader: %s", err)
 		}
 		defer r.(*gzip.Reader).Close()
 	}
 
 	raw, err := ioutil.ReadAll(r)
 	if err != nil {
-		fmt.Println("Error reading json file:", err)
-		os.Exit(1)
+		return fmt.Errorf("read parse file: %s", err)
 	}
 
 	return parseBytes(raw)
 }
 
 // Check for gzip magic number, 0x1f8b, in the files' first 2 bytes
-func isGzipFile(tr *bufio.Reader) bool {
+func isGzipFile(tr *bufio.Reader) (bool, error) {
 	tb, err := tr.Peek(2)
 	if err != nil {
-		fmt.Println("Error peeking file:", err)
-		os.Exit(1)
+		return false, fmt.Errorf("peek gzip magic number: %s", err)
 	}
-
-	return tb[0] == 31 && tb[1] == 139
+	return tb[0] == 31 && tb[1] == 139, nil
 }
 
 func parseRawCloudTrailEvent(event string) string {

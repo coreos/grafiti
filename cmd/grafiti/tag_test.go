@@ -162,8 +162,8 @@ func TestAddResourceNameToBucket(t *testing.T) {
 // Set stdout to pipe and capture printed output of a Print event
 func captureRGTAStdOut(f func(rgtaiface.ResourceGroupsTaggingAPIAPI, arn.ResourceARNs, Tag) error, i rgtaiface.ResourceGroupsTaggingAPIAPI, as arn.ResourceARNs, t Tag) string {
 	oldStdOut := os.Stdout
-	r, w, perr := os.Pipe()
-	if perr != nil {
+	r, w, err := os.Pipe()
+	if err != nil {
 		return ""
 	}
 
@@ -244,8 +244,8 @@ func TestTagARNBucket(t *testing.T) {
 // Set stdout to pipe and capture printed output of a Print event
 func captureRGTAUnsupportedStdOut(f func(interface{}, arn.ResourceType, arn.ResourceName, Tags), i interface{}, rt arn.ResourceType, rn arn.ResourceName, t Tags) string {
 	oldStdOut := os.Stdout
-	r, w, perr := os.Pipe()
-	if perr != nil {
+	r, w, err := os.Pipe()
+	if err != nil {
 		return ""
 	}
 
@@ -453,17 +453,17 @@ func TestDecodeInput(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		f, ferr := os.Open(c.InputFilePath)
-		if ferr != nil {
+		f, err := os.Open(c.InputFilePath)
+		if err != nil {
 			t.Fatal("Failed to open", c.InputFilePath)
 		}
 		defer f.Close()
 
 		dec := json.NewDecoder(bufio.NewReader(f))
 		for i := 0; ; i++ {
-			ti, isEOF, derr := decodeInput(dec)
-			if derr != nil {
-				t.Fatal("Failed to decode:", derr.Error())
+			ti, isEOF, err := decodeInput(dec)
+			if err != nil {
+				t.Fatal("Failed to decode:", err.Error())
 			}
 			if isEOF {
 				break
