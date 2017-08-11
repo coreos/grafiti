@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -28,11 +27,11 @@ func (m *mockRGTAGetResources) GetResourcesWithContext(ctx aws.Context, in *rgta
 }
 
 // Set stdout to pipe and capture printed output of a Print event
-func captureFilterStdOut(f func(rgtaiface.ResourceGroupsTaggingAPIAPI, io.Reader, io.Reader) error, svc rgtaiface.ResourceGroupsTaggingAPIAPI, v1, v2 io.Reader) string {
+func captureFilterStdOut(f func(rgtaiface.ResourceGroupsTaggingAPIAPI, io.Reader, io.Reader) error, svc rgtaiface.ResourceGroupsTaggingAPIAPI, v1, v2 io.Reader) (string, error) {
 	oldStdOut := os.Stdout
-	r, w, perr := os.Pipe()
-	if perr != nil {
-		return ""
+	r, w, err := os.Pipe()
+	if err != nil {
+		return "", err
 	}
 
 	os.Stdout = w
@@ -45,11 +44,13 @@ func captureFilterStdOut(f func(rgtaiface.ResourceGroupsTaggingAPIAPI, io.Reader
 	}()
 
 	// Execute any f that takes an interface{} argument
-	f(svc, v1, v2)
+	if err := f(svc, v1, v2); err != nil {
+		return "", err
+	}
 
 	w.Close()
 	os.Stdout = oldStdOut
-	return <-pipeOut
+	return <-pipeOut, nil
 }
 
 func TestFilter(t *testing.T) {
@@ -74,6 +75,10 @@ func TestFilter(t *testing.T) {
 						ResourceARN: aws.String("arn:aws:ec2:us-west-2:123456789101:instance/i-0e846a0fc3863dddd"),
 					}, {
 						ResourceARN: aws.String("arn:aws:s3:::bucket/s3-bucket-name-1"),
+					}, {
+						ResourceARN: aws.String("arn:aws:autoscaling:us-west-2:123456789101:autoScalingGroup:big-long-string:autoScalingGroupName/autoscaling-group-1"),
+					}, {
+						ResourceARN: aws.String("arn:aws:route53:::hostedzone/HOSTEDZONEEXAMPLE1"),
 					},
 				},
 			},
@@ -82,37 +87,36 @@ func TestFilter(t *testing.T) {
 	}
 
 	var wi bytes.Buffer
-
 	for i, c := range cases {
 		svc := &mockRGTAGetResources{
 			Resp: c.InputResp,
 		}
 
 		// Parse input data
-		ifb, ierr := ioutil.ReadFile(c.InputFilePath)
-		if ierr != nil {
-			fmt.Println("Could not read", c.InputFilePath)
-			t.FailNow()
+		ifb, err := ioutil.ReadFile(c.InputFilePath)
+		if err != nil {
+			t.Fatal("Could not read", c.InputFilePath)
 		}
 		wi.Write(ifb)
 
 		// Ignore tag file
-		tf, terr := os.OpenFile(c.InputTagFilePath, os.O_RDWR, 0644)
-		if terr != nil {
-			fmt.Println("Could not open", c.InputTagFilePath)
-			t.FailNow()
+		tf, err := os.OpenFile(c.InputTagFilePath, os.O_RDWR, 0644)
+		if err != nil {
+			t.Fatal("Could not open", c.InputTagFilePath)
 		}
 
-		filteredOutput := captureFilterStdOut(filter, svc, &wi, tf)
+		filteredOutput, err := captureFilterStdOut(filter, svc, &wi, tf)
+		if err != nil {
+			t.Fatal("Failed to capture stdout:", err)
+		}
 		filteredOutput = strings.Trim(filteredOutput, "\n")
 
-		ob, rerr := ioutil.ReadFile(c.ExpectedFilePath)
-		if rerr != nil {
-			fmt.Println("Could not read from", c.ExpectedFilePath)
-			t.FailNow()
+		ob, err := ioutil.ReadFile(c.ExpectedFilePath)
+		if err != nil {
+			t.Fatal("Could not read from", c.ExpectedFilePath)
 		}
 
-		if !reflect.DeepEqual(string(ob), filteredOutput) {
+		if !reflect.DeepEqual(strings.Trim(string(ob), "\n"), filteredOutput) {
 			t.Errorf("filter test %d failed\nwanted\n%s\ngot\n%s\n", i+1, string(ob), filteredOutput)
 		}
 

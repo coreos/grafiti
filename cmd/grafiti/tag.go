@@ -333,8 +333,11 @@ func tagUnsupportedResourceType(rt arn.ResourceType, nameSet ResourceNameSet) er
 			}
 		}
 	case arn.Route53Namespace:
+		svc := route53.New(sess)
 		for n, tags := range nameSet {
-			return tagRoute53Resource(route53.New(sess), rt, n, tags)
+			if err := tagRoute53Resource(svc, rt, n, tags); err != nil {
+				return err
+			}
 		}
 	}
 
