@@ -1,5 +1,5 @@
-hash: 02a226c10bb37ccd95e7d2f6318817a57b4f838971a6bd69705b8f0aa5483519
-updated: 2017-07-10T16:01:52.056886261-07:00
+hash: d57e0422cbf20315277f3bc70a32ecf3c23326da4d557ce08da9db606c7658a6
+updated: 2017-08-11T14:25:55.194968749-07:00
 imports:
 - name: github.com/aws/aws-sdk-go
   version: 96358b8282b1a3aa66836d2f2fe66216cc419668
@@ -75,7 +75,7 @@ imports:
 - name: github.com/pelletier/go-toml
   version: 69d355db5304c0f7f809a2edc054553e7142f016
 - name: github.com/sirupsen/logrus
-  version: 7f976d3a76720c4c27af2ba716b85d2e0a7e38b1
+  version: a3f95b5c423586578a4e099b11a46c2479628cac
 - name: github.com/spf13/afero
   version: 9be650865eab0c12963d8753212f4f9c66cdcf12
   subpackages:
@@ -84,8 +84,6 @@ imports:
   version: acbeb36b902d72a7a4c18e8f3241075e7ab763e4
 - name: github.com/spf13/cobra
   version: 8c6fa02d2225de0f9bdcb7ca912556f68d172d8c
-  subpackages:
-  - pflag
 - name: github.com/spf13/jwalterweatherman
   version: 0efa5202c04663c757d84f90f5219c1250baf94f
 - name: github.com/spf13/pflag
@@ -97,14 +95,14 @@ imports:
 - name: github.com/tidwall/match
   version: 173748da739a410c5b0b813b956f89ff94730b4c
 - name: golang.org/x/sys
-  version: abf9c25f54453410d0c6668e519582a9e1115027
+  version: 833a04a10549a95dc34458c195cbad61bbb6cb4d
   subpackages:
   - unix
 - name: golang.org/x/text
-  version: cfdf022e86b4ecfb646e1efbd7db175dd623a8fa
+  version: f4b4367115ec2de254587813edaa901bc1c723a8
   subpackages:
   - transform
   - unicode/norm
 - name: gopkg.in/yaml.v2
-  version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
+  version: a83829b6f1293c91addabc89d0571c246397bbf4
 testImports: []
