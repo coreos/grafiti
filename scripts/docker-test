@@ -1,0 +1,14 @@
+#!/bin/bash -e
+
+# Using golang:X.X.X-stretch because `go test` does not work as expected in
+# 'golang:1.8.3-alpine'
+sudo docker run \
+  -v "$PWD":/go/src/github.com/coreos/grafiti \
+  -w /go/src/github.com/coreos/grafiti \
+  -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+  -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+  golang:1.8.3-stretch \
+  /bin/bash -x -c \
+  'apt-get update && apt-get install -y jq \
+  && go get -u github.com/golang/lint/golint \
+  && make testall'

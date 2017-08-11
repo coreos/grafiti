@@ -18,31 +18,22 @@ node('worker && ec2') {
 
   checkout scm
 
-  def git_branch = env.BRANCH_NAME
-  def git_commit = sh(returnStdout: true, script: "git rev-parse --short HEAD").trim()
-  def builder_image = "quay.io/coreos/grafiti:${git_commit}"
+  def grafiti_version = sh(returnStdout: true, script: "./scripts/git-version").trim()
 
-  stage('Build') {
-    sh """#!/bin/bash -ex
-    docker build -t "$builder_image" .
-    """
-  }
   stage('Test') {
     withCredentials(creds) {
-      withDockerContainer(builder_image) {
-        sh """#!/bin/bash -ex
-        cd /go/src/github.com/coreos/grafiti
-        make test
-        """
-      }
+      sh """#!/bin/bash -ex
+      . ./scripts/docker-test
+      """
     }
   }
   stage('Push') {
-    if (git_branch == 'master') {
+    if (env.BRANCH_NAME == 'master') {
       withCredentials(quay_creds) {
         sh """#!/bin/bash -ex
         docker login -u="$QUAY_ROBOT_USERNAME" -p="$QUAY_ROBOT_SECRET" quay.io
-        docker push "$builder_image"
+        make docker-image
+        docker push quay.io/coreos/grafiti:$grafiti_version
         """
       }
     }
