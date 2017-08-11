@@ -35,7 +35,6 @@ var (
 
 // Grafiti-specific environment variables are prefixed with GRF_
 var envVarMap = map[string]string{
-	"AWS_REGION":          "region",
 	"GRF_START_HOUR":      "startHour",
 	"GRF_END_HOUR":        "endHour",
 	"GRF_START_TIMESTAMP": "startTimeStamp",

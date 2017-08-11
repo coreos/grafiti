@@ -74,22 +74,13 @@ Flags:
 Use "grafiti [command] --help" for more information about a command.
 ```
 
-## Configure aws credentials
+## Configure AWS
 
-  In order to use `grafiti`, you will need to configure your machine to talk to AWS with a `~/.aws/credentials` [file](http://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html).
+You will need to [configure your machine][aws-configure] to talk to AWS prior to running grafiti; configuring both credentials and [AWS region][aws-configure-region] is required.
 
-```
- [default]
- aws_access_key_id = AKID1234567890
- aws_secret_access_key = MY-SECRET-KEY
-```
+### Credentials
 
- Alternatively, you can set the following [environment variables](http://docs.aws.amazon.com/cli/latest/userguide/cli-environment.html):
-
-```
- AWS_ACCESS_KEY_ID=AKID1234567890
- AWS_SECRET_ACCESS_KEY=MY-SECRET-KEY
-```
+There are several ways to configure your AWS credentials for the [Go SDK][aws-configure-credentials]. Grafiti supports all methods because it uses the Go SDK and does not implement its own credential handling logic.
 
 ## Configure Grafiti
 
@@ -101,7 +92,6 @@ endHour = 0
 startHour = -8
 endTimeStamp = "2017-06-14T01:01:01Z"
 startTimeStamp = "2017-06-13T01:01:01Z"
-region = "us-east-1"
 maxNumRequestRetries = 11
 includeEvent = false
 tagPatterns = [
@@ -116,7 +106,6 @@ filterPatterns = [
  * `endHour`,`startHour` - Specifies the range of hours (beginning at `startHour`, ending at `endHour`) to query events from CloudTrail.
  * `endTimeStamp`,`startTimeStamp` - Specifies the range between two exact times (beginning at `startTimeStamp`, ending at `endTimeStamp`) to query events from CloudTrail. These fields take RFC-3339 (no milliseconds) format.
     * **Note**: Only one of `*Hour`, `*TimeStamp` pairs can be used. An error will be thrown if both are used.
- * `region` - The AWS region to query.
  * `maxNumRequestRetries` = The maximum number of retries the delete request retryer should attempt. Defaults to 8.
  * `includeEvent` - Setting `true` will include the raw CloudEvent in the tagging output (this is useful for finding attributes to filter on).
  * `tagPatterns` - should use `jq` syntax to generate `{tagKey: tagValue}` objects from output from `grafiti parse`. The results will be included in the `Tags` field of the tagging output.
@@ -124,9 +113,8 @@ filterPatterns = [
 
 ### Environment variables
 
-In addition to, or in lieu of, a config file, grafiti can be configured with the following environment variables:
+Grafiti can be configured with the following environment variables in addition to, or in lieu of, a config file:
 
- * `AWS_REGION` corresponds to the `region` config file field.
  * `GRF_START_HOUR` corresponds to the `startHour` config file field.
  * `GRF_END_HOUR` corresponds to the `endHour` config file field.
  * `GRF_START_TIMESTAMP` corresponds to the `startTimeStamp` config file field.
@@ -189,7 +177,6 @@ $ cat config.toml
 resourceTypes = ["AWS::EC2::Instance"]
 endHour = 0
 startHour = -8
-region = "us-east-1"
 maxNumRequestRetries = 11
 includeEvent = false
 tagPatterns = [
@@ -306,7 +293,6 @@ config.toml
 resourceTypes = ["AWS::EC2::Instance"]
 endHour = 0
 startHour = -8
-region = "us-east-1"
 maxNumRequestRetries = 11
 includeEvent = false
 tagPatterns = [
@@ -414,17 +400,15 @@ spec:
             - -c
             - grafiti -e -c /opt/config.toml delete --all-deps -f /opt/tags.json
             env:
-              # Specify GRF_* environment variables here
+              # Specify GRF_* and AWS_* environment variables here
               - name: AWS_REGION
                 value: us-east-1
-              - name: AWS_CREDENTIAL_PROFILES_FILE # Sets the AWS 'credentials' file path
-                value: /etc/credentials
             name: grafiti-deleter
             image: your/registry/grafiti:v0.1.1
             volumeMounts:
-              # Alternatively, add your own 'secret':
+              # Mount a set of AWS credentials. Alternatively, add your own 'secret':
               # https://kubernetes.io/docs/concepts/configuration/secret/
-              - mountPath: /etc/credentials # Mount a set of AWS credentials
+              - mountPath: /root/.aws/credentials
                 name: grafiti-aws-credentials
                 readOnly: true
               - mountPath: /opt/config.toml
@@ -468,3 +452,7 @@ Tectonic documentation:
 ### Logging
 
 grafiti log files of the format `./delete-log-yyyy-mm-dd_HH-MM-SS.log` are created by each `grafiti delete` execution. The Kubernetes [logging architecture](https://kubernetes.io/docs/concepts/cluster-administration/logging/), which uses [fluentd](http://www.fluentd.org/) as its logging layer, can aggregate and forward log data from log files to an endpoint of your choices, like an S3 bucket.
+
+[aws-configure]: http://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html
+[aws-configure-region]: http://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html#specifying-the-region
+[aws-configure-credentials]: http://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html#specifying-credentials

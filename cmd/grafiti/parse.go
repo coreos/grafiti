@@ -105,9 +105,7 @@ func runParseCommand(cmd *cobra.Command, args []string) error {
 
 	// Parse resource data from the CloudTrail API.
 	svc := cloudtrail.New(session.Must(session.NewSession(
-		&aws.Config{
-			Region: aws.String(viper.GetString("region")),
-		},
+		&aws.Config{},
 	)))
 	if err := parseFromCloudTrail(svc); err != nil {
 		return fmt.Errorf("parse: %s", err)

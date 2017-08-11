@@ -16,12 +16,10 @@ spec:
             env:
               - name: AWS_REGION
                 value: ${AWS_REGION}
-              - name: AWS_CREDENTIAL_PROFILES_FILE
-                value: /etc/credentials
             name: grafiti-deleter
             image: your/registry/grafiti:v0.1.1
             volumeMounts:
-              - mountPath: /etc/credentials
+              - mountPath: /root/.aws/credentials
                 name: grafiti-aws-credentials
                 readOnly: true
               - mountPath: /opt/config.toml
@@ -33,7 +31,7 @@ spec:
               runAsUser: 1000
           volumes:
             - hostPath:
-                path: ~/.aws/credentials
+                path: ${HOME}/.aws/credentials
               name: grafiti-aws-credentials
             - hostPath:
                 path: ./config.toml
