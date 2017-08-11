@@ -278,6 +278,11 @@ func tag(reader io.Reader) error {
 		// Check map that holds all RGTA-unsupported resource types and bucket
 		// accordingly
 		tm := t.TaggingMetadata
+		// Certain resources do not support tagging at all. Skip these.
+		if _, ok := arn.UntaggableResourceTypes[tm.ResourceType]; ok {
+			continue
+		}
+
 		if tm.ResourceType != "" && tm.ResourceName != "" && tm.ResourceARN != "" {
 			if _, ok := arn.RGTAUnsupportedResourceTypes[tm.ResourceType]; ok {
 				resourceNameBuckets.AddResourceNameToBucket(tm.ResourceType, tm.ResourceName, t.Tags)

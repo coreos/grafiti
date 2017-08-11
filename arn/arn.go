@@ -314,17 +314,21 @@ const (
 	S3Namespace = "s3"
 )
 
-// CTUnsupportedResourceTypes holds values for which CloudTrail does not
-// collect logs
+// CTUnsupportedResourceTypes holds ResourceTypes of resources from which the
+// CloudTrail API does not collect logs
 var CTUnsupportedResourceTypes = map[ResourceType]struct{}{
 	Route53HostedZoneRType: struct{}{},
 }
 
-// RGTAUnsupportedResourceTypes holds values the Resource Group Tagging
-// API does not support
+// RGTAUnsupportedResourceTypes holds ResourceTypes of resources that the
+// Resource Group Tagging API does not support
 var RGTAUnsupportedResourceTypes = map[ResourceType]struct{}{
-	Route53HostedZoneRType:              struct{}{},
-	AutoScalingGroupRType:               struct{}{},
+	Route53HostedZoneRType: struct{}{},
+	AutoScalingGroupRType:  struct{}{},
+}
+
+// UntaggableResourceTypes holds ResourceTypes of resources that cannot be tagged
+var UntaggableResourceTypes = map[ResourceType]struct{}{
 	AutoScalingLaunchConfigurationRType: struct{}{},
 	AutoScalingPolicyRType:              struct{}{},
 	AutoScalingScheduledActionRType:     struct{}{},
