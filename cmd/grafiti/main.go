@@ -32,7 +32,7 @@ var (
 	ignoreErrors bool
 )
 
-// grafiti-specific environment variables will begin with GRF_
+// Grafiti-specific environment variables are prefixed with GRF_
 var envVarMap = map[string]string{
 	"AWS_REGION":          "region",
 	"GRF_START_HOUR":      "startHour",
@@ -40,6 +40,7 @@ var envVarMap = map[string]string{
 	"GRF_START_TIMESTAMP": "startTimeStamp",
 	"GRF_END_TIMESTAMP":   "endTimeStamp",
 	"GRF_INCLUDE_EVENT":   "includeEvent",
+	"GRF_MAX_NUM_RETRIES": "maxNumRequestRetries",
 }
 
 // RootCmd represents the base command when called without any subcommands
