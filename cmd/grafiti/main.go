@@ -75,33 +75,42 @@ func initConfig() {
 		viper.SetConfigName(".grafiti") // name of config file (without extension)
 	}
 
-	// Use env variables as defaults
-	for ev, path := range envVarMap {
-		val := os.Getenv(ev)
-		if val != "" {
-			viper.SetDefault(path, val)
-		}
-	}
-
 	// Default bucket ejection time: 10 minutes in seconds
 	viper.SetDefault("bucketEjectLimitSeconds", 300)
 	// Default number of delete request retries
 	viper.SetDefault("maxNumRequestRetries", 8)
 
+	// Prefer env variables over config file fields
+	for ev, path := range envVarMap {
+		if val := os.Getenv(ev); val != "" {
+			viper.Set(path, val)
+		}
+	}
+
 	// If a config file is found, read in its data
-	if err := viper.ReadInConfig(); err == nil {
-		logrus.Info("Using config file: ", viper.ConfigFileUsed())
+	if err := viper.ReadInConfig(); err != nil {
+		// Only log if a config file was provided but not found. The user probably
+		// wants to solely use env vars to configure grafiti if no config file was
+		// provided
+		if cfgFile != "" {
+			logrus.Errorln("read config file:", err)
+			os.Exit(1)
+		}
+	} else {
+		logrus.Infoln("Using config file:", viper.ConfigFileUsed())
 		return
 	}
 
-	// No config file found so configure grafiti with a dummy config file (Reader)
-	// and environment variables
+	// No config file found so configure grafiti with a dummy config file and
+	// environment variables
 	viper.SetConfigType("toml")
-	if err := viper.ReadConfig(bytes.NewBuffer([]byte(""))); err == nil {
+	if err := viper.ReadConfig(bytes.NewBuffer([]byte(""))); err != nil {
+		logrus.Errorln("read dummy config file:", err)
+		os.Exit(1)
+	} else {
 		logrus.Info("Using environment variables to configure grafiti.")
 		return
 	}
-
 }
 
 func main() {
