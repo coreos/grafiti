@@ -132,6 +132,7 @@ In addition to, or in lieu of, a config file, grafiti can be configured with the
  * `GRF_START_TIMESTAMP` corresponds to the `startTimeStamp` config file field.
  * `GRF_END_TIMESTAMP` corresponds to the `endTimeStamp` config file field.
  * `GRF_INCLUDE_EVENT` corresponds to the `includeEvent` config file field.
+ * `GRF_MAX_NUM_RETRIES` corresponds to the `maxNumRequestRetries` config file field.
 
 If one of the above variables is set, its' data will be used as the corresponding config value and override that config file field if set. Setting environment variables allows you to avoid using a config file in certain cases; some config file fields are complex, ex. `tagPatterns` and `filterPatterns`, and cannot be succinctly encoded by environment variables. See [this pull request][grafiti-pr-env-var] for the reasoning behind this hierarchy.
 
