@@ -1,8 +1,8 @@
 #!/bin/env groovy​
 
-folder("grafiti")
+folder("grafiti-project")
 
-job("grafiti/grafiti-pr-trigger") {
+job("grafiti-project/grafiti-pr-trigger") {
   description('Grafiti PR Trigger.\nChanges here will be reverted automatically.')
 
   concurrentBuild()
@@ -11,7 +11,7 @@ job("grafiti/grafiti-pr-trigger") {
   label("master")
 
   properties {
-    githubProjectUrl('https://github.com/coreos/grafiti/')
+    githubProjectUrl('https://github.com/coreos/grafiti')
   }
 
   wrappers {
@@ -38,7 +38,7 @@ job("grafiti/grafiti-pr-trigger") {
       allowMembersOfWhitelistedOrgsAsAdmin(true)
       msgSuccess("")
       msgFailure("")
-      commitStatusContext("Jenkins-Tectonic-Installer")
+      commitStatusContext("Jenkins-Grafiti")
       buildDescTemplate("#\$pullId: \$abbrTitle")
       blackListLabels("do-not-test")
       whiteListLabels("")
