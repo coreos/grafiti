@@ -104,7 +104,7 @@ func (c *DeleteConfig) logRequestError(rt arn.ResourceType, rn interface{}, err 
 
 	failMsg := fmt.Sprintf("Failed to delete %s \"%v\"", rt, rn)
 	if fields["parent_resource_type"] != nil && fields["parent_resource_name"] != nil {
-		failMsg += fmt.Sprintf("from %s \"%s\"", fields["parent_resource_type"], fields["parent_resource_name"])
+		failMsg += fmt.Sprintf(" from %s \"%s\"", fields["parent_resource_type"], fields["parent_resource_name"])
 	}
 	fmt.Printf("%s: %s\n", failMsg, err.Error())
 

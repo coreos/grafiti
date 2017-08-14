@@ -1231,8 +1231,12 @@ func (rd *EC2NatGatewayDeleter) DeleteResources(cfg *DeleteConfig) error {
 	// and customer gateway disassociation/deletion will fail
 	fmt.Println("Waiting for EC2 NAT Gateways to delete...")
 	deletedNGWs, aliveNGWs, err := rd.waitUntilNatGatewaysDeleted(ngws)
-	if !cfg.IgnoreErrors {
-		fmt.Printf("{\"error\": \"%s\"}", err)
+	if err != nil {
+		if cfg.IgnoreErrors {
+			fmt.Printf("{\"error\": \"%s\"}", err)
+		} else {
+			return err
+		}
 	}
 	if len(aliveNGWs) != 0 {
 		ngwErrMsg := "Failed to delete EC2 Nat Gateway within 5 minutes."

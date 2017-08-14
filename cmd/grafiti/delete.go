@@ -513,8 +513,10 @@ func formatReportLogEntry(e *deleter.LogEntry) (m string) {
 	}
 
 	switch {
-	case e.AWSErrorCode != "" && e.AWSErrorMsg != "":
-		m = fmt.Sprintf("%s (%s: %s)", m, e.AWSErrorCode, e.AWSErrorMsg)
+	case e.AWSErrorCode != "":
+		// AWS error messages are verbose and should be logged to a log file instead
+		// of printed
+		m = fmt.Sprintf("%s (%s)", m, e.AWSErrorCode)
 	case e.ErrMsg != "":
 		m = fmt.Sprintf("%s (%s)", m, e.ErrMsg)
 	}
