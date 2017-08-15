@@ -7,6 +7,7 @@ sudo docker run \
   -w /go/src/github.com/coreos/grafiti \
   -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
   -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+  -e AWS_REGION="${AWS_REGION:-us-east-1}" \
   golang:1.8.3-stretch \
   /bin/bash -x -c \
   'apt-get update && apt-get install -y jq \
