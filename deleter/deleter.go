@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -45,25 +44,6 @@ type DeleteConfig struct {
 	DryRun       bool
 	IgnoreErrors bool
 	Logger       logrus.FieldLogger
-}
-
-// InitRequestLogger creates a logrus.FieldLogger that logs to a file at path,
-// or os.Stdout if an error occurs opening the file
-func InitRequestLogger(path string) logrus.FieldLogger {
-	logger := &logrus.Logger{
-		Out:       os.Stdout,
-		Formatter: &logrus.JSONFormatter{},
-		Level:     logrus.InfoLevel,
-	}
-
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0664)
-	if err == nil {
-		logger.Out = f
-	} else {
-		logger.Infof("Failed to open file %s for logging, using stdout instead", path)
-	}
-
-	return logger
 }
 
 // LogEntry maps potential log entry fields to a Go struct. Add fields here when

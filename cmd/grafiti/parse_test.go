@@ -159,7 +159,6 @@ func TestParseCloudTrailEvent(t *testing.T) {
 			gotStr += parseRawCloudTrailEvent(string(event)) + "\n"
 		}
 
-		// NOTE: non-deterministic pass. jq eval will occasionally fail for some reason.
 		if string(want) != gotStr {
 			t.Errorf("printCloudTrailEvent case %d failed\nwanted\n%s\n\ngot\n%s\n", i+1, string(want), gotStr)
 		}
@@ -183,7 +182,7 @@ func captureStdOut(f func(interface{}), v interface{}) string {
 		pipeOut <- buf.String()
 	}()
 
-	// Execute any f that takes an interface{} argument
+	// Capture stdout of any f that prints to stdout
 	f(v)
 
 	w.Close()
@@ -222,7 +221,6 @@ func TestPrintCloudTrailEvents(t *testing.T) {
 			t.Fatal("Failed to open", c.ExpectedFile)
 		}
 
-		// NOTE: non-deterministic pass. jq eval will occasionally fail for some reason.
 		if string(want) != ctJSON {
 			t.Errorf("printCloudTrailEvent case %d failed\nwanted\n%s\n\ngot\n%s\n", i+1, string(want), ctJSON)
 		}

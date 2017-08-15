@@ -16,3 +16,4 @@ filterPatterns = [
   # ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
   # ".TaggingMetadata.ResourceType == \"AWS::ElasticLoadBalancing::LoadBalancer\"",
 ]
+# logDir = "/tmp"

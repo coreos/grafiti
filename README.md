@@ -100,6 +100,7 @@ tagPatterns = [
 filterPatterns = [
   ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\""
 ]
+logDir = "/var/log"
 ```
 
  * `resourceTypes` - Specifies a list of resource types to query for. These can be any values the CloudTrail [API](http://docs.aws.amazon.com/awscloudtrail/latest/userguide/view-cloudtrail-events-supported-resource-types.html), or CloudTrail [log files](http://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-supported-services.html) if you're parsing files from a CloudTrail S3 bucket, accept.
@@ -110,6 +111,7 @@ filterPatterns = [
  * `includeEvent` - Setting `true` will include the raw CloudEvent in the tagging output (this is useful for finding attributes to filter on).
  * `tagPatterns` - should use `jq` syntax to generate `{tagKey: tagValue}` objects from output from `grafiti parse`. The results will be included in the `Tags` field of the tagging output.
  * `filterPatterns` - will filter output of `grafiti parse` based on `jq` syntax matches.
+ * `logDir` - By default, grafiti logs to stderr. If this field is present in your config, grafiti writes logs to a file in this directory. Log files have the format: 'grafiti-yyyymmdd_HHMMSS.log'.
 
 ### Environment variables
 
@@ -303,7 +305,6 @@ tagPatterns = [
 filterPatterns = [
   ".TaggingMetadata.ResourceType == \"AWS::EC2::Instance\"",
 ]
-
 ```
 
 Run:
@@ -451,8 +452,10 @@ Tectonic documentation:
 
 ### Logging
 
-grafiti log files of the format `./delete-log-yyyy-mm-dd_HH-MM-SS.log` are created by each `grafiti delete` execution. The Kubernetes [logging architecture](https://kubernetes.io/docs/concepts/cluster-administration/logging/), which uses [fluentd](http://www.fluentd.org/) as its logging layer, can aggregate and forward log data from log files to an endpoint of your choices, like an S3 bucket.
+Grafiti supports two forms of logging: to a file or stderr. Logs are sent to stderr by default, and to a log file if the `logDir` config field (`GRF_LOG_DIR` environment variable) is not empty. In the latter case, grafiti log files of the format `grafiti-yyyymmdd_HHMMSS.log` are created by each `grafiti` execution. The Kubernetes [logging architecture][kubernetes-logging], which uses [fluentd][fluentd-website] as its logging layer, can aggregate and forward log data from log files to an endpoint of your choices, like an S3 bucket.
 
 [aws-configure]: http://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html
 [aws-configure-region]: http://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html#specifying-the-region
 [aws-configure-credentials]: http://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html#specifying-credentials
+[kubernetes-logging]: https://kubernetes.io/docs/concepts/cluster-administration/logging/
+[fluentd-website]: http://www.fluentd.org/
