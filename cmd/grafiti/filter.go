@@ -13,7 +13,6 @@ import (
 	rgtaiface "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi/resourcegroupstaggingapiiface"
 	"github.com/coreos/grafiti/arn"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -50,9 +49,7 @@ func runFilterCommand(cmd *cobra.Command, args []string) error {
 	defer iFile.Close()
 
 	svc := rgta.New(session.Must(session.NewSession(
-		&aws.Config{
-			Region: aws.String(viper.GetString("region")),
-		},
+		&aws.Config{},
 	)))
 
 	// filterFile holds data structured in the output format of `grafiti parse`.

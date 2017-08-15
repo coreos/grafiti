@@ -264,9 +264,7 @@ func tagFromStdIn() error {
 
 func tag(reader io.Reader) error {
 	svc := rgta.New(session.Must(session.NewSession(
-		&aws.Config{
-			Region: aws.String(viper.GetString("region")),
-		},
+		&aws.Config{},
 	)))
 	dec := json.NewDecoder(reader)
 
@@ -328,9 +326,7 @@ func tag(reader io.Reader) error {
 
 func tagUnsupportedResourceType(rt arn.ResourceType, nameSet ResourceNameSet) error {
 	sess := session.Must(session.NewSession(
-		&aws.Config{
-			Region: aws.String(viper.GetString("region")),
-		},
+		&aws.Config{},
 	))
 
 	switch arn.NamespaceForResource(rt) {

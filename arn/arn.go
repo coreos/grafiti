@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
-	"github.com/spf13/viper"
 	"github.com/tidwall/gjson"
 )
 
@@ -390,9 +389,7 @@ func getAutoScalingGroupARN(rn ResourceName) (string, error) {
 	}
 
 	svc := autoscaling.New(session.Must(session.NewSession(
-		&aws.Config{
-			Region: aws.String(viper.GetString("region")),
-		},
+		&aws.Config{},
 	)))
 	params := &autoscaling.DescribeAutoScalingGroupsInput{
 		AutoScalingGroupNames: aws.StringSlice([]string{rn.String()}),
