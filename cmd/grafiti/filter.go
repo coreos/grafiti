@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -27,23 +28,24 @@ func init() {
 }
 
 var filterCmd = &cobra.Command{
-	Use:   "filter",
-	Short: "Filter AWS resources by tag.",
-	Long:  "Filter AWS resources from 'parse' output by tags specified in the 'ignore-file'.",
-	RunE:  runFilterCommand,
+	Use:           "filter",
+	Short:         "Filter AWS resources by tag.",
+	Long:          "Filter AWS resources from 'parse' output by tags specified in the 'ignore-file'.",
+	RunE:          runFilterCommand,
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 func runFilterCommand(cmd *cobra.Command, args []string) error {
 	if ignoreFile == "" {
-		fmt.Println("Required: --ignore-file <arg>.")
-		os.Exit(1)
+		return errors.New("filter: --ignore-file <arg> is required")
 	}
 
-	// Open ignoreFile
-	iFile, ferr := os.OpenFile(ignoreFile, os.O_RDONLY, 0644)
-	if ferr != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", ferr.Error())
-		return nil
+	// We decode tags from ignoreFile that will be attached to resources `grafiti
+	// filter` should remove from parsed data.
+	iFile, err := os.OpenFile(ignoreFile, os.O_RDONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("filter: %s", err)
 	}
 	defer iFile.Close()
 
@@ -53,17 +55,17 @@ func runFilterCommand(cmd *cobra.Command, args []string) error {
 		},
 	)))
 
+	// filterFile holds data structured in the output format of `grafiti parse`.
 	if filterFile != "" {
-		if ferr := filterFromFile(svc, iFile, filterFile); ferr != nil {
-			fmt.Printf("{\"error\": \"%s\"}\n", ferr.Error())
-			os.Exit(1)
+		if err := filterFromFile(svc, iFile, filterFile); err != nil {
+			return fmt.Errorf("filter: %s", err)
 		}
 		return nil
 	}
 
-	if serr := filterFromStdIn(svc, iFile); serr != nil {
-		fmt.Printf("{\"error\": \"%s\"}\n", serr.Error())
-		os.Exit(1)
+	// Same data as that in filterFile but passed by stdin.
+	if err := filterFromStdIn(svc, iFile); err != nil {
+		return fmt.Errorf("filter: %s", err)
 	}
 
 	return nil

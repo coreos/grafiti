@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -43,12 +44,24 @@ var envVarMap = map[string]string{
 	"GRF_MAX_NUM_RETRIES": "maxNumRequestRetries",
 }
 
+// http://tldp.org/LDP/abs/html/exitcodes.html
+const errExit = 1
+
+func exitWithError(err error) {
+	fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+	os.Exit(errExit)
+}
+
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
 	Use:   "grafiti",
 	Short: "Ingest CloudTrail data to tag, then delete, AWS resources.",
 	Long:  `Parse resources ID's from CloudTrail events to tag them in AWS, then delete them later.`,
-	Run:   func(cmd *cobra.Command, args []string) { cmd.Usage() },
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return errors.New("no sub-command provided. See `grafiti --help` for information")
+	},
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 func init() {
@@ -63,10 +76,9 @@ func init() {
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
-	// Check for 'jq' in path
+	// Ensure jq is installed and in $PATH
 	if path, err := exec.LookPath("jq"); err != nil || path == "" {
-		fmt.Println("Please install 'jq' before running grafiti.")
-		os.Exit(1)
+		exitWithError(errors.New("'jq' must be installed before running grafiti"))
 	}
 
 	if cfgFile != "" { // enable ability to specify config file via flag
@@ -94,8 +106,7 @@ func initConfig() {
 		// wants to solely use env vars to configure grafiti if no config file was
 		// provided
 		if cfgFile != "" {
-			logrus.Errorln("read config file:", err)
-			os.Exit(1)
+			exitWithError(fmt.Errorf("read config file: %s", err))
 		}
 	} else {
 		logrus.Infoln("Using config file:", viper.ConfigFileUsed())
@@ -106,8 +117,7 @@ func initConfig() {
 	// environment variables
 	viper.SetConfigType("toml")
 	if err := viper.ReadConfig(bytes.NewBuffer([]byte(""))); err != nil {
-		logrus.Errorln("read dummy config file:", err)
-		os.Exit(1)
+		exitWithError(fmt.Errorf("read dummy config file: %s", err))
 	} else {
 		logrus.Info("Using environment variables to configure grafiti.")
 		return
@@ -116,6 +126,6 @@ func initConfig() {
 
 func main() {
 	if err := RootCmd.Execute(); err != nil {
-		os.Exit(-1)
+		exitWithError(err)
 	}
 }

@@ -84,26 +84,36 @@ func init() {
 }
 
 var deleteCmd = &cobra.Command{
-	Use:   "delete",
-	Short: "Delete resources in AWS by tag.",
-	Long:  "Delete resources in AWS by tags specified in 'delete-file'.",
-	RunE:  runDeleteCommand,
+	Use:           "delete",
+	Short:         "Delete resources in AWS by tag.",
+	Long:          "Delete resources in AWS by tags specified in 'delete-file'.",
+	RunE:          runDeleteCommand,
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 func runDeleteCommand(cmd *cobra.Command, args []string) error {
+	// We decode tags from deleteFile that resources `grafiti delete` should
+	// delete are tagged with.
 	if deleteFile != "" {
-		return deleteFromFile(deleteFile)
+		if err := deleteFromFile(deleteFile); err != nil {
+			return fmt.Errorf("delete: %s", err)
+		}
+		return nil
 	}
+
+	// Same data as that in deleteFile but passed by stdin.
 	if err := deleteFromStdIn(); err != nil {
-		return err
+		return fmt.Errorf("delete: %s", err)
 	}
+
 	return nil
 }
 
 func deleteFromFile(fname string) error {
 	file, err := os.Open(fname)
 	if err != nil {
-		return err
+		return fmt.Errorf("open delete file: %s", err)
 	}
 	defer file.Close()
 
