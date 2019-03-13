@@ -11,7 +11,7 @@
 
 Example CronJob configuration file:
 ```yaml
-apiVersion: batch/v2alpha1
+apiVersion: batch/v1beta1
 kind: CronJob
 metadata:
   name: grafiti-deleter
